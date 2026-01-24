@@ -11,16 +11,6 @@ exports.id = "vendor-chunks/firebase";
 exports.ids = ["vendor-chunks/firebase"];
 exports.modules = {
 
-/***/ "(ssr)/./node_modules/firebase/firestore/dist/index.cjs.js":
-/*!***********************************************************!*\
-  !*** ./node_modules/firebase/firestore/dist/index.cjs.js ***!
-  \***********************************************************/
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
-
-eval("\nObject.defineProperty(exports, \"__esModule\", ({\n    value: true\n}));\nvar firestore = __webpack_require__(/*! @firebase/firestore */ \"(ssr)/./node_modules/@firebase/firestore/dist/index.node.cjs.js\");\nObject.keys(firestore).forEach(function(k) {\n    if (k !== \"default\" && !exports.hasOwnProperty(k)) Object.defineProperty(exports, k, {\n        enumerable: true,\n        get: function() {\n            return firestore[k];\n        }\n    });\n}); //# sourceMappingURL=index.cjs.js.map\n//# sourceURL=[module]\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiKHNzcikvLi9ub2RlX21vZHVsZXMvZmlyZWJhc2UvZmlyZXN0b3JlL2Rpc3QvaW5kZXguY2pzLmpzIiwibWFwcGluZ3MiOiJBQUFBO0FBRUFBLDhDQUE2QztJQUFFRyxPQUFPO0FBQUssQ0FBQyxFQUFDO0FBRTdELElBQUlDLFlBQVlDLG1CQUFPQSxDQUFDO0FBSXhCTCxPQUFPTSxJQUFJLENBQUNGLFdBQVdHLE9BQU8sQ0FBQyxTQUFVQyxDQUFDO0lBQ3pDLElBQUlBLE1BQU0sYUFBYSxDQUFDTixRQUFRTyxjQUFjLENBQUNELElBQUlSLE9BQU9DLGNBQWMsQ0FBQ0MsU0FBU00sR0FBRztRQUNwRkUsWUFBWTtRQUNaQyxLQUFLO1lBQWMsT0FBT1AsU0FBUyxDQUFDSSxFQUFFO1FBQUU7SUFDekM7QUFDRCxJQUNBLHFDQUFxQyIsInNvdXJjZXMiOlsid2VicGFjazovL2JldHRpbmctYXBwLy4vbm9kZV9tb2R1bGVzL2ZpcmViYXNlL2ZpcmVzdG9yZS9kaXN0L2luZGV4LmNqcy5qcz8yYWVhIl0sInNvdXJjZXNDb250ZW50IjpbIid1c2Ugc3RyaWN0JztcblxuT2JqZWN0LmRlZmluZVByb3BlcnR5KGV4cG9ydHMsICdfX2VzTW9kdWxlJywgeyB2YWx1ZTogdHJ1ZSB9KTtcblxudmFyIGZpcmVzdG9yZSA9IHJlcXVpcmUoJ0BmaXJlYmFzZS9maXJlc3RvcmUnKTtcblxuXG5cbk9iamVjdC5rZXlzKGZpcmVzdG9yZSkuZm9yRWFjaChmdW5jdGlvbiAoaykge1xuXHRpZiAoayAhPT0gJ2RlZmF1bHQnICYmICFleHBvcnRzLmhhc093blByb3BlcnR5KGspKSBPYmplY3QuZGVmaW5lUHJvcGVydHkoZXhwb3J0cywgaywge1xuXHRcdGVudW1lcmFibGU6IHRydWUsXG5cdFx0Z2V0OiBmdW5jdGlvbiAoKSB7IHJldHVybiBmaXJlc3RvcmVba107IH1cblx0fSk7XG59KTtcbi8vIyBzb3VyY2VNYXBwaW5nVVJMPWluZGV4LmNqcy5qcy5tYXBcbiJdLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsImZpcmVzdG9yZSIsInJlcXVpcmUiLCJrZXlzIiwiZm9yRWFjaCIsImsiLCJoYXNPd25Qcm9wZXJ0eSIsImVudW1lcmFibGUiLCJnZXQiXSwic291cmNlUm9vdCI6IiJ9\n//# sourceURL=webpack-internal:///(ssr)/./node_modules/firebase/firestore/dist/index.cjs.js\n");
-
-/***/ }),
-
 /***/ "(ssr)/./node_modules/firebase/app/dist/index.mjs":
 /*!**************************************************!*\
   !*** ./node_modules/firebase/app/dist/index.mjs ***!

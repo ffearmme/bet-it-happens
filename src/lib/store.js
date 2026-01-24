@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   collection, addDoc, onSnapshot, query, orderBy,
-  doc, setDoc, updateDoc, getDoc, where, increment
+  doc, setDoc, updateDoc, getDoc, where, increment, deleteDoc, getDocs
 } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -20,24 +20,41 @@ export function AppProvider({ children }) {
   const [ideas, setIdeas] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Safety timeout: If Firebase auth hangs for >1s, just load the app (as signed out) to prevent being stuck.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoaded(prev => {
+        if (!prev) console.warn("Firebase auth slow - forcing load state");
+        return true;
+      });
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
   // --- 1. Auth & User Profile Listener ---
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // User is signed in, listen to their profile in Firestore
-        const userRef = doc(db, 'users', firebaseUser.uid);
+    let unsubscribeProfile = null;
 
-        const unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
+    // Auth Listener
+    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      // 1. Clean up previous profile listener if any
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
+      }
+
+      if (firebaseUser) {
+        // User is signed in -> Listen to Firestore Profile
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
             setUser({ id: firebaseUser.uid, ...docSnap.data() });
           } else {
-            // Should not happen normally if signup works right, but handling edge case
+            // Fallback for new users
             setUser({ id: firebaseUser.uid, email: firebaseUser.email, role: 'user', balance: 0 });
           }
           setIsLoaded(true);
         });
-
-        return () => unsubscribeProfile();
       } else {
         // User is signed out
         setUser(null);
@@ -46,16 +63,25 @@ export function AppProvider({ children }) {
       }
     });
 
-    return () => unsubscribeAuth();
+    // Cleanup function when component unmounts
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+      }
+    };
   }, []);
 
-  // --- 2. Data Listeners (Events & Ideas) ---
+  const [users, setUsers] = useState([]); // List of all users for leaderboard
+
+  // ... (existing timeout code) ...
+
+  // --- 2. Data Listeners (Events, Ideas, Users) ---
   useEffect(() => {
     // Listen to Events
-    const eventsQuery = query(collection(db, 'events')); // You might want orderBy('startAt')
+    const eventsQuery = query(collection(db, 'events'));
     const unsubEvents = onSnapshot(eventsQuery, (snapshot) => {
       const eventsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      // Sort by open status, then date
       eventsList.sort((a, b) => (a.status === 'open' ? -1 : 1) || new Date(a.startAt) - new Date(b.startAt));
       setEvents(eventsList);
     });
@@ -66,9 +92,16 @@ export function AppProvider({ children }) {
       setIdeas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    // Listen to Users (for Leaderboard)
+    const allUsersQuery = query(collection(db, 'users'));
+    const unsubUsers = onSnapshot(allUsersQuery, (snapshot) => {
+      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     return () => {
       unsubEvents();
       unsubIdeas();
+      unsubUsers();
     };
   }, []);
 
@@ -189,7 +222,6 @@ export function AppProvider({ children }) {
       // await deleteDoc(doc(db, 'events', eventId)); 
       // Let's stick to update to 'deleted' or just rely on the UI filter?
       // Let's actually delete.
-      const { deleteDoc } = require('firebase/firestore');
       await deleteDoc(doc(db, 'events', eventId));
     } catch (e) {
       console.error(e);
@@ -219,7 +251,6 @@ export function AppProvider({ children }) {
       // I will implement a "dumb" loop here. It works for small scale.
 
       // We need to fetch the snapshots once, we don't need a listener.
-      const { getDocs } = require('firebase/firestore');
       const querySnapshot = await getDocs(q);
 
       const batchPromises = querySnapshot.docs.map(async (betDoc) => {
@@ -275,7 +306,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea,
       events, createEvent, resolveEvent, deleteEvent,
-      bets, placeBet, isLoaded, isFirebase: true
+      bets, placeBet, isLoaded, isFirebase: true, users
     }}>
       {children}
     </AppContext.Provider>
