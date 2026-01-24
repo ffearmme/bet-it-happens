@@ -52,12 +52,21 @@ export default function Home() {
             if (isLoginMode) {
                 // Sign In
                 const res = await signin(email, password);
-                if (!res.success) setAuthError(res.error);
+                if (res.success) {
+                    // Force refresh to ensure state is clear
+                    window.location.reload();
+                } else {
+                    setAuthError(res.error);
+                }
             } else {
                 // Sign Up
                 if (!username) { setAuthError('Username required'); return; }
                 const res = await signup(email, username, password);
-                if (!res.success) setAuthError(res.error);
+                if (res.success) {
+                    window.location.reload();
+                } else {
+                    setAuthError(res.error);
+                }
             }
         };
 
@@ -162,7 +171,9 @@ export default function Home() {
             <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', paddingTop: '10px' }}>
                 <div>
                     <h1 style={{ marginBottom: '4px', fontSize: '24px' }}>Bet It Happens</h1>
-                    <p className="text-sm">Balance: <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>${user.balance.toFixed(2)}</span></p>
+                    <p className="text-sm">Balance: <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
+                        {user.balance !== undefined ? `$${user.balance.toFixed(2)}` : '...'}
+                    </span></p>
                 </div>
                 <Link href="/profile" style={{ textDecoration: 'none', color: 'inherit' }}>
                     <div style={{

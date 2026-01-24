@@ -20,6 +20,35 @@ export function AppProvider({ children }) {
   const [ideas, setIdeas] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // --- 0. Optimistic Cache Load ---
+  useEffect(() => {
+    // Load caching helpers
+    const loadCache = (key, setter) => {
+      const cached = localStorage.getItem(key);
+      if (cached) setter(JSON.parse(cached));
+    };
+
+    loadCache('bet_user_cache', setUser);
+    loadCache('bet_events_cache', setEvents);
+    loadCache('bet_bets_cache', setBets);
+
+    // If we have a user cache, we can skip the loading screen
+    if (localStorage.getItem('bet_user_cache')) {
+      setIsLoaded(true);
+    }
+  }, []);
+
+  // Update Cache wrapper
+  const setUserWithCache = (userData) => {
+    setUser(userData);
+    if (userData) {
+      localStorage.setItem('bet_user_cache', JSON.stringify(userData));
+    } else {
+      localStorage.removeItem('bet_user_cache');
+      localStorage.removeItem('bet_bets_cache'); // Clear bets on logout too
+    }
+  };
+
   // Safety timeout: If Firebase auth hangs for >1s, just load the app (as signed out) to prevent being stuck.
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -44,20 +73,46 @@ export function AppProvider({ children }) {
       }
 
       if (firebaseUser) {
-        // User is signed in -> Listen to Firestore Profile
+        // User is signed in -> Set basic auth user immediately to prevent logout loop
+        // We will enrich this with DB data in a moment
+        // Note: We don't overwrite cache here with partial data if we already have full data locally
+        setUser(prev => {
+          if (prev) return prev; // If we have cache/prev user, keep it until DB update finishes
+          return {
+            id: firebaseUser.uid,
+            email: firebaseUser.email,
+            username: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+            role: 'user',
+          };
+        });
+
+        // Listen to Firestore Profile
         const userRef = doc(db, 'users', firebaseUser.uid);
         unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
-            setUser({ id: firebaseUser.uid, ...docSnap.data() });
+            setUserWithCache({ id: firebaseUser.uid, ...docSnap.data() });
           } else {
-            // Fallback for new users
-            setUser({ id: firebaseUser.uid, email: firebaseUser.email, role: 'user', balance: 0 });
+            // Document does not exist (e.g. first login or previous error).
+            // Auto-create the user profile in Firestore
+            const newUser = {
+              email: firebaseUser.email,
+              username: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+              role: (firebaseUser.email.toLowerCase().includes('admin') || firebaseUser.email === 'ffearmme@gmail.com') ? 'admin' : 'user',
+              balance: 1000,
+              createdAt: new Date().toISOString()
+            };
+
+            // Write to DB
+            setDoc(userRef, newUser).catch(err => console.error("Error auto-creating profile:", err));
+
+            // Set local state
+            setUserWithCache({ id: firebaseUser.uid, ...newUser });
           }
           setIsLoaded(true);
         });
       } else {
         // User is signed out
-        setUser(null);
+        setUserWithCache(null);
         setBets([]);
         setIsLoaded(true);
       }
@@ -84,6 +139,7 @@ export function AppProvider({ children }) {
       const eventsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       eventsList.sort((a, b) => (a.status === 'open' ? -1 : 1) || new Date(a.startAt) - new Date(b.startAt));
       setEvents(eventsList);
+      localStorage.setItem('bet_events_cache', JSON.stringify(eventsList));
     });
 
     // Listen to Ideas
@@ -118,6 +174,7 @@ export function AppProvider({ children }) {
       const myBets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       myBets.sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
       setBets(myBets);
+      localStorage.setItem('bet_bets_cache', JSON.stringify(myBets));
     });
 
     return () => unsubBets();

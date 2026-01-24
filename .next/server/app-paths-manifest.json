@@ -1,7 +1,8 @@
 {
   "/page": "app/page.js",
-  "/bets/page": "app/bets/page.js",
   "/profile/page": "app/profile/page.js",
+  "/admin/page": "app/admin/page.js",
   "/wallet/page": "app/wallet/page.js",
-  "/admin/page": "app/admin/page.js"
+  "/bets/page": "app/bets/page.js",
+  "/leaderboard/page": "app/leaderboard/page.js"
 }
