@@ -207,9 +207,35 @@ export function AppProvider({ children }) {
     const newEvent = {
       id: uuidv4(),
       status: 'open',
+      deadline: eventData.deadline || eventData.startAt, // Use provided deadline or fallback to startAt
       ...eventData
     };
     setEvents([newEvent, ...events]);
+  };
+
+  const deleteEvent = (eventId) => {
+    setEvents(events.filter(e => e.id !== eventId));
+    // Optionally remove bets associated with the deleted event?
+    // For now, let's keep them or filter them out in the UI.
+    // Ideally we should probably refund pending bets.
+
+    // Refund pending bets logic:
+    const betsToRefund = bets.filter(b => b.eventId === eventId && b.status === "pending");
+    if (betsToRefund.length > 0) {
+      let totalRefund = 0;
+      // In a real multi-user system, we'd refund each user.
+      // For local user:
+      const myRefund = betsToRefund
+        .filter(b => b.userId === user?.id)
+        .reduce((sum, b) => sum + b.amount, 0);
+
+      if (myRefund > 0) {
+        setUser(u => ({ ...u, balance: u.balance + myRefund }));
+      }
+    }
+
+    // Remove bets from list
+    setBets(bets.filter(b => b.eventId !== eventId));
   };
 
   const resolveEvent = (eventId, winnerOutcomeId) => {
@@ -249,7 +275,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea,
-      events, createEvent, resolveEvent,
+      events, createEvent, resolveEvent, deleteEvent,
       bets, placeBet, isLoaded, ideas, users
     }}>
       {children}

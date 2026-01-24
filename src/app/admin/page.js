@@ -4,10 +4,10 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
 export default function Admin() {
-    const { user, events, createEvent, resolveEvent, ideas } = useApp();
+    const { user, events, createEvent, resolveEvent, deleteEvent, ideas } = useApp();
     const router = useRouter();
     const [newEvent, setNewEvent] = useState({
-        title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: ''
+        title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: ''
     });
 
     useEffect(() => {
@@ -23,13 +23,14 @@ export default function Admin() {
         createEvent({
             title: newEvent.title,
             description: newEvent.description,
-            startAt: new Date(Date.now() + 86400000).toISOString(),
+            startAt: newEvent.deadline || new Date(Date.now() + 86400000).toISOString(),
+            deadline: newEvent.deadline || new Date(Date.now() + 86400000).toISOString(),
             outcomes: [
                 { id: 'o-' + Date.now() + '-1', label: newEvent.outcome1, odds: parseFloat(newEvent.odds1) },
                 { id: 'o-' + Date.now() + '-2', label: newEvent.outcome2, odds: parseFloat(newEvent.odds2) },
             ]
         });
-        setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '' });
+        setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '' });
     };
 
     return (
@@ -44,6 +45,15 @@ export default function Admin() {
                     </div>
                     <div className="input-group">
                         <input className="input" placeholder="Description" value={newEvent.description} onChange={e => setNewEvent({ ...newEvent, description: e.target.value })} required />
+                    </div>
+                    <div className="input-group">
+                        <label className="text-sm" style={{ marginBottom: '4px', display: 'block' }}>Betting Deadline (Optional)</label>
+                        <input
+                            className="input"
+                            type="datetime-local"
+                            value={newEvent.deadline}
+                            onChange={e => setNewEvent({ ...newEvent, deadline: e.target.value })}
+                        />
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px', marginBottom: '8px' }}>
                         <input className="input" placeholder="Outcome AA" value={newEvent.outcome1} onChange={e => setNewEvent({ ...newEvent, outcome1: e.target.value })} required />
@@ -61,7 +71,15 @@ export default function Admin() {
                 <h2>Resolve Events</h2>
                 {events.filter(e => e.status === 'open' || e.status === 'locked').map(event => (
                     <div key={event.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '16px' }}>
-                        <p style={{ fontWeight: 600 }}>{event.title}</p>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <p style={{ fontWeight: 600 }}>{event.title}</p>
+                            <button
+                                onClick={() => { if (confirm('Delete event?')) deleteEvent(event.id) }}
+                                style={{ background: 'transparent', border: 'none', color: 'var(--accent-loss)', cursor: 'pointer', fontSize: '12px' }}
+                            >
+                                Delete
+                            </button>
+                        </div>
                         <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                             {event.outcomes.map(o => (
                                 <button key={o.id} className="btn btn-outline" style={{ fontSize: '12px', padding: '8px' }} onClick={() => resolveEvent(event.id, o.id)}>

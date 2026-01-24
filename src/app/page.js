@@ -206,7 +206,12 @@ export default function Home() {
                         </div>
 
                         <h3 style={{ fontSize: '18px', marginBottom: '4px' }}>{event.title}</h3>
-                        <p className="text-sm" style={{ marginBottom: '16px' }}>{event.description}</p>
+                        <p className="text-sm" style={{ marginBottom: '8px' }}>{event.description}</p>
+                        {event.deadline && (
+                            <p className="text-sm" style={{ marginBottom: '16px', color: 'var(--accent-lock)', fontSize: '12px' }}>
+                                🕒 Deadline: {new Date(event.deadline).toLocaleString()}
+                            </p>
+                        )}
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                             {event.outcomes.map(outcome => (
