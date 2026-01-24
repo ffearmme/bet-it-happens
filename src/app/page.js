@@ -5,7 +5,7 @@ import { useApp } from '../lib/store';
 
 const FUNNY_QUOTES = [
     "Loading luck...",
-    "Consulting the sports oracle...",
+    "Consulting the betting oracle...",
     "Convincing your wallet to open...",
     "Calculating the odds of you winning...",
     "Shuffling virtual deck...",
@@ -146,7 +146,7 @@ export default function Home() {
         }
         const res = placeBet(selectedOutcome.eventId, selectedOutcome.outcomeId, parseFloat(wager));
         if (res.success) {
-            setSuccess('Bet Placed Successfully!');
+            setSuccess('Bet Placed Successfully! Good Luck Soldier🫡');
             setWager('');
             setTimeout(() => {
                 setSelectedOutcome(null);
