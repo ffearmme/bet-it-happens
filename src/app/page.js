@@ -45,18 +45,18 @@ export default function Home() {
 
     // --- LOGIN SCREEN ---
     if (!user) {
-        const handleAuth = (e) => {
+        const handleAuth = async (e) => {
             e.preventDefault();
             setAuthError('');
 
             if (isLoginMode) {
                 // Sign In
-                const res = signin(email, password);
+                const res = await signin(email, password);
                 if (!res.success) setAuthError(res.error);
             } else {
                 // Sign Up
                 if (!username) { setAuthError('Username required'); return; }
-                const res = signup(email, username, password);
+                const res = await signup(email, username, password);
                 if (!res.success) setAuthError(res.error);
             }
         };

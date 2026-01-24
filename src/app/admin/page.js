@@ -108,6 +108,10 @@ export default function Admin() {
                     <p className="text-sm">No ideas submitted yet.</p>
                 )}
             </div>
+
+            <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
+                System Version 0.07
+            </p>
         </div>
     );
 }
