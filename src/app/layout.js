@@ -11,11 +11,23 @@ export const metadata = {
     viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0',
 };
 
+function BetaBanner() {
+    return (
+        <div className="beta-banner">
+            <span className="beta-tag">BETA</span>
+            <span className="beta-message">
+                This app is in beta. Play money only - no real gambling.
+            </span>
+        </div>
+    );
+}
+
 export default function RootLayout({ children }) {
     return (
         <html lang="en">
             <body className={inter.className}>
                 <AppProvider>
+                    <BetaBanner />
                     {children}
                     <Navbar />
                 </AppProvider>

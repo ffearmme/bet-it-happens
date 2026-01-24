@@ -160,3 +160,28 @@ h2 { font-size: 20px; margin-bottom: 12px; }
 .animate-fade {
   animation: fadeIn 0.3s ease-out forwards;
 }
+
+/* Beta Banner */
+.beta-banner {
+  background: linear-gradient(to right, #eab308, #f59e0b);
+  color: black;
+  padding: 8px 16px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 10px rgba(234, 179, 8, 0.2);
+}
+
+.beta-tag {
+  background: black;
+  color: #eab308;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
