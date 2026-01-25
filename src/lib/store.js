@@ -212,6 +212,7 @@ export function AppProvider({ children }) {
       // 2. Create Bet
       await addDoc(collection(db, 'bets'), {
         userId: user.id,
+        username: user.username,
         eventId,
         outcomeId,
         outcomeLabel: outcome.label,

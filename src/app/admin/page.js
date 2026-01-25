@@ -3,18 +3,35 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
+import { db } from '../../lib/firebase';
+import { collection, query, limit, onSnapshot } from 'firebase/firestore';
+
 export default function Admin() {
-    const { user, events, createEvent, resolveEvent, deleteEvent, ideas } = useApp();
+    const { user, events, createEvent, resolveEvent, deleteEvent, ideas, users } = useApp();
     const router = useRouter();
     const [newEvent, setNewEvent] = useState({
         title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: ''
     });
+    const [allBets, setAllBets] = useState([]);
 
     useEffect(() => {
         if (!user || user.role !== 'admin') {
             router.push('/');
         }
     }, [user, router]);
+
+    // Fetch Global Bets (Admin Only)
+    useEffect(() => {
+        if (!user || user.role !== 'admin') return;
+
+        const q = query(collection(db, 'bets'), limit(50));
+        const unsub = onSnapshot(q, (snapshot) => {
+            const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            list.sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
+            setAllBets(list);
+        });
+        return () => unsub();
+    }, [user]); // Re-run if user/role changes (though protected by route ref)
 
     if (!user || user.role !== 'admin') return null;
 
@@ -110,8 +127,34 @@ export default function Admin() {
                 )}
             </div>
 
+            <div className="card">
+                <h2>Recent Bets (Global)</h2>
+                {allBets.length === 0 ? <p className="text-sm">No bets placed yet.</p> : (
+                    <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                        {allBets.map(bet => {
+                            const betUser = users.find(u => u.id === bet.userId);
+                            const displayName = bet.username || betUser?.username || (bet.userId ? bet.userId.slice(0, 8) : 'User');
+
+                            return (
+                                <div key={bet.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '8px', marginBottom: '8px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{displayName}</span>
+                                        <span style={{ fontSize: '12px', color: '#888' }}>{new Date(bet.placedAt).toLocaleTimeString()}</span>
+                                    </div>
+                                    <div style={{ fontSize: '14px' }}>
+                                        Bet <b>${bet.amount}</b> on <b>{bet.outcomeLabel}</b>
+                                        <br />
+                                        <span style={{ fontSize: '12px', color: '#666' }}>{bet.eventTitle}</span>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+            </div>
+
             <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                System Version V0.1
+                System Version V0.12
             </p>
         </div>
     );

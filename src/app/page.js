@@ -198,6 +198,24 @@ export default function Home() {
                     </div>
                 </Link>        </header>
 
+            {/* Earn CTA */}
+            <Link href="/wallet" style={{ textDecoration: 'none' }}>
+                <div
+                    className="card"
+                    style={{ marginBottom: '24px', background: 'linear-gradient(90deg, rgba(39, 39, 42, 1) 0%, rgba(34,197,94,0.1) 100%)', border: '1px solid var(--primary)', cursor: 'pointer' }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                            <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                💡 Have a Bet Idea?
+                            </h3>
+                            <p className="text-sm" style={{ margin: 0, color: 'var(--text-secondary)' }}>Submit it and earn <span style={{ color: '#fff', fontWeight: 'bold' }}>$15.00</span> instantly!</p>
+                        </div>
+                        <div style={{ fontSize: '24px', color: 'var(--primary)' }}>→</div>
+                    </div>
+                </div>
+            </Link>
+
             {/* --- Active Events --- */}
             <div style={{ marginBottom: '32px' }}>
                 <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>

@@ -27,6 +27,7 @@ export default function Wallet() {
         if (res.success) {
             setMsg({ type: 'success', text: res.message });
             setIdea('');
+            alert("Idea submitted successfully! You've earned $15 for your contribution.");
         } else {
             setMsg({ type: 'error', text: res.error });
         }
