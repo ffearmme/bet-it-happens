@@ -18,6 +18,7 @@ export default function Home() {
     const [wager, setWager] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [expandedEvent, setExpandedEvent] = useState(null);
 
     // Login State
     const [isLoginMode, setIsLoginMode] = useState(true); // Toggle Login/Signup
@@ -251,12 +252,19 @@ export default function Home() {
                         marginBottom: '40px'
                     }}>
                         {activeEvents.filter(e => e.featured).slice(0, 3).map(event => (
-                            <div key={event.id} className="card" style={{
-                                border: '1px solid #fbbf24',
-                                background: 'linear-gradient(145deg, var(--bg-card), rgba(251, 191, 36, 0.05))',
-                                display: 'flex',
-                                flexDirection: 'column'
-                            }}>
+                            <div
+                                key={event.id}
+                                className="card"
+                                onClick={() => setExpandedEvent(event)}
+                                style={{
+                                    border: '1px solid #fbbf24',
+                                    background: 'linear-gradient(145deg, var(--bg-card), rgba(251, 191, 36, 0.05))',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    cursor: 'pointer',
+                                    transition: 'transform 0.2s'
+                                }}
+                            >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                                     <span className="badge" style={{ background: '#fbbf24', color: '#000', fontWeight: 'bold' }}>FEATURED</span>
                                     <span className="text-sm" style={{ color: '#fbbf24' }}>{new Date(event.startAt).toLocaleDateString()}</span>
@@ -264,29 +272,62 @@ export default function Home() {
                                 <h3 style={{ fontSize: '18px', marginBottom: '8px', color: '#fbbf24', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</h3>
                                 <p className="text-sm" style={{ marginBottom: '16px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{event.description}</p>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                    {event.outcomes.slice(0, 2).map(outcome => (
-                                        <button
-                                            key={outcome.id}
-                                            disabled={event.status !== 'open'}
-                                            onClick={() => {
-                                                if (user) {
-                                                    setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, label: outcome.label, odds: outcome.odds, title: event.title });
-                                                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                                                } else {
-                                                    alert("Login to bet!");
-                                                }
-                                            }}
-                                            className="btn btn-outline"
-                                            style={{ borderColor: '#fbbf24', color: '#fbbf24', padding: '6px' }}
-                                        >
-                                            <div style={{ fontWeight: 'bold', fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{outcome.label}</div>
-                                            <div style={{ fontSize: '11px' }}>{outcome.odds.toFixed(2)}x</div>
-                                        </button>
-                                    ))}
+                                <div style={{ marginTop: 'auto', textAlign: 'center', color: '#fbbf24', fontSize: '12px' }}>
+                                    (Click to Expand & Bet)
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {/* --- Expanded Event Modal --- */}
+            {expandedEvent && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                    background: 'rgba(0,0,0,0.8)', zIndex: 1000,
+                    display: 'flex', justifyContent: 'center', alignItems: 'center',
+                    padding: '20px'
+                }} onClick={() => setExpandedEvent(null)}>
+                    <div
+                        className="card"
+                        style={{
+                            width: '100%', maxWidth: '500px',
+                            border: '1px solid #fbbf24',
+                            boxShadow: '0 0 30px rgba(251,191,36,0.2)',
+                            maxHeight: '80vh', overflowY: 'auto'
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                            <h2 style={{ color: '#fbbf24', margin: 0, fontSize: '20px' }}>{expandedEvent.title}</h2>
+                            <button onClick={() => setExpandedEvent(null)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer' }}>&times;</button>
+                        </div>
+                        <p style={{ marginBottom: '24px', lineHeight: '1.5' }}>{expandedEvent.description}</p>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            {expandedEvent.outcomes.map(outcome => (
+                                <button
+                                    key={outcome.id}
+                                    disabled={expandedEvent.status !== 'open'}
+                                    onClick={() => {
+                                        if (user) {
+                                            setSelectedOutcome({ eventId: expandedEvent.id, outcomeId: outcome.id, label: outcome.label, odds: outcome.odds, title: expandedEvent.title });
+                                            setExpandedEvent(null); // Close modal
+                                            window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to bet slip if needed, though bet slip is usually sticky? 
+                                            // Actually bet slip is at top of page 
+                                        } else {
+                                            alert("Login to bet!");
+                                        }
+                                    }}
+                                    className="btn btn-outline"
+                                    style={{ borderColor: '#fbbf24', color: '#fbbf24', padding: '12px' }}
+                                >
+                                    <div style={{ fontWeight: 'bold' }}>{outcome.label}</div>
+                                    <div style={{ fontSize: '14px' }}>{outcome.odds.toFixed(2)}x</div>
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}

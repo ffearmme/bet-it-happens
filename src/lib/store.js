@@ -662,7 +662,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-      events, createEvent, resolveEvent, deleteEvent, toggleFeatured,
+      events, createEvent, resolveEvent, deleteEvent, toggleFeatured, recalculateLeaderboard,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas
     }}>
       {children}
