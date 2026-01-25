@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   collection, addDoc, onSnapshot, query, orderBy,
-  doc, setDoc, updateDoc, getDoc, where, increment, deleteDoc, getDocs
+  doc, setDoc, updateDoc, getDoc, where, increment, deleteDoc, getDocs, limit
 } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -19,35 +19,6 @@ export function AppProvider({ children }) {
   const [bets, setBets] = useState([]);
   const [ideas, setIdeas] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
-
-  // --- 0. Optimistic Cache Load ---
-  useEffect(() => {
-    // Load caching helpers
-    const loadCache = (key, setter) => {
-      const cached = localStorage.getItem(key);
-      if (cached) setter(JSON.parse(cached));
-    };
-
-    loadCache('bet_user_cache', setUser);
-    loadCache('bet_events_cache', setEvents);
-    loadCache('bet_bets_cache', setBets);
-
-    // If we have a user cache, we can skip the loading screen
-    if (localStorage.getItem('bet_user_cache')) {
-      setIsLoaded(true);
-    }
-  }, []);
-
-  // Update Cache wrapper
-  const setUserWithCache = (userData) => {
-    setUser(userData);
-    if (userData) {
-      localStorage.setItem('bet_user_cache', JSON.stringify(userData));
-    } else {
-      localStorage.removeItem('bet_user_cache');
-      localStorage.removeItem('bet_bets_cache'); // Clear bets on logout too
-    }
-  };
 
   // Safety timeout: If Firebase auth hangs for >1s, just load the app (as signed out) to prevent being stuck.
   useEffect(() => {
@@ -75,24 +46,27 @@ export function AppProvider({ children }) {
       if (firebaseUser) {
         // User is signed in -> Set basic auth user immediately to prevent logout loop
         // We will enrich this with DB data in a moment
-        // Note: We don't overwrite cache here with partial data if we already have full data locally
-        setUser(prev => {
-          if (prev) return prev; // If we have cache/prev user, keep it until DB update finishes
-          return {
-            id: firebaseUser.uid,
-            email: firebaseUser.email,
-            username: firebaseUser.displayName || firebaseUser.email.split('@')[0],
-            role: 'user',
-          };
+        setUser(prev => prev || {
+          id: firebaseUser.uid,
+          email: firebaseUser.email,
+          username: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+          role: 'user',
         });
 
         // Listen to Firestore Profile
         const userRef = doc(db, 'users', firebaseUser.uid);
         unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
-            setUserWithCache({ id: firebaseUser.uid, ...docSnap.data() });
+            const data = docSnap.data();
+            // Force Admin for owner if not set (fixing previous signups)
+            if (firebaseUser.email === 'ffearmme@gmail.com' && data.role !== 'admin') {
+              updateDoc(userRef, { role: 'admin' });
+              data.role = 'admin';
+            }
+            setUser({ id: firebaseUser.uid, ...data });
           } else {
             // Document does not exist (e.g. first login or previous error).
+            console.log(">>> DETECTED NEW USER (No Profile Found) - Creating Profile...");
             // Auto-create the user profile in Firestore
             const newUser = {
               email: firebaseUser.email,
@@ -103,16 +77,24 @@ export function AppProvider({ children }) {
             };
 
             // Write to DB
-            setDoc(userRef, newUser).catch(err => console.error("Error auto-creating profile:", err));
+            setDoc(userRef, newUser)
+              .then(() => {
+                console.log(">>> SUCCESSFULLY CREATED PROFILE FOR:", newUser.email);
+                // alert("Welcome! Your profile has been created with $1000.");
+              })
+              .catch(err => {
+                console.error(">>> ERROR CREATING PROFILE:", err);
+                alert("Error creating profile. Check permissions.");
+              });
 
             // Set local state
-            setUserWithCache({ id: firebaseUser.uid, ...newUser });
+            setUser({ id: firebaseUser.uid, ...newUser });
           }
           setIsLoaded(true);
         });
       } else {
         // User is signed out
-        setUserWithCache(null);
+        setUser(null);
         setBets([]);
         setIsLoaded(true);
       }
@@ -133,31 +115,23 @@ export function AppProvider({ children }) {
 
   // --- 2. Data Listeners (Events, Ideas, Users) ---
   useEffect(() => {
-    // Listen to Events
-    const eventsQuery = query(collection(db, 'events'));
+    // Listen to Events (Limit 50 active)
+    const eventsQuery = query(collection(db, 'events'), limit(50));
     const unsubEvents = onSnapshot(eventsQuery, (snapshot) => {
       const eventsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       eventsList.sort((a, b) => (a.status === 'open' ? -1 : 1) || new Date(a.startAt) - new Date(b.startAt));
       setEvents(eventsList);
-      localStorage.setItem('bet_events_cache', JSON.stringify(eventsList));
     });
 
-    // Listen to Ideas
-    const ideasQuery = query(collection(db, 'ideas'), orderBy('submittedAt', 'desc'));
+    // Listen to Ideas (Limit 50 recent)
+    const ideasQuery = query(collection(db, 'ideas'), orderBy('submittedAt', 'desc'), limit(50));
     const unsubIdeas = onSnapshot(ideasQuery, (snapshot) => {
       setIdeas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-
-    // Listen to Users (for Leaderboard)
-    const allUsersQuery = query(collection(db, 'users'));
-    const unsubUsers = onSnapshot(allUsersQuery, (snapshot) => {
-      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
     return () => {
       unsubEvents();
       unsubIdeas();
-      unsubUsers();
     };
   }, []);
 
@@ -168,13 +142,13 @@ export function AppProvider({ children }) {
       return;
     }
 
-    const betsQuery = query(collection(db, 'bets'), where('userId', '==', user.id));
+    const betsQuery = query(collection(db, 'bets'), where('userId', '==', user.id), limit(100));
     const unsubBets = onSnapshot(betsQuery, (snapshot) => {
       // We'll trust the client side sorting for now or add orderBy index later
       const myBets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       myBets.sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
       setBets(myBets);
-      localStorage.setItem('bet_bets_cache', JSON.stringify(myBets));
+      // localStorage.setItem('bet_bets_cache', JSON.stringify(myBets));
     });
 
     return () => unsubBets();

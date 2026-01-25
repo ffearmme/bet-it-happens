@@ -1,6 +1,6 @@
 
 import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -14,7 +14,11 @@ const firebaseConfig = {
 
 // Initialize Firebase (singleton pattern to avoid reloading)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const db = getFirestore(app);
+
+// Use initializeFirestore with Persistent Cache (for speed)
+const db = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+});
 const auth = getAuth(app);
 
 export { db, auth };
