@@ -23,6 +23,16 @@ export default function Rules() {
             </div>
 
             <div className="card">
+                <h2>🤝 Loyalty Clause</h2>
+                <p style={{ lineHeight: '1.6', color: '#d1d5db' }}>
+                    <strong>Pick a side and stick to it!</strong>
+                    <br />
+                    Once you place a bet on an outcome (e.g., "Yes"), you cannot hedge your bets by betting on the other side.
+                    You can add more money to your original position, but switching sides is forbidden.
+                </p>
+            </div>
+
+            <div className="card">
                 <h2>⚖️ How are bets resolved?</h2>
                 <p style={{ lineHeight: '1.6', color: '#d1d5db', marginBottom: '16px' }}>
                     Events are resolved by our Admin team based on <strong>definitive public evidence</strong>.

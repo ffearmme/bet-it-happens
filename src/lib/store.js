@@ -228,6 +228,15 @@ export function AppProvider({ children }) {
     const event = events.find(e => e.id === eventId);
     if (!event || event.status !== 'open') return { success: false, error: 'Event is locked' };
 
+    // Check for existing bets on OTHER sides
+    const qExisting = query(collection(db, 'bets'), where('userId', '==', user.id), where('eventId', '==', eventId));
+    const snapExisting = await getDocs(qExisting);
+    const otherSideBet = snapExisting.docs.find(d => d.data().outcomeId !== outcomeId);
+
+    if (otherSideBet) {
+      return { success: false, error: "Loyalty check! You already bet on the other side. No switching." };
+    }
+
     const outcome = event.outcomes.find(o => o.id === outcomeId);
 
     try {
@@ -386,6 +395,13 @@ export function AppProvider({ children }) {
 
   const submitIdea = async (ideaText) => {
     if (!user) return { success: false, error: 'Not logged in' };
+
+    // Duplicate Check
+    const qDup = query(collection(db, 'ideas'), where('userId', '==', user.id), where('text', '==', ideaText));
+    const snapDup = await getDocs(qDup);
+    if (!snapDup.empty) {
+      return { success: false, error: "You already suggested this! Hey switch it up." };
+    }
 
     // Check Daily Limit (Client-side check based on local user data, ideally backend does this)
     const today = new Date().toDateString();

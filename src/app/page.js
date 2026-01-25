@@ -41,7 +41,7 @@ export default function Home() {
         const q = query(collection(db, 'comments'), where('eventId', '==', expandedEvent.id));
         const unsub = onSnapshot(q, (snap) => {
             const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
             setComments(list);
         });
         return () => unsub();
@@ -232,7 +232,7 @@ export default function Home() {
                         WebkitTextFillColor: 'transparent',
                         display: 'inline-block'
                     }}>
-                        Prediction Markets for Real Life — Risk Free, Glory Bound.
+                        Prediction markets for real life — make predictions, earn coins, climb the leaderboard.
                     </p>
                     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
                         <p className="text-sm" style={{ background: 'var(--bg-card)', padding: '4px 12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
@@ -299,6 +299,13 @@ export default function Home() {
                                 <p className="text-sm" style={{ marginBottom: '16px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{event.description}</p>
 
                                 <div style={{ marginTop: 'auto', textAlign: 'center', color: '#fbbf24', fontSize: '12px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '6px' }}>
+                                        {event.outcomes.map(o => (
+                                            <span key={o.id} style={{ background: 'rgba(251, 191, 36, 0.2)', padding: '2px 8px', borderRadius: '4px' }}>
+                                                {o.label}: x{o.odds.toFixed(2)}
+                                            </span>
+                                        ))}
+                                    </div>
                                     (Click to Expand & Bet)
                                 </div>
                             </div>

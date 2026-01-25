@@ -10,6 +10,9 @@ export const metadata = {
     title: 'Bet It Happens',
     description: 'Fake Money Betting App',
     viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0',
+    icons: {
+        icon: '/logo.png',
+    },
 };
 
 function BetaBanner() {

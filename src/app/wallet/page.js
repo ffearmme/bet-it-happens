@@ -17,14 +17,14 @@ export default function Wallet() {
     if (!isLoaded) return null; // or a spinner
     if (!user) return null;
 
-    const handleSubmitIdea = (e) => {
+    const handleSubmitIdea = async (e) => {
         e.preventDefault();
         if (idea.length < 10) {
             setMsg({ type: 'error', text: 'Idea must be at least 10 characters.' });
             return;
         }
 
-        const res = submitIdea(idea);
+        const res = await submitIdea(idea);
         if (res.success) {
             setMsg({ type: 'success', text: res.message });
             setIdea('');
