@@ -118,7 +118,6 @@ export function AppProvider({ children }) {
     });
 
     // Listen to Ideas (Limit 50 recent)
-    // Listen to Ideas (Limit 50 recent)
     // Removed orderBy to avoid missing index issues. Sorting client-side.
     const ideasQuery = query(collection(db, 'ideas'), limit(50));
     const unsubIdeas = onSnapshot(ideasQuery, (snapshot) => {
@@ -129,10 +128,22 @@ export function AppProvider({ children }) {
       console.error("Error listening to ideas:", error);
     });
 
+    // Listen to Users (Global List for Leaderboard & Admin)
+    const usersQuery = query(collection(db, 'users'), limit(50));
+    const unsubUsers = onSnapshot(usersQuery, (snapshot) => {
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Client-side sort by balance desc
+      list.sort((a, b) => (b.balance || 0) - (a.balance || 0));
+      setUsers(list);
+    });
+
     return () => {
       unsubEvents();
       unsubIdeas();
+      unsubUsers();
     };
+
+
   }, []);
 
   // --- 3. Bets Listener (Only for logged in user) ---
