@@ -209,7 +209,7 @@ export default function Home() {
                             <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 💡 Have a Bet Idea?
                             </h3>
-                            <p className="text-sm" style={{ margin: 0, color: 'var(--text-secondary)' }}>Submit it and earn <span style={{ color: '#fff', fontWeight: 'bold' }}>$15.00</span> instantly!</p>
+                            <p className="text-sm" style={{ margin: 0, color: '#e4e4e7' }}>Submit it and earn <span style={{ color: '#fff', fontWeight: 'bold' }}>$15.00</span> instantly!</p>
                         </div>
                         <div style={{ fontSize: '24px', color: 'var(--primary)' }}>→</div>
                     </div>

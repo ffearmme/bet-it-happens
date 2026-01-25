@@ -3,5 +3,6 @@
   "/profile/page": "app/profile/page.js",
   "/wallet/page": "app/wallet/page.js",
   "/admin/page": "app/admin/page.js",
-  "/leaderboard/page": "app/leaderboard/page.js"
+  "/leaderboard/page": "app/leaderboard/page.js",
+  "/bets/page": "app/bets/page.js"
 }
