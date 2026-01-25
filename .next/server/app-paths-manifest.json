@@ -2,6 +2,6 @@
   "/page": "app/page.js",
   "/profile/page": "app/profile/page.js",
   "/wallet/page": "app/wallet/page.js",
-  "/leaderboard/page": "app/leaderboard/page.js",
-  "/admin/page": "app/admin/page.js"
+  "/admin/page": "app/admin/page.js",
+  "/leaderboard/page": "app/leaderboard/page.js"
 }

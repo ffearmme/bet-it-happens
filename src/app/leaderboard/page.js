@@ -110,9 +110,7 @@ export default function Leaderboard() {
                     ))}
                 </div>
             )}
-            <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                * Admins are hidden from rank.
-            </p>
+
         </div>
     );
 }
