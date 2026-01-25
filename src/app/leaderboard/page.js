@@ -47,6 +47,17 @@ export default function Leaderboard() {
                                 }}>
                                     #{index + 1}
                                 </span>
+                                {player.profilePic ? (
+                                    <img
+                                        src={player.profilePic}
+                                        alt={player.username}
+                                        style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }}
+                                    />
+                                ) : (
+                                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--bg-card)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontSize: '12px' }}>
+                                        {player.username.charAt(0).toUpperCase()}
+                                    </div>
+                                )}
                                 <div>
                                     <p style={{ fontWeight: '600', fontSize: '1.1em' }}>{player.username}</p>
                                     <p style={{ fontSize: '0.8em', color: 'var(--text-secondary)' }}>

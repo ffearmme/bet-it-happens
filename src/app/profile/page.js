@@ -40,14 +40,18 @@ export default function Profile() {
         }
     };
 
-    const handleUpdate = (e) => {
+    const handleUpdate = async (e) => {
         e.preventDefault();
-        const res = updateUser(formData);
+        setMsg({ type: '', text: 'Updating...' });
+
+        const res = await updateUser(formData);
+
         if (res.success) {
-            setMsg({ type: 'success', text: 'Profile updated successfully!' });
-            setTimeout(() => setMsg({ type: '', text: '' }), 2000);
+            setMsg({ type: 'success', text: res.message || 'Profile updated successfully!' });
+            setTimeout(() => setMsg({ type: '', text: '' }), 3000);
         } else {
-            setMsg({ type: 'error', text: res.error });
+            console.error("Update failed:", res.error);
+            setMsg({ type: 'error', text: res.error || 'Failed to update.' });
         }
     };
 

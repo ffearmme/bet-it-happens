@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  signOut, onAuthStateChanged
+  signOut, onAuthStateChanged, updateEmail, updatePassword, verifyBeforeUpdateEmail
 } from 'firebase/auth';
 import { db, auth } from './firebase';
 
@@ -389,9 +389,61 @@ export function AppProvider({ children }) {
   };
 
   const updateUser = async (updates) => {
-    if (!user) return;
-    await updateDoc(doc(db, 'users', user.id), updates);
-    return { success: true };
+    if (!user) return { success: false, error: 'Not logged in' };
+
+    try {
+      let authUpdated = false;
+
+      // 1. Update Auth Email if changed
+      if (updates.email && auth.currentUser) {
+        const currentAuthEmail = auth.currentUser.email;
+        if (updates.email !== currentAuthEmail) {
+          console.log(`Debug: Attempting email update from ${currentAuthEmail} to ${updates.email}`);
+          try {
+            await updateEmail(auth.currentUser, updates.email);
+            authUpdated = true;
+          } catch (emailErr) {
+            console.warn("Direct updateEmail failed, trying verification flow:", emailErr.code);
+            // If direct update is blocked (likely due to Security settings), send verification email
+            if (emailErr.code === 'auth/operation-not-allowed' || emailErr.message.includes('verify')) {
+              await verifyBeforeUpdateEmail(auth.currentUser, updates.email);
+              return { success: true, message: `Verification link sent to ${updates.email}. Check inbox to confirm!` };
+            }
+            throw emailErr;
+          }
+        }
+      }
+
+      // 2. Update Auth Password if provided
+      if (updates.password && updates.password.length > 0) {
+        if (auth.currentUser) {
+          await updatePassword(auth.currentUser, updates.password);
+          authUpdated = true;
+        }
+      }
+
+      // 3. Update Firestore (exclude password)
+      const firestoreUpdates = { ...updates };
+      delete firestoreUpdates.password; // Don't store raw password in DB
+
+      await updateDoc(doc(db, 'users', user.id), firestoreUpdates);
+
+      // 4. Force refresh to ensure local auth state matches cloud
+      if (authUpdated && auth.currentUser) {
+        await auth.currentUser.reload();
+        // Manually update local user state to reflect changes immediately
+        setUser(prev => ({ ...prev, ...firestoreUpdates }));
+      }
+
+      return { success: true, message: authUpdated ? 'Account & Profile updated!' : 'Profile updated' };
+
+    } catch (e) {
+      console.error("Update Error:", e);
+      if (e.code === 'auth/requires-recent-login') {
+        return { success: false, error: "CRITICAL: You must re-login to change sensitive info (Email/Password)." };
+      }
+      return { success: false, error: e.message };
+    }
   }
 
   const demoteSelf = async () => {
