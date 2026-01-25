@@ -4,12 +4,12 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
 export default function Leaderboard() {
-    const { user, users } = useApp();
+    const { user, users, isLoaded } = useApp();
     const router = useRouter();
 
     useEffect(() => {
-        if (!user) router.push('/');
-    }, [user, router]);
+        if (isLoaded && !user) router.push('/');
+    }, [user, isLoaded, router]);
 
     // Filter out admins and sort by balance (redundant sort but safe), then take Top 20
     // users is already sorted in store.js, but we filter here.

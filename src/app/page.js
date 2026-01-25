@@ -49,14 +49,30 @@ export default function Home() {
             e.preventDefault();
             setAuthError('');
 
+            const getFriendlyError = (msg) => {
+                if (msg.includes('user-not-found') || msg.includes('invalid-credential')) {
+                    return "Whoops! We don't recognize that email. Did you mean to Sign Up?";
+                } else if (msg.includes('wrong-password')) {
+                    return "Incorrect password! Try 'password123'... just kidding, don't.";
+                } else if (msg.includes('too-many-requests')) {
+                    return "Slow down! You're trying too hard. Take a breather.";
+                } else if (msg.includes('invalid-email')) {
+                    return "You got to put in a valid email, silly!";
+                } else if (msg.includes('email-already-in-use')) {
+                    return "That email is taken! Try logging in instead.";
+                } else if (msg.includes('missing-password')) {
+                    return "You forgot to type a password! We can't read your mind... yet.";
+                }
+                return "Yikes! " + msg;
+            };
+
             if (isLoginMode) {
                 // Sign In
                 const res = await signin(email, password);
                 if (res.success) {
-                    // Force refresh to ensure state is clear
                     window.location.reload();
                 } else {
-                    setAuthError(res.error);
+                    setAuthError(getFriendlyError(res.error));
                 }
             } else {
                 // Sign Up
@@ -65,7 +81,7 @@ export default function Home() {
                 if (res.success) {
                     window.location.reload();
                 } else {
-                    setAuthError(res.error);
+                    setAuthError(getFriendlyError(res.error));
                 }
             }
         };
@@ -94,7 +110,7 @@ export default function Home() {
                         </button>
                     </div>
 
-                    <form onSubmit={handleAuth}>
+                    <form onSubmit={handleAuth} noValidate>
                         {!isLoginMode && (
                             <div className="input-group">
                                 <label className="text-sm" style={{ marginBottom: '8px', display: 'block' }}>Username</label>

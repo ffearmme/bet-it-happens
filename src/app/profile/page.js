@@ -4,13 +4,14 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
 export default function Profile() {
-    const { user, updateUser, logout, deleteAccount, demoteSelf } = useApp();
+    const { user, updateUser, logout, deleteAccount, demoteSelf, isLoaded } = useApp();
     const router = useRouter();
 
     const [formData, setFormData] = useState({ username: '', email: '', password: '', profilePic: '' });
     const [msg, setMsg] = useState({ type: '', text: '' });
 
     useEffect(() => {
+        if (!isLoaded) return;
         if (!user) {
             router.push('/');
             return;
@@ -21,8 +22,9 @@ export default function Profile() {
             password: user.password,
             profilePic: user.profilePic || ''
         });
-    }, [user, router]);
+    }, [user, isLoaded, router]);
 
+    if (!isLoaded) return <div className="container" style={{ padding: '40px', textAlign: 'center' }}>Loading profile...</div>;
     if (!user) return null;
 
     const handleFileChange = (e) => {

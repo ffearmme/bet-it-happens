@@ -4,16 +4,17 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
 export default function Wallet() {
-    const { user, logout, submitIdea } = useApp();
+    const { user, logout, submitIdea, isLoaded } = useApp();
     const router = useRouter();
 
     const [idea, setIdea] = useState('');
     const [msg, setMsg] = useState({ type: '', text: '' });
 
     useEffect(() => {
-        if (!user) router.push('/');
-    }, [user, router]);
+        if (isLoaded && !user) router.push('/');
+    }, [user, isLoaded, router]);
 
+    if (!isLoaded) return null; // or a spinner
     if (!user) return null;
 
     const handleSubmitIdea = (e) => {

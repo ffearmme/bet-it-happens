@@ -113,7 +113,13 @@ export function AppProvider({ children }) {
     const eventsQuery = query(collection(db, 'events'), limit(50));
     const unsubEvents = onSnapshot(eventsQuery, (snapshot) => {
       const eventsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      eventsList.sort((a, b) => (a.status === 'open' ? -1 : 1) || new Date(a.startAt) - new Date(b.startAt));
+      eventsList.sort((a, b) => {
+        // Open events first
+        if (a.status === 'open' && b.status !== 'open') return -1;
+        if (a.status !== 'open' && b.status === 'open') return 1;
+        // Then sort by startAt date (ascending: earliest date first)
+        return new Date(a.startAt) - new Date(b.startAt);
+      });
       setEvents(eventsList);
     });
 

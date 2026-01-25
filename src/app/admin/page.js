@@ -7,7 +7,7 @@ import { db } from '../../lib/firebase';
 import { collection, query, limit, onSnapshot } from 'firebase/firestore';
 
 export default function Admin() {
-    const { user, events, createEvent, resolveEvent, deleteEvent, ideas, deleteIdea, users, deleteUser, syncEventStats } = useApp();
+    const { user, events, createEvent, resolveEvent, deleteEvent, ideas, deleteIdea, users, deleteUser, syncEventStats, isLoaded } = useApp();
     const router = useRouter();
     const [newEvent, setNewEvent] = useState({
         title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: ''
@@ -16,10 +16,10 @@ export default function Admin() {
     const [allBets, setAllBets] = useState([]);
 
     useEffect(() => {
-        if (!user || user.role !== 'admin') {
+        if (isLoaded && (!user || user.role !== 'admin')) {
             router.push('/');
         }
-    }, [user, router]);
+    }, [user, isLoaded, router]);
 
     // Fetch Global Bets (Admin Only)
     useEffect(() => {
@@ -34,6 +34,7 @@ export default function Admin() {
         return () => unsub();
     }, [user]); // Re-run if user/role changes (though protected by route ref)
 
+    if (!isLoaded) return null;
     if (!user || user.role !== 'admin') return null;
 
     const handleCreate = (e) => {
@@ -311,7 +312,7 @@ service cloud.firestore {
             )}
 
             <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                System Version V0.18
+                System Version V0.20
             </p>
         </div>
     );
