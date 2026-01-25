@@ -57,13 +57,7 @@ export function AppProvider({ children }) {
         const userRef = doc(db, 'users', firebaseUser.uid);
         unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
-            const data = docSnap.data();
-            // Force Admin for owner if not set (fixing previous signups)
-            if (firebaseUser.email === 'ffearmme@gmail.com' && data.role !== 'admin') {
-              updateDoc(userRef, { role: 'admin' });
-              data.role = 'admin';
-            }
-            setUser({ id: firebaseUser.uid, ...data });
+            setUser({ id: firebaseUser.uid, ...docSnap.data() });
           } else {
             // Document does not exist (e.g. first login or previous error).
             console.log(">>> DETECTED NEW USER (No Profile Found) - Creating Profile...");
@@ -71,7 +65,7 @@ export function AppProvider({ children }) {
             const newUser = {
               email: firebaseUser.email,
               username: firebaseUser.displayName || firebaseUser.email.split('@')[0],
-              role: (firebaseUser.email.toLowerCase().includes('admin') || firebaseUser.email === 'ffearmme@gmail.com') ? 'admin' : 'user',
+              role: (firebaseUser.email.toLowerCase().includes('admin')) ? 'admin' : 'user',
               balance: 1000,
               createdAt: new Date().toISOString()
             };
@@ -333,9 +327,53 @@ export function AppProvider({ children }) {
     return { success: true };
   }
 
+  const demoteSelf = async () => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.id), { role: 'user' });
+      // setUser({...user, role: 'user'}); // Optimistic update
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (!user) return { success: false };
+    try {
+      const userId = user.id;
+
+      // 1. Delete all user's bets (Query first)
+      const betsQ = query(collection(db, 'bets'), where('userId', '==', userId));
+      const betsSnap = await getDocs(betsQ);
+      const batch = [];
+      // Note: Firestore batch limit is 500, simple loop for now
+      for (const b of betsSnap.docs) {
+        await deleteDoc(doc(db, 'bets', b.id));
+      }
+
+      // 2. Delete User Profile
+      await deleteDoc(doc(db, 'users', userId));
+
+      // 3. Delete Auth Account
+      if (auth.currentUser) {
+        await auth.currentUser.delete();
+      }
+
+      return { success: true };
+    } catch (e) {
+      console.error("Delete Error:", e);
+      // Force logout if auth delete fails (requires re-login usually)
+      if (e.code === 'auth/requires-recent-login') {
+        return { success: false, error: "Please log out and log in again to delete your account." };
+      }
+      return { success: false, error: e.message };
+    }
+  };
+
   return (
     <AppContext.Provider value={{
-      user, signup, signin, logout, updateUser, submitIdea,
+      user, signup, signin, logout, updateUser, submitIdea, deleteAccount, demoteSelf,
       events, createEvent, resolveEvent, deleteEvent,
       bets, placeBet, isLoaded, isFirebase: true, users
     }}>

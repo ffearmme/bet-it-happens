@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
 export default function Profile() {
-    const { user, updateUser, logout } = useApp();
+    const { user, updateUser, logout, deleteAccount, demoteSelf } = useApp();
     const router = useRouter();
 
     const [formData, setFormData] = useState({ username: '', email: '', password: '', profilePic: '' });
@@ -128,9 +128,58 @@ export default function Profile() {
                 </form>
 
                 <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--border)' }}>
-                    <button className="btn btn-outline" onClick={logout} style={{ borderColor: 'var(--accent-loss)', color: 'var(--accent-loss)' }}>
+                    <button className="btn btn-outline" onClick={logout} style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
                         Sign Out
                     </button>
+                </div>
+
+                {/* DANGER ZONE */}
+                <div style={{ marginTop: '40px', paddingTop: '24px', borderTop: '1px solid #dc2626' }}>
+                    <h3 style={{ color: '#ef4444', fontSize: '18px', marginBottom: '16px' }}>Danger Zone</h3>
+
+                    {user.role === 'admin' && (
+                        <div style={{ marginBottom: '16px' }}>
+                            <p className="text-sm" style={{ marginBottom: '8px' }}>You are currently an Admin.</p>
+                            <button
+                                className="btn"
+                                style={{ background: 'var(--bg-card)', border: '1px solid #f59e0b', color: '#f59e0b', width: '100%' }}
+                                onClick={async () => {
+                                    if (confirm("Are you sure you want to remove your own Admin privileges? This cannot be undone from here.")) {
+                                        const res = await demoteSelf();
+                                        if (res.success) alert("You are now a regular user.");
+                                        else alert("Error: " + res.error);
+                                    }
+                                }}
+                            >
+                                Step Down (Remove Admin)
+                            </button>
+                        </div>
+                    )}
+
+                    <div style={{ padding: '16px', border: '1px solid #7f1d1d', borderRadius: '8px', background: 'rgba(127, 29, 29, 0.1)' }}>
+                        <p style={{ color: '#fca5a5', fontSize: '14px', marginBottom: '12px' }}>
+                            Permanently delete your account and all data. This action cannot be undone.
+                        </p>
+                        <button
+                            className="btn"
+                            style={{ background: '#dc2626', color: 'white', border: 'none', width: '100%' }}
+                            onClick={async () => {
+                                const confirm1 = confirm("Are you sure you want to delete your account? This is PERMANENT.");
+                                if (confirm1) {
+                                    const confirm2 = confirm("Last chance: This will wipe your coins, bets, and profile forever. Confirm?");
+                                    if (confirm2) {
+                                        const res = await deleteAccount();
+                                        if (!res.success) {
+                                            alert(res.error || "Failed to delete. Try logging out and in again.");
+                                        }
+                                        // If success, store listener will handle redirect usually, or auth change will
+                                    }
+                                }
+                            }}
+                        >
+                            Delete Account Permanently
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
