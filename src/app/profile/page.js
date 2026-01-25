@@ -4,11 +4,12 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
 export default function Profile() {
-    const { user, updateUser, logout, deleteAccount, demoteSelf, isLoaded } = useApp();
+    const { user, updateUser, logout, deleteAccount, demoteSelf, isLoaded, getUserStats } = useApp();
     const router = useRouter();
 
-    const [formData, setFormData] = useState({ username: '', email: '', password: '', profilePic: '' });
+    const [formData, setFormData] = useState({ username: '', email: '', password: '', profilePic: '', bio: '' });
     const [msg, setMsg] = useState({ type: '', text: '' });
+    const [stats, setStats] = useState(null);
 
     useEffect(() => {
         if (!isLoaded) return;
@@ -20,7 +21,12 @@ export default function Profile() {
             username: user.username,
             email: user.email,
             password: user.password,
-            profilePic: user.profilePic || ''
+            profilePic: user.profilePic || '',
+            bio: user.bio || ''
+        });
+
+        getUserStats(user.id).then(res => {
+            if (res.success) setStats(res.stats);
         });
     }, [user, isLoaded, router]);
 
@@ -149,6 +155,25 @@ export default function Profile() {
                         </label>
                     </div>
                     <p className="text-sm">User ID: {user.id.slice(0, 8)}...</p>
+
+                    {stats && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                            <div style={{ background: 'var(--bg-input)', padding: '8px', borderRadius: '8px' }}>
+                                <div className="text-sm">Win Rate</div>
+                                <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--primary)' }}>{stats.winRate}%</div>
+                            </div>
+                            <div style={{ background: 'var(--bg-input)', padding: '8px', borderRadius: '8px' }}>
+                                <div className="text-sm">Profit</div>
+                                <div style={{ fontSize: '18px', fontWeight: 'bold', color: stats.profit >= 0 ? 'var(--primary)' : 'var(--accent-loss)' }}>
+                                    ${stats.profit.toFixed(0)}
+                                </div>
+                            </div>
+                            <div style={{ background: 'var(--bg-input)', padding: '8px', borderRadius: '8px' }}>
+                                <div className="text-sm">Bets</div>
+                                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#fff' }}>{stats.total}</div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <form onSubmit={handleUpdate}>
@@ -175,10 +200,22 @@ export default function Profile() {
                         <label className="text-sm" style={{ marginBottom: '8px', display: 'block' }}>Password</label>
                         <input
                             className="input"
-                            type="password" // Show password for simple edit as requested
+                            type="password"
                             value={formData.password}
                             onChange={e => setFormData({ ...formData, password: e.target.value })}
                             required
+                        />
+                    </div>
+
+                    <div className="input-group">
+                        <label className="text-sm" style={{ marginBottom: '8px', display: 'block' }}>Bio</label>
+                        <textarea
+                            className="input"
+                            value={formData.bio}
+                            onChange={e => setFormData({ ...formData, bio: e.target.value })}
+                            placeholder="Tell the world who you are..."
+                            rows={3}
+                            style={{ resize: 'none' }}
                         />
                     </div>
 

@@ -697,10 +697,76 @@ export function AppProvider({ children }) {
 
 
 
+  const getUserStats = async (targetUserId) => {
+    try {
+      const userRef = doc(db, 'users', targetUserId);
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.exists() ? userSnap.data() : {};
+
+      const betsQ = query(collection(db, 'bets'), where('userId', '==', targetUserId));
+      const snap = await getDocs(betsQ);
+      let wins = 0;
+      let losses = 0;
+      let profit = 0;
+      let settledCount = 0;
+
+      snap.docs.forEach(d => {
+        const b = d.data();
+        if (b.status === 'won') {
+          wins++;
+          settledCount++;
+          profit += ((b.potentialPayout || (b.amount * b.odds)) - b.amount);
+        } else if (b.status === 'lost') {
+          losses++;
+          settledCount++;
+          profit -= b.amount;
+        }
+      });
+
+      const total = snap.size;
+      const winRate = settledCount > 0 ? ((wins / settledCount) * 100).toFixed(1) : 0;
+
+      return {
+        success: true,
+        stats: { wins, losses, total, winRate, profit },
+        profile: { bio: userData.bio || '', profilePic: userData.profilePic, username: userData.username }
+      };
+    } catch (e) { console.error(e); return { success: false, error: e.message }; }
+  };
+
+  const getWeeklyLeaderboard = async () => {
+    try {
+      const d = new Date();
+      const day = d.getDay();
+      const diff = d.getDate() - day;
+      const startOfWeek = new Date(d.setDate(diff));
+      startOfWeek.setHours(0, 0, 0, 0);
+      const isoStr = startOfWeek.toISOString();
+
+      const q = query(collection(db, 'bets'), where('status', 'in', ['won', 'lost']), where('settledAt', '>=', isoStr));
+      const snap = await getDocs(q);
+
+      const stats = {};
+      snap.docs.forEach(doc => {
+        const b = doc.data();
+        if (!stats[b.userId]) stats[b.userId] = 0;
+        if (b.status === 'won') {
+          stats[b.userId] += ((b.potentialPayout || (b.amount * b.odds)) - b.amount);
+        } else {
+          stats[b.userId] -= b.amount;
+        }
+      });
+
+      const leaderboard = Object.entries(stats).map(([userId, profit]) => ({ userId, profit }));
+      leaderboard.sort((a, b) => b.profit - a.profit);
+      return { success: true, data: leaderboard };
+    } catch (e) { console.error(e); return { success: false, error: e.message }; }
+  };
+
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-      events, createEvent, resolveEvent, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, markNotificationRead,
+      events, createEvent, resolveEvent, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, markNotificationRead, getUserStats, getWeeklyLeaderboard,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db
     }}>
       {children}

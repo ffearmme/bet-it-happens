@@ -14,7 +14,7 @@ const FUNNY_QUOTES = [
 ];
 
 export default function Home() {
-    const { user, events, placeBet, signup, signin, isLoaded, addComment, db } = useApp();
+    const { user, events, placeBet, signup, signin, isLoaded, addComment, db, getUserStats } = useApp();
     const [selectedOutcome, setSelectedOutcome] = useState(null);
     const [wager, setWager] = useState('');
     const [error, setError] = useState('');
@@ -22,6 +22,19 @@ export default function Home() {
     const [expandedEvent, setExpandedEvent] = useState(null);
     const [comments, setComments] = useState([]);
     const [commentText, setCommentText] = useState('');
+
+    // Public Profile Viewer
+    const [viewingUser, setViewingUser] = useState(null);
+    const [viewingProfile, setViewingProfile] = useState(null);
+
+    useEffect(() => {
+        if (viewingUser) {
+            setViewingProfile(null);
+            getUserStats(viewingUser.id).then(res => {
+                if (res.success) setViewingProfile(res);
+            });
+        }
+    }, [viewingUser]);
 
     useEffect(() => {
         if (!expandedEvent || !db) return;
@@ -206,7 +219,10 @@ export default function Home() {
         <div className="container animate-fade">
             <header style={{ marginBottom: '32px', paddingTop: '10px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '800' }}>Bet It Happens</h1>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                        <img src="/logo.png" alt="Logo" style={{ height: '80px', width: 'auto' }} />
+                        <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '800', letterSpacing: '-0.5px' }}>Bet It Happens</h1>
+                    </div>
 
                     <Link href="/profile" style={{ textDecoration: 'none', color: 'inherit' }}>
                         <div style={{
@@ -381,7 +397,14 @@ export default function Home() {
                                 {comments.length === 0 && <p className="text-sm">No chatter yet. Start the beef!</p>}
                                 {comments.map(c => (
                                     <div key={c.id} style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px' }}>
-                                        <div style={{ fontSize: '10px', color: 'var(--primary)', fontWeight: 'bold' }}>{c.username || 'Anon'}</div>
+                                        <div
+                                            style={{ fontSize: '10px', color: 'var(--primary)', fontWeight: 'bold', cursor: 'pointer', display: 'inline-block', marginBottom: '2px' }}
+                                            onClick={() => setViewingUser({ id: c.userId, username: c.username })}
+                                            onMouseEnter={e => e.target.style.textDecoration = 'underline'}
+                                            onMouseLeave={e => e.target.style.textDecoration = 'none'}
+                                        >
+                                            {c.username || 'Anon'}
+                                        </div>
                                         <div style={{ fontSize: '12px' }}>{c.text}</div>
                                     </div>
                                 ))}
@@ -429,6 +452,57 @@ export default function Home() {
                                     </button>
                                 </div>
                             ) : <p className="text-sm">Login to comment.</p>}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- Public User Profile Modal --- */}
+            {viewingUser && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                    background: 'rgba(0,0,0,0.85)', zIndex: 1100,
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px'
+                }} onClick={() => setViewingUser(null)}>
+                    <div className="card animate-fade" style={{ width: '100%', maxWidth: '350px', border: '1px solid var(--primary)', position: 'relative' }} onClick={e => e.stopPropagation()}>
+                        <button
+                            onClick={() => setViewingUser(null)}
+                            style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', color: '#fff', fontSize: '20px' }}
+                        >
+                            &times;
+                        </button>
+
+                        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                            <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--bg-input)', margin: '0 auto 12px', overflow: 'hidden', border: '2px solid var(--primary)' }}>
+                                {viewingProfile?.profile?.profilePic ? (
+                                    <img src={viewingProfile.profile.profilePic} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+                                ) : (
+                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px' }}>
+                                        {(viewingProfile?.profile?.username || viewingUser.username || '?').charAt(0).toUpperCase()}
+                                    </div>
+                                )}
+                            </div>
+                            <h2 style={{ fontSize: '20px', marginBottom: '4px' }}>{viewingProfile?.profile?.username || viewingUser.username}</h2>
+                            {viewingProfile?.profile?.bio && (
+                                <p style={{ fontSize: '13px', color: '#a1a1aa', fontStyle: 'italic', margin: '0 0 16px 0' }}>
+                                    "{viewingProfile.profile.bio}"
+                                </p>
+                            )}
+
+                            {viewingProfile?.stats ? (
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '16px' }}>
+                                    <div style={{ background: 'var(--bg-input)', padding: '12px', borderRadius: '8px' }}>
+                                        <div className="text-sm">Win Rate</div>
+                                        <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--primary)' }}>{viewingProfile.stats.winRate}%</div>
+                                    </div>
+                                    <div style={{ background: 'var(--bg-input)', padding: '12px', borderRadius: '8px' }}>
+                                        <div className="text-sm">Profit</div>
+                                        <div style={{ fontSize: '18px', fontWeight: 'bold', color: viewingProfile.stats.profit >= 0 ? 'var(--primary)' : 'var(--accent-loss)' }}>
+                                            ${viewingProfile.stats.profit.toFixed(0)}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : <p className="text-sm">Loading stats...</p>}
                         </div>
                     </div>
                 </div>
