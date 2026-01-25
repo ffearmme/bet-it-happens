@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useApp } from '../lib/store';
 import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
@@ -15,6 +15,7 @@ const FUNNY_QUOTES = [
 
 export default function Home() {
     const { user, events, placeBet, signup, signin, isLoaded, addComment, db, getUserStats } = useApp();
+    const chatEndRef = useRef(null);
     const [selectedOutcome, setSelectedOutcome] = useState(null);
     const [wager, setWager] = useState('');
     const [error, setError] = useState('');
@@ -46,6 +47,12 @@ export default function Home() {
         });
         return () => unsub();
     }, [expandedEvent, db]);
+
+    useEffect(() => {
+        if (chatEndRef.current) {
+            chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+    }, [comments, expandedEvent]);
 
     // Login State
     const [isLoginMode, setIsLoginMode] = useState(true); // Toggle Login/Signup
@@ -218,6 +225,19 @@ export default function Home() {
 
     return (
         <div className="container animate-fade">
+            <div style={{
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid #3b82f6',
+                color: '#60a5fa',
+                padding: '10px',
+                textAlign: 'center',
+                fontSize: '12px',
+                fontWeight: '600',
+                borderRadius: '8px',
+                marginBottom: '12px'
+            }}>
+                📢 NEW RULE: You can now only bet on ONE side per event. Choose wisely! (Loyalty Check Active)
+            </div>
             <header style={{ marginBottom: '32px', paddingTop: '10px' }}>
 
 
@@ -388,6 +408,7 @@ export default function Home() {
                                         <div style={{ fontSize: '12px' }}>{c.text}</div>
                                     </div>
                                 ))}
+                                <div ref={chatEndRef} />
                             </div>
                             {user ? (
                                 <div style={{ display: 'flex', gap: '8px' }}>
