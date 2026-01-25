@@ -306,27 +306,36 @@ export default function Home() {
                         <p style={{ marginBottom: '24px', lineHeight: '1.5' }}>{expandedEvent.description}</p>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                            {expandedEvent.outcomes.map(outcome => (
-                                <button
-                                    key={outcome.id}
-                                    disabled={expandedEvent.status !== 'open'}
-                                    onClick={() => {
-                                        if (user) {
-                                            setSelectedOutcome({ eventId: expandedEvent.id, outcomeId: outcome.id, label: outcome.label, odds: outcome.odds, title: expandedEvent.title });
-                                            setExpandedEvent(null); // Close modal
-                                            window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to bet slip if needed, though bet slip is usually sticky? 
-                                            // Actually bet slip is at top of page 
-                                        } else {
-                                            alert("Login to bet!");
-                                        }
-                                    }}
-                                    className="btn btn-outline"
-                                    style={{ borderColor: '#fbbf24', color: '#fbbf24', padding: '12px' }}
-                                >
-                                    <div style={{ fontWeight: 'bold' }}>{outcome.label}</div>
-                                    <div style={{ fontSize: '14px' }}>{outcome.odds.toFixed(2)}x</div>
-                                </button>
-                            ))}
+                            {expandedEvent.outcomes.map(outcome => {
+                                const stats = expandedEvent.stats || {};
+                                const total = stats.totalBets || 0;
+                                const count = stats.counts?.[outcome.id] || 0;
+                                const percent = total > 0 ? Math.round((count / total) * 100) : 0;
+
+                                return (
+                                    <button
+                                        key={outcome.id}
+                                        disabled={expandedEvent.status !== 'open'}
+                                        onClick={() => {
+                                            if (user) {
+                                                setSelectedOutcome({ eventId: expandedEvent.id, outcomeId: outcome.id, label: outcome.label, odds: outcome.odds, title: expandedEvent.title });
+                                                setExpandedEvent(null);
+                                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                                            } else {
+                                                alert("Login to bet!");
+                                            }
+                                        }}
+                                        className="btn btn-outline"
+                                        style={{ borderColor: '#fbbf24', color: '#fbbf24', padding: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}
+                                    >
+                                        <div style={{ fontSize: '24px', fontWeight: '800' }}>{outcome.odds.toFixed(2)}x</div>
+                                        <div style={{ fontWeight: '600', fontSize: '14px' }}>{outcome.label}</div>
+                                        <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
+                                            {percent}% picked
+                                        </div>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>

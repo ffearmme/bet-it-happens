@@ -353,7 +353,7 @@ service cloud.firestore {
             }
 
             <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                System Version V0.39
+                System Version V0.40
             </p>
         </div >
     );
