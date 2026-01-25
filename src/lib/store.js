@@ -348,6 +348,20 @@ export function AppProvider({ children }) {
             invested: increment(-bet.amount)
           });
         }
+
+        // Create Notification
+        const notifRef = doc(collection(db, 'notifications'));
+        batch.set(notifRef, {
+          userId: bet.userId,
+          type: 'result',
+          eventId: eventId,
+          title: isWinner ? 'You Won!' : 'Bet Lost',
+          message: isWinner
+            ? `You won $${(bet.potentialPayout).toFixed(2)} on ${bet.eventTitle} (${bet.outcomeLabel})`
+            : `You lost $${bet.amount.toFixed(2)} on ${bet.eventTitle} (${bet.outcomeLabel})`,
+          read: false,
+          createdAt: new Date().toISOString()
+        });
       });
 
       await batch.commit();
@@ -659,11 +673,35 @@ export function AppProvider({ children }) {
     }
   };
 
+  const addComment = async (eventId, text) => {
+    if (!user) return { success: false, error: 'Login to comment' };
+    try {
+      await addDoc(collection(db, 'comments'), {
+        eventId,
+        userId: user.id,
+        username: user.username,
+        text,
+        createdAt: new Date().toISOString()
+      });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const markNotificationRead = async (notifId) => {
+    try {
+      await updateDoc(doc(db, 'notifications', notifId), { read: true });
+    } catch (e) { console.error(e); }
+  };
+
+
+
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-      events, createEvent, resolveEvent, deleteEvent, toggleFeatured, recalculateLeaderboard,
-      bets, placeBet, isLoaded, isFirebase: true, users, ideas
+      events, createEvent, resolveEvent, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, markNotificationRead,
+      bets, placeBet, isLoaded, isFirebase: true, users, ideas, db
     }}>
       {children}
     </AppContext.Provider>

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useApp } from '../lib/store';
+import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
 
 const FUNNY_QUOTES = [
     "Loading luck...",
@@ -13,12 +14,25 @@ const FUNNY_QUOTES = [
 ];
 
 export default function Home() {
-    const { user, events, placeBet, signup, signin, isLoaded } = useApp();
+    const { user, events, placeBet, signup, signin, isLoaded, addComment, db } = useApp();
     const [selectedOutcome, setSelectedOutcome] = useState(null);
     const [wager, setWager] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [expandedEvent, setExpandedEvent] = useState(null);
+    const [comments, setComments] = useState([]);
+    const [commentText, setCommentText] = useState('');
+
+    useEffect(() => {
+        if (!expandedEvent || !db) return;
+        const q = query(collection(db, 'comments'), where('eventId', '==', expandedEvent.id));
+        const unsub = onSnapshot(q, (snap) => {
+            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            setComments(list);
+        });
+        return () => unsub();
+    }, [expandedEvent, db]);
 
     // Login State
     const [isLoginMode, setIsLoginMode] = useState(true); // Toggle Login/Signup
@@ -190,35 +204,58 @@ export default function Home() {
 
     return (
         <div className="container animate-fade">
-            <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', paddingTop: '10px' }}>
-                <div>
-                    <h1 style={{ marginBottom: '4px', fontSize: '24px' }}>Bet It Happens</h1>
-                    <p className="text-sm">Balance: <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
-                        {user.balance !== undefined ? `$${user.balance.toFixed(2)}` : '...'}
-                    </span></p>
+            <header style={{ marginBottom: '32px', paddingTop: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '800' }}>Bet It Happens</h1>
+
+                    <Link href="/profile" style={{ textDecoration: 'none', color: 'inherit' }}>
+                        <div style={{
+                            padding: '8px 12px',
+                            borderRadius: '20px',
+                            background: 'var(--bg-card)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            border: '1px solid var(--border)',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            gap: '6px',
+                            cursor: 'pointer'
+                        }}>
+                            {user.profilePic ? (
+                                <img src={user.profilePic} style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }} alt="" />
+                            ) : (
+                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)' }}></div>
+                            )}
+                            {user.username}
+                        </div>
+                    </Link>
                 </div>
-                <Link href="/profile" style={{ textDecoration: 'none', color: 'inherit' }}>
-                    <div style={{
-                        padding: '8px 12px',
-                        borderRadius: '20px',
-                        background: 'var(--bg-card)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        border: '1px solid var(--border)',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        gap: '6px',
-                        cursor: 'pointer'
+
+                <div style={{ textAlign: 'center' }}>
+                    <p style={{
+                        fontSize: '16px',
+                        color: '#fff',
+                        marginBottom: '12px',
+                        fontWeight: '600',
+                        background: 'linear-gradient(90deg, #fff, #a1a1aa)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        display: 'inline-block'
                     }}>
-                        {user.profilePic ? (
-                            <img src={user.profilePic} style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }} alt="" />
-                        ) : (
-                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)' }}></div>
-                        )}
-                        {user.username}
+                        Prediction Markets for Real Life — Risk Free, Glory Bound.
+                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
+                        <p className="text-sm" style={{ background: 'var(--bg-card)', padding: '4px 12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                            Balance: <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
+                                {user.balance !== undefined ? `$${user.balance.toFixed(2)}` : '...'}
+                            </span></p>
+                        <Link href="/rules" style={{ fontSize: '11px', color: 'var(--text-muted)', textDecoration: 'underline' }}>
+                            Resolutions & Rules ℹ️
+                        </Link>
                     </div>
-                </Link>        </header>
+                </div>
+            </header>
 
             {/* Earn CTA */}
             <Link href="/wallet" style={{ textDecoration: 'none' }}>
@@ -337,6 +374,62 @@ export default function Home() {
                                 );
                             })}
                         </div>
+
+                        <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #333' }}>
+                            <h3 style={{ fontSize: '16px', marginBottom: '12px', color: '#a1a1aa' }}>Trash Talk 🗣️</h3>
+                            <div style={{ maxHeight: '150px', overflowY: 'auto', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {comments.length === 0 && <p className="text-sm">No chatter yet. Start the beef!</p>}
+                                {comments.map(c => (
+                                    <div key={c.id} style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px' }}>
+                                        <div style={{ fontSize: '10px', color: 'var(--primary)', fontWeight: 'bold' }}>{c.username || 'Anon'}</div>
+                                        <div style={{ fontSize: '12px' }}>{c.text}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            {user ? (
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <input
+                                        className="input"
+                                        placeholder="Say something..."
+                                        style={{ padding: '8px', fontSize: '12px' }}
+                                        value={commentText}
+                                        onChange={e => setCommentText(e.target.value)}
+                                        onKeyDown={async (e) => {
+                                            if (e.key === 'Enter' && commentText.trim()) {
+                                                const text = commentText;
+                                                setCommentText(''); // Optimistic update
+                                                console.log("Sending:", text);
+                                                const res = await addComment(expandedEvent.id, text);
+                                                if (!res.success) {
+                                                    console.error("Failed:", res.error);
+                                                    alert("Failed to send: " + res.error);
+                                                    setCommentText(text); // Revert
+                                                }
+                                            }
+                                        }}
+                                    />
+                                    <button
+                                        className="btn btn-primary"
+                                        style={{ width: 'auto', padding: '8px 12px', fontSize: '12px' }}
+                                        onClick={async () => {
+                                            if (commentText.trim()) {
+                                                const text = commentText;
+                                                setCommentText('');
+                                                console.log("Sending:", text);
+                                                const res = await addComment(expandedEvent.id, text);
+                                                if (!res.success) {
+                                                    console.error("Failed:", res.error);
+                                                    alert("Failed to send: " + res.error);
+                                                    setCommentText(text);
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        Send
+                                    </button>
+                                </div>
+                            ) : <p className="text-sm">Login to comment.</p>}
+                        </div>
                     </div>
                 </div>
             )}
@@ -353,10 +446,20 @@ export default function Home() {
                 <div style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                    gap: '20px'
                 }}>
                     {activeEvents.filter(e => !e.featured).map((event) => (
-                        <div key={event.id} className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+                        <div
+                            key={event.id}
+                            className="card"
+                            onClick={() => setExpandedEvent(event)}
+                            style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                cursor: 'pointer',
+                                transition: 'transform 0.2s',
+                                border: '1px solid var(--border)'
+                            }}
+                        >
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                                 <span className="badge" style={{ background: event.status === 'open' ? '#22c55e20' : '#eab30820', color: event.status === 'open' ? '#22c55e' : '#eab308' }}>
                                     {event.status === 'open' ? 'OPEN' : 'LOCKED'}
@@ -402,7 +505,15 @@ export default function Home() {
                                                 position: 'relative',
                                                 overflow: 'hidden'
                                             }}
-                                            onClick={() => setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title })}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (user) {
+                                                    setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
+                                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                } else {
+                                                    alert("Login to bet!");
+                                                }
+                                            }}
                                         >
                                             <span style={{ fontSize: '14px', zIndex: 2 }}>{outcome.label}</span>
                                             <span style={{ color: 'var(--primary)', fontWeight: 'bold', zIndex: 2 }}>x{outcome.odds.toFixed(2)}</span>
@@ -418,6 +529,7 @@ export default function Home() {
                                     )
                                 })}
                             </div>
+                            <div style={{ marginTop: '12px', textAlign: 'center', fontSize: '11px', color: '#52525b' }}>(Click card for Chat & Analysis)</div>
                         </div>
                     ))}
                 </div>
