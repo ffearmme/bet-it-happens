@@ -125,12 +125,12 @@ export default function Home() {
                             </div>
                         )}
                         <div className="input-group">
-                            <label className="text-sm" style={{ marginBottom: '8px', display: 'block' }}>Email</label>
+                            <label className="text-sm" style={{ marginBottom: '8px', display: 'block' }}>Email or Username</label>
                             <input
-                                type="email"
+                                type="text"
                                 required
                                 className="input"
-                                placeholder="you@example.com"
+                                placeholder="you@example.com or CoolUser123"
                                 value={email}
                                 onChange={e => setEmail(e.target.value)}
                             />
@@ -251,12 +251,22 @@ export default function Home() {
                         </div>
 
                         <h3 style={{ fontSize: '18px', marginBottom: '4px' }}>{event.title}</h3>
-                        <p className="text-sm" style={{ marginBottom: '8px' }}>{event.description}</p>
-                        {event.deadline && (
-                            <p className="text-sm" style={{ marginBottom: '16px', color: 'var(--accent-lock)', fontSize: '12px' }}>
-                                🕒 Deadline: {new Date(event.deadline).toLocaleString()}
-                            </p>
-                        )}
+                        <p className="text-sm" style={{ marginBottom: '12px' }}>{event.description}</p>
+
+                        <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', fontSize: '12px', background: 'var(--bg-input)', padding: '8px', borderRadius: '6px' }}>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>🛑 Betting Closes:</div>
+                                <div style={{ color: 'var(--accent-loss)', fontWeight: 'bold' }}>
+                                    {event.deadline ? new Date(event.deadline).toLocaleString() : 'No deadline'}
+                                </div>
+                            </div>
+                            <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: '16px' }}>
+                                <div style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>🏁 Resolution/Cashout:</div>
+                                <div style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
+                                    {new Date(event.startAt).toLocaleString()}
+                                </div>
+                            </div>
+                        </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                             {event.outcomes.map(outcome => {

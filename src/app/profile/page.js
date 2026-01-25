@@ -27,19 +27,73 @@ export default function Profile() {
     if (!isLoaded) return <div className="container" style={{ padding: '40px', textAlign: 'center' }}>Loading profile...</div>;
     if (!user) return null;
 
-    const handleFileChange = (e) => {
+    const handleFileChange = async (e) => {
         const file = e.target.files[0];
         if (file) {
-            if (file.size > 500000) { // 500KB limit
-                setMsg({ type: 'error', text: 'Image too large (Max 500KB)' });
+            if (file.size > 10 * 1024 * 1024) { // 10MB limit
+                setMsg({ type: 'error', text: 'Image too large (Max 10MB)' });
                 return;
             }
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setFormData(prev => ({ ...prev, profilePic: reader.result }));
-            };
-            reader.readAsDataURL(file);
+
+            try {
+                setMsg({ type: '', text: 'Processing image...' });
+                const compressedBase64 = await compressImage(file);
+
+                // Final check for Firestore limit (1MB roughly)
+                if (compressedBase64.length > 1000000) {
+                    setMsg({ type: 'error', text: 'Image still too complex after compression. Try a simpler image.' });
+                    return;
+                }
+
+                setFormData(prev => ({ ...prev, profilePic: compressedBase64 }));
+                setMsg({ type: 'success', text: 'Image processed! Ready to save.' });
+                setTimeout(() => setMsg({ type: '', text: '' }), 2000);
+            } catch (err) {
+                console.error("Compression error:", err);
+                setMsg({ type: 'error', text: 'Failed to process image.' });
+            }
         }
+    };
+
+    const compressImage = (file) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    const MAX_WIDTH = 500;
+                    const MAX_HEIGHT = 500;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Compress to JPEG with 0.7 quality
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    resolve(dataUrl);
+                };
+                img.onerror = (err) => reject(err);
+            };
+            reader.onerror = (err) => reject(err);
+        });
     };
 
     const handleUpdate = async (e) => {

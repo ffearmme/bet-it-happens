@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
 export default function Wallet() {
-    const { user, logout, submitIdea, isLoaded } = useApp();
+    const { user, logout, submitIdea, isLoaded, ideas } = useApp();
     const router = useRouter();
 
     const [idea, setIdea] = useState('');
@@ -46,11 +46,24 @@ export default function Wallet() {
             </div>
 
             <div className="card" style={{ textAlign: 'center', padding: '40px 20px', background: 'linear-gradient(180deg, var(--bg-card) 0%, rgba(34,197,94,0.05) 100%)' }}>
-                <p className="text-sm">Total Balance</p>
-                <div style={{ fontSize: '48px', fontWeight: 800, color: 'var(--primary)', margin: '10px 0' }}>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Available to Bet</p>
+                <div style={{ fontSize: '48px', fontWeight: 800, color: 'var(--primary)', margin: '5px 0 15px 0' }}>
                     ${user.balance.toFixed(2)}
                 </div>
-                <div className="badge" style={{ background: '#27272a', display: 'inline-block' }}>VIRTUAL CURRENCY</div>
+
+                <div style={{ background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '8px', display: 'inline-flex', flexDirection: 'column', gap: '5px', minWidth: '200px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>In Active Bets:</span>
+                        <span style={{ fontWeight: 'bold' }}>${(user.invested || 0).toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '5px', marginTop: '2px' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Total Net Worth:</span>
+                        <span style={{ fontWeight: 'bold', color: '#fff' }}>${((user.balance || 0) + (user.invested || 0)).toFixed(2)}</span>
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'var(--primary)', marginTop: '4px', fontStyle: 'italic' }}>
+                        (This is your Leaderboard Score)
+                    </div>
+                </div>
             </div>
 
             {/* Earn Section */}
@@ -107,6 +120,23 @@ export default function Wallet() {
                         Submit & Earn
                     </button>
                 </form>
+
+                {/* List of user submitted ideas */}
+                {ideas && ideas.filter(i => i.userId === user.id).length > 0 && (
+                    <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+                        <h4 style={{ fontSize: '14px', marginBottom: '12px', color: 'var(--text-muted)' }}>Your Submitted Ideas</h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {ideas.filter(i => i.userId === user.id)
+                                .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)) // Recent first
+                                .map(idea => (
+                                    <div key={idea.id} style={{ background: 'var(--bg-input)', padding: '10px', borderRadius: '6px', fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ fontStyle: 'italic', color: '#ccc' }}>"{idea.text}"</span>
+                                        <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>✓ Submitted</span>
+                                    </div>
+                                ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="card">
@@ -120,6 +150,6 @@ export default function Wallet() {
                     This application is for <strong>entertainment purposes only</strong>. The currency used in this app is entirely virtual and has no real-world value.
                 </p>
             </div>
-        </div>
+        </div >
     );
 }

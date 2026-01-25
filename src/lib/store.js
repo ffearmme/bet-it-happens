@@ -192,8 +192,19 @@ export function AppProvider({ children }) {
     }
   };
 
-  const signin = async (email, password) => {
+  const signin = async (emailOrUsername, password) => {
     try {
+      let email = emailOrUsername;
+      // Simple check: if no '@', assume username
+      if (!email.includes('@')) {
+        const q = query(collection(db, 'users'), where('username', '==', emailOrUsername), limit(1));
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          return { success: false, error: 'User-not-found' };
+        }
+        email = snap.docs[0].data().email;
+      }
+
       await signInWithEmailAndPassword(auth, email, password);
       return { success: true };
     } catch (error) {
@@ -220,10 +231,11 @@ export function AppProvider({ children }) {
     const outcome = event.outcomes.find(o => o.id === outcomeId);
 
     try {
-      // 1. Deduct Balance
+      // 1. Deduct Balance & Add to Invested
       const userRef = doc(db, 'users', user.id);
       await updateDoc(userRef, {
-        balance: increment(-amount)
+        balance: increment(-amount),
+        invested: increment(amount) // Track active wagers for leaderboard
       });
 
       // 2. Create Bet
@@ -298,46 +310,47 @@ export function AppProvider({ children }) {
         winnerOutcomeId
       });
 
-      // 2. Find all pending bets for this event (This is client side heavy! ideally backend)
-      // Since we are doing a client-side admin, we query ALL bets for this event.
-      // NOTE: This usually requires a composite index on Firestore: eventId + status
-      const betsRef = collection(db, 'bets');
-      const q = query(betsRef, where('eventId', '==', eventId), where('status', '==', 'pending'));
+      // 2. Process Bets
+      const betsQ = query(collection(db, 'bets'), where('eventId', '==', eventId));
+      const betsSnap = await getDocs(betsQ); // Need all bets to settle
 
-      // We can't use await inside map easily without Promise.all
-      // But we need to fetch them first. 
-      // We actually can't easily query *all* bets from client unless we are admin and security rules allow it.
-      // Assuming Admin has permission to read all bets.
+      const batch = writeBatch(db);
 
-      // This part is tricky purely client-side without Cloud Functions.
-      // I will implement a "dumb" loop here. It works for small scale.
-
-      // We need to fetch the snapshots once, we don't need a listener.
-      const querySnapshot = await getDocs(q);
-
-      const batchPromises = querySnapshot.docs.map(async (betDoc) => {
+      betsSnap.docs.forEach((betDoc) => {
         const bet = betDoc.data();
-        const isWin = bet.outcomeId === winnerOutcomeId;
+        const isWinner = bet.outcomeId === winnerOutcomeId;
+        const userRef = doc(db, 'users', bet.userId);
 
-        // Update Bet Status
-        await updateDoc(doc(db, 'bets', betDoc.id), {
-          status: isWin ? 'won' : 'lost'
+        // Settle the bet document
+        batch.update(betDoc.ref, {
+          status: isWinner ? 'won' : 'lost',
+          settledAt: new Date().toISOString()
         });
 
-        // If Win, Pay User
-        if (isWin) {
-          await updateDoc(doc(db, 'users', bet.userId), {
-            balance: increment(bet.potentialPayout)
+        // Update User Balance & Invested
+        // Always decrease 'invested' because the bet is over.
+        // Increase 'balance' only if they won.
+        if (isWinner) {
+          batch.update(userRef, {
+            balance: increment(bet.potentialPayout),
+            invested: increment(-bet.amount)
+          });
+        } else {
+          batch.update(userRef, {
+            invested: increment(-bet.amount)
           });
         }
       });
 
-      await Promise.all(batchPromises);
-
+      await batch.commit();
+      return { success: true };
     } catch (e) {
-      console.error("Error resolving event", e);
+      console.error(e);
+      return { success: false, error: e.message };
     }
   };
+
+
 
   const submitIdea = async (ideaText) => {
     if (!user) return { success: false, error: 'Not logged in' };
@@ -398,59 +411,114 @@ export function AppProvider({ children }) {
     if (!user) return { success: false, error: 'Not logged in' };
 
     try {
-      let authUpdated = false;
-
-      // 1. Update Auth Email if changed
-      if (updates.email && auth.currentUser) {
-        const currentAuthEmail = auth.currentUser.email;
-        if (updates.email !== currentAuthEmail) {
-          console.log(`Debug: Attempting email update from ${currentAuthEmail} to ${updates.email}`);
-          try {
-            await updateEmail(auth.currentUser, updates.email);
-            authUpdated = true;
-          } catch (emailErr) {
-            console.warn("Direct updateEmail failed, trying verification flow:", emailErr.code);
-            // If direct update is blocked (likely due to Security settings), send verification email
-            if (emailErr.code === 'auth/operation-not-allowed' || emailErr.message.includes('verify')) {
-              await verifyBeforeUpdateEmail(auth.currentUser, updates.email);
-              return { success: true, message: `Verification link sent to ${updates.email}. Check inbox to confirm!` };
-            }
-            throw emailErr;
-          }
-        }
-      }
-
-      // 2. Update Auth Password if provided
-      if (updates.password && updates.password.length > 0) {
-        if (auth.currentUser) {
-          await updatePassword(auth.currentUser, updates.password);
-          authUpdated = true;
-        }
-      }
-
-      // 3. Update Firestore (exclude password)
+      // 1. Update Firestore FIRST (Profile Pic, Username, etc.)
+      // This ensures that non-sensitive updates always succeed even if Auth fails.
       const firestoreUpdates = { ...updates };
       delete firestoreUpdates.password; // Don't store raw password in DB
 
       await updateDoc(doc(db, 'users', user.id), firestoreUpdates);
 
-      // 4. Force refresh to ensure local auth state matches cloud
-      if (authUpdated && auth.currentUser) {
-        await auth.currentUser.reload();
-        // Manually update local user state to reflect changes immediately
-        setUser(prev => ({ ...prev, ...firestoreUpdates }));
+      // Update local state immediately for the UI
+      setUser(prev => ({ ...prev, ...firestoreUpdates }));
+
+      // 2. Attempt Auth Updates (Sensitive: Email/Password)
+      let authUpdated = false;
+      let authErrorMsg = '';
+
+      try {
+        // Update Email
+        if (updates.email && auth.currentUser) {
+          const currentAuthEmail = auth.currentUser.email;
+          if (updates.email.toLowerCase() !== currentAuthEmail.toLowerCase()) {
+            console.log(`Debug: Attempting email update from ${currentAuthEmail} to ${updates.email}`);
+            try {
+              await updateEmail(auth.currentUser, updates.email);
+              authUpdated = true;
+            } catch (emailErr) {
+              if (emailErr.code === 'auth/operation-not-allowed' || emailErr.message.includes('verify')) {
+                await verifyBeforeUpdateEmail(auth.currentUser, updates.email);
+                return { success: true, message: `Profile saved & Verification sent to ${updates.email}.` };
+              }
+              throw emailErr;
+            }
+          }
+        }
+
+        // Update Password
+        if (updates.password && updates.password.length > 0) {
+          if (auth.currentUser) {
+            await updatePassword(auth.currentUser, updates.password);
+            authUpdated = true;
+          }
+        }
+
+        // Force refresh if Auth changed
+        if (authUpdated && auth.currentUser) {
+          await auth.currentUser.reload();
+        }
+
+      } catch (authErr) {
+        console.error("Auth Update Failed:", authErr);
+        if (authErr.code === 'auth/requires-recent-login') {
+          authErrorMsg = " (Note: Re-login required to update Email/Password)";
+        } else {
+          authErrorMsg = ` (Auth Error: ${authErr.message})`;
+        }
       }
 
-      return { success: true, message: authUpdated ? 'Account & Profile updated!' : 'Profile updated' };
+      const successMsg = authUpdated
+        ? 'Account & Profile updated!'
+        : 'Profile updated!' + authErrorMsg;
+
+      return { success: true, message: authUpdated ? 'Account & Profile updated!' : 'Profile updated!' + authErrorMsg };
 
     } catch (e) {
-      console.error("Update Error:", e);
-      if (e.code === 'auth/requires-recent-login') {
-        return { success: false, error: "CRITICAL: You must re-login to change sensitive info (Email/Password)." };
-      }
+      console.error("Firestore Update Error:", e);
       return { success: false, error: e.message };
     }
   }
+
+  const recalculateLeaderboard = async () => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      // 1. Fetch all pending bets
+      const betsQ = query(collection(db, 'bets'), where('status', '==', 'pending'));
+      const betsSnap = await getDocs(betsQ);
+      // If index missing, this line throws.
+
+      const investmentsByUser = {};
+      betsSnap.docs.forEach(doc => {
+        const bet = doc.data();
+        if (!investmentsByUser[bet.userId]) investmentsByUser[bet.userId] = 0;
+        investmentsByUser[bet.userId] += (bet.amount || 0);
+      });
+
+      // 2. Fetch all users to update their stats
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const batch = writeBatch(db);
+      let updateCount = 0;
+
+      usersSnap.docs.forEach(userDoc => {
+        const uid = userDoc.id;
+        const currentInvested = userDoc.data().invested || 0;
+        const correctInvested = investmentsByUser[uid] || 0;
+
+        // Only update if different to save writes
+        if (Math.abs(currentInvested - correctInvested) > 0.01) {
+          batch.update(userDoc.ref, { invested: correctInvested });
+          updateCount++;
+        }
+      });
+
+      if (updateCount > 0) await batch.commit();
+      return { success: true, message: `Recalculated! Updated ${updateCount} users.` };
+    } catch (e) {
+      console.error("Recalc Detailed Error:", e);
+      let errMsg = e.message || String(e);
+      if (errMsg.includes("index")) errMsg = "Missing Index! Check Browser Console (F12) for the creation link.";
+      return { success: false, error: errMsg };
+    }
+  };
 
   const demoteSelf = async () => {
     if (!user) return;

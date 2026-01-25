@@ -13,8 +13,11 @@ export default function Leaderboard() {
 
     // Filter out admins and sort by balance (redundant sort but safe), then take Top 20
     // users is already sorted in store.js, but we filter here.
+    // calculating Total, sorting, slicing
     const activePlayers = users
-        ? users.filter(u => u.role !== 'admin').sort((a, b) => b.balance - a.balance).slice(0, 20)
+        ? users.filter(u => u.role !== 'admin')
+            .sort((a, b) => ((b.balance + (b.invested || 0)) - (a.balance + (a.invested || 0))))
+            .slice(0, 20)
         : [];
 
     return (
@@ -67,8 +70,13 @@ export default function Leaderboard() {
                             </div>
                             <div style={{ textAlign: 'right' }}>
                                 <p style={{ fontWeight: 'bold', color: '#4ade80', fontSize: '1.1em' }}>
-                                    ${typeof player.balance === 'number' ? player.balance.toFixed(2) : '0.00'}
+                                    ${((player.balance || 0) + (player.invested || 0)).toFixed(2)}
                                 </p>
+                                {(player.invested > 0) && (
+                                    <span style={{ fontSize: '10px', color: '#a1a1aa' }}>
+                                        (${player.invested.toFixed(2)} in play)
+                                    </span>
+                                )}
                             </div>
                         </div>
                     ))}

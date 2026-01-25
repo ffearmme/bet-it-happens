@@ -7,10 +7,10 @@ import { db } from '../../lib/firebase';
 import { collection, query, limit, onSnapshot } from 'firebase/firestore';
 
 export default function Admin() {
-    const { user, events, createEvent, resolveEvent, deleteEvent, ideas, deleteIdea, users, deleteUser, syncEventStats, isLoaded } = useApp();
+    const { user, events, createEvent, resolveEvent, deleteEvent, ideas, deleteIdea, users, deleteUser, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
     const router = useRouter();
     const [newEvent, setNewEvent] = useState({
-        title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: ''
+        title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: ''
     });
     const [showRules, setShowRules] = useState(false);
     const [allBets, setAllBets] = useState([]);
@@ -42,14 +42,14 @@ export default function Admin() {
         createEvent({
             title: newEvent.title,
             description: newEvent.description,
-            startAt: newEvent.deadline || new Date(Date.now() + 86400000).toISOString(),
-            deadline: newEvent.deadline || new Date(Date.now() + 86400000).toISOString(),
+            startAt: newEvent.startAt || new Date(Date.now() + 86400000).toISOString(),
+            deadline: newEvent.deadline || null,
             outcomes: [
                 { id: 'o-' + Date.now() + '-1', label: newEvent.outcome1, odds: parseFloat(newEvent.odds1) },
                 { id: 'o-' + Date.now() + '-2', label: newEvent.outcome2, odds: parseFloat(newEvent.odds2) },
             ]
         });
-        setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '' });
+        setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '' });
     };
 
     return (
@@ -66,12 +66,22 @@ export default function Admin() {
                         <input className="input" placeholder="Description" value={newEvent.description} onChange={e => setNewEvent({ ...newEvent, description: e.target.value })} required />
                     </div>
                     <div className="input-group">
-                        <label className="text-sm" style={{ marginBottom: '4px', display: 'block' }}>Betting Deadline (Optional)</label>
+                        <label className="text-sm" style={{ marginBottom: '4px', display: 'block' }}>Betting Deadline (Locks Bets)</label>
                         <input
                             className="input"
                             type="datetime-local"
                             value={newEvent.deadline}
                             onChange={e => setNewEvent({ ...newEvent, deadline: e.target.value })}
+                        />
+                    </div>
+                    <div className="input-group">
+                        <label className="text-sm" style={{ marginBottom: '4px', display: 'block' }}>Resolution Date (Event Starts/Ends)</label>
+                        <input
+                            className="input"
+                            type="datetime-local"
+                            required
+                            value={newEvent.startAt}
+                            onChange={e => setNewEvent({ ...newEvent, startAt: e.target.value })}
                         />
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px', marginBottom: '8px' }}>
@@ -203,7 +213,18 @@ export default function Admin() {
                     }}
                     style={{ background: 'transparent', border: '1px solid #333', color: '#666', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}
                 >
-                    Sync / Recalculate Stats
+                    Sync Event Stats
+                </button>
+                <button
+                    onClick={async () => {
+                        if (!confirm("Recalculate everyone's invested amounts?")) return;
+                        const res = await recalculateLeaderboard();
+                        if (res.success) alert(res.message);
+                        else alert('Error: ' + res.error);
+                    }}
+                    style={{ background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', marginLeft: '10px' }}
+                >
+                    🔄 Recalc User Net Worth
                 </button>
             </div>
 
@@ -312,7 +333,7 @@ service cloud.firestore {
             )}
 
             <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                System Version V0.20
+                System Version V0.33
             </p>
         </div>
     );
