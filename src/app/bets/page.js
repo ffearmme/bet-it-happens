@@ -18,38 +18,61 @@ export default function MyBets() {
 
     const myBets = bets.filter(b => b.userId === user.id).sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
 
+    const activeBets = myBets.filter(b => b.status === 'pending');
+    const completedBets = myBets.filter(b => b.status !== 'pending');
+
+    const BetCard = ({ bet }) => {
+        let statusColor = '#eab308'; // pending
+        if (bet.status === 'won') statusColor = '#22c55e';
+        if (bet.status === 'lost') statusColor = '#ef4444';
+
+        return (
+            <div className="card" style={{ borderLeft: `4px solid ${statusColor}`, marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{ fontWeight: 600 }}>{bet.outcomeLabel}</span>
+                    <span style={{ fontWeight: 700, color: statusColor }}>{bet.status.toUpperCase()}</span>
+                </div>
+                <p className="text-sm" style={{ marginBottom: '4px' }}>{bet.eventTitle}</p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '14px' }}>
+                        <span className="text-sm">Wager:</span> ${bet.amount.toFixed(2)}
+                    </div>
+                    <div style={{ fontSize: '14px' }}>
+                        <span className="text-sm">Payout:</span> <span style={{ color: statusColor }}>${bet.potentialPayout.toFixed(2)}</span>
+                    </div>
+                </div>
+            </div>
+        );
+    };
     return (
         <div className="container animate-fade">
-            <h1 style={{ marginTop: '20px' }}>My Bets</h1>
+            <h1 style={{ marginTop: '20px', marginBottom: '20px' }}>My Bets</h1>
 
             {myBets.length === 0 ? (
                 <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '40px' }}>
                     <p>No bets placed yet.</p>
                 </div>
             ) : (
-                myBets.map(bet => {
-                    let statusColor = '#eab308'; // pending
-                    if (bet.status === 'won') statusColor = '#22c55e';
-                    if (bet.status === 'lost') statusColor = '#ef4444';
-
-                    return (
-                        <div key={bet.id} className="card" style={{ borderLeft: `4px solid ${statusColor}` }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                <span style={{ fontWeight: 600 }}>{bet.outcomeLabel}</span>
-                                <span style={{ fontWeight: 700, color: statusColor }}>{bet.status.toUpperCase()}</span>
-                            </div>
-                            <p className="text-sm" style={{ marginBottom: '4px' }}>{bet.eventTitle}</p>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
-                                <div style={{ fontSize: '14px' }}>
-                                    <span className="text-sm">Wager:</span> ${bet.amount.toFixed(2)}
-                                </div>
-                                <div style={{ fontSize: '14px' }}>
-                                    <span className="text-sm">Payout:</span> <span style={{ color: statusColor }}>${bet.potentialPayout.toFixed(2)}</span>
-                                </div>
-                            </div>
+                <>
+                    {/* Active Section */}
+                    {activeBets.length > 0 && (
+                        <div style={{ marginBottom: '32px' }}>
+                            <h2 style={{ fontSize: '18px', marginBottom: '12px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', boxShadow: '0 0 10px var(--primary)' }}></span>
+                                Active Bets
+                            </h2>
+                            {activeBets.map(bet => <BetCard key={bet.id} bet={bet} />)}
                         </div>
-                    )
-                })
+                    )}
+
+                    {/* Completed Section */}
+                    {completedBets.length > 0 && (
+                        <div style={{ opacity: 0.8 }}>
+                            <h2 style={{ fontSize: '18px', marginBottom: '12px', color: 'var(--text-muted)' }}>Completed History</h2>
+                            {completedBets.map(bet => <BetCard key={bet.id} bet={bet} />)}
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );

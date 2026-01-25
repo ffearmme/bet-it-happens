@@ -291,40 +291,49 @@ export default function Home() {
                         boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
                         // Removed keyframe animation to prevent transform conflict
                     }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
-                            <div>
-                                <p className="text-sm">Betting on</p>
-                                <h3 style={{ fontSize: '20px' }}>{selectedOutcome.label} <span style={{ color: 'var(--primary)' }}>x{selectedOutcome.odds}</span></h3>
+                        {success ? (
+                            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🫡</div>
+                                <h3 style={{ color: 'var(--accent-win)', fontSize: '24px', marginBottom: '8px' }}>Good Luck Soldier</h3>
+                                <p style={{ color: 'var(--text-secondary)' }}>Bet Placed Successfully</p>
                             </div>
-                            <button onClick={() => setSelectedOutcome(null)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer' }}>&times;</button>
-                        </div>
+                        ) : (
+                            <>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+                                    <div>
+                                        <p className="text-sm">Betting on</p>
+                                        <h3 style={{ fontSize: '20px' }}>{selectedOutcome.label} <span style={{ color: 'var(--primary)' }}>x{selectedOutcome.odds}</span></h3>
+                                    </div>
+                                    <button onClick={() => setSelectedOutcome(null)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer' }}>&times;</button>
+                                </div>
 
-                        <p className="text-sm" style={{ marginBottom: '12px' }}>{selectedOutcome.eventTitle}</p>
+                                <p className="text-sm" style={{ marginBottom: '12px' }}>{selectedOutcome.eventTitle}</p>
 
-                        <div className="input-group">
-                            <input
-                                type="number"
-                                className="input"
-                                placeholder="Wager Amount ($)"
-                                value={wager}
-                                autoFocus
-                                onChange={(e) => setWager(e.target.value)}
-                            />
-                        </div>
+                                <div className="input-group">
+                                    <input
+                                        type="number"
+                                        className="input"
+                                        placeholder="Wager Amount ($)"
+                                        value={wager}
+                                        autoFocus
+                                        onChange={(e) => setWager(e.target.value)}
+                                    />
+                                </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', fontSize: '14px', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px' }}>
-                            <span className="text-sm">Potential Payout:</span>
-                            <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
-                                ${wager ? (parseFloat(wager) * selectedOutcome.odds).toFixed(2) : '0.00'}
-                            </span>
-                        </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', fontSize: '14px', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px' }}>
+                                    <span className="text-sm">Potential Payout:</span>
+                                    <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
+                                        ${wager ? (parseFloat(wager) * selectedOutcome.odds).toFixed(2) : '0.00'}
+                                    </span>
+                                </div>
 
-                        {error && <p style={{ color: 'var(--accent-loss)', marginBottom: '12px', fontSize: '14px', textAlign: 'center' }}>{error}</p>}
-                        {success && <p style={{ color: 'var(--accent-win)', marginBottom: '12px', fontSize: '14px', textAlign: 'center' }}>{success}</p>}
+                                {error && <p style={{ color: 'var(--accent-loss)', marginBottom: '12px', fontSize: '14px', textAlign: 'center' }}>{error}</p>}
 
-                        <button className="btn btn-primary" onClick={handleBet}>
-                            Place Bet
-                        </button>
+                                <button className="btn btn-primary" onClick={handleBet}>
+                                    Place Bet
+                                </button>
+                            </>
+                        )}
                     </div>
                 </>
             )}
