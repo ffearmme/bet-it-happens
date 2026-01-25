@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   collection, addDoc, onSnapshot, query, orderBy,
-  doc, setDoc, updateDoc, getDoc, where, increment, deleteDoc, getDocs, limit
+  doc, setDoc, updateDoc, getDoc, where, increment, deleteDoc, getDocs, limit, writeBatch
 } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -235,6 +235,19 @@ export function AppProvider({ children }) {
         placedAt: new Date().toISOString()
       });
 
+      // 3. Update Event Stats (Best Effort - ignore permission errors for now)
+      try {
+        const eventRef = doc(db, 'events', eventId);
+        await updateDoc(eventRef, {
+          [`stats.counts.${outcomeId}`]: increment(1),
+          [`stats.amounts.${outcomeId}`]: increment(amount),
+          'stats.totalBets': increment(1),
+          'stats.totalPool': increment(amount)
+        });
+      } catch (statsErr) {
+        console.warn("Could not update event stats (likely permission issue):", statsErr);
+      }
+
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };
@@ -365,6 +378,16 @@ export function AppProvider({ children }) {
     }
   };
 
+  const deleteIdea = async (ideaId) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      await deleteDoc(doc(db, 'ideas', ideaId));
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
   const updateUser = async (updates) => {
     if (!user) return;
     await updateDoc(doc(db, 'users', user.id), updates);
@@ -386,20 +409,35 @@ export function AppProvider({ children }) {
     if (!user) return { success: false };
     try {
       const userId = user.id;
+      const batch = writeBatch(db);
+      let opCount = 0;
 
-      // 1. Delete all user's bets (Query first)
+      // 1. Delete all user's bets
       const betsQ = query(collection(db, 'bets'), where('userId', '==', userId));
       const betsSnap = await getDocs(betsQ);
-      const batch = [];
-      // Note: Firestore batch limit is 500, simple loop for now
-      for (const b of betsSnap.docs) {
-        await deleteDoc(doc(db, 'bets', b.id));
+      betsSnap.docs.forEach(doc => {
+        batch.delete(doc.ref);
+        opCount++;
+      });
+
+      // 2. Delete all user's ideas
+      const ideasQ = query(collection(db, 'ideas'), where('userId', '==', userId));
+      const ideasSnap = await getDocs(ideasQ);
+      ideasSnap.docs.forEach(doc => {
+        batch.delete(doc.ref);
+        opCount++;
+      });
+
+      // 3. Delete User Profile
+      const userRef = doc(db, 'users', userId);
+      batch.delete(userRef);
+      opCount++;
+
+      if (opCount > 0) {
+        await batch.commit();
       }
 
-      // 2. Delete User Profile
-      await deleteDoc(doc(db, 'users', userId));
-
-      // 3. Delete Auth Account
+      // 4. Delete Auth Account
       if (auth.currentUser) {
         await auth.currentUser.delete();
       }
@@ -407,7 +445,6 @@ export function AppProvider({ children }) {
       return { success: true };
     } catch (e) {
       console.error("Delete Error:", e);
-      // Force logout if auth delete fails (requires re-login usually)
       if (e.code === 'auth/requires-recent-login') {
         return { success: false, error: "Please log out and log in again to delete your account." };
       }
@@ -415,9 +452,82 @@ export function AppProvider({ children }) {
     }
   };
 
+  const deleteUser = async (targetUserId) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      const batch = writeBatch(db);
+      let opCount = 0;
+
+      // 1. Delete all user's bets
+      const betsQ = query(collection(db, 'bets'), where('userId', '==', targetUserId));
+      const betsSnap = await getDocs(betsQ);
+      betsSnap.docs.forEach(doc => {
+        batch.delete(doc.ref);
+        opCount++;
+      });
+
+      // 2. Delete all user's ideas
+      const ideasQ = query(collection(db, 'ideas'), where('userId', '==', targetUserId));
+      const ideasSnap = await getDocs(ideasQ);
+      ideasSnap.docs.forEach(doc => {
+        batch.delete(doc.ref);
+        opCount++;
+      });
+
+      // 3. Delete User Profile
+      const userRef = doc(db, 'users', targetUserId);
+      batch.delete(userRef);
+      opCount++;
+
+      if (opCount > 0) {
+        await batch.commit();
+      }
+
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const syncEventStats = async () => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      // 1. Fetch all bets
+      const betsSnap = await getDocs(collection(db, 'bets'));
+      const allBets = betsSnap.docs.map(d => d.data());
+
+      // 2. Aggregate Stats
+      const statsMap = {}; // eventId -> { counts: {}, amounts: {}, totalBets: 0, totalPool: 0 }
+
+      for (const bet of allBets) {
+        if (!statsMap[bet.eventId]) {
+          statsMap[bet.eventId] = { counts: {}, amounts: {}, totalBets: 0, totalPool: 0 };
+        }
+        const s = statsMap[bet.eventId];
+        s.totalBets += 1;
+        s.totalPool += (bet.amount || 0);
+        s.counts[bet.outcomeId] = (s.counts[bet.outcomeId] || 0) + 1;
+        s.amounts[bet.outcomeId] = (s.amounts[bet.outcomeId] || 0) + (bet.amount || 0);
+      }
+
+      // 3. Update Events
+      const eventsSnap = await getDocs(collection(db, 'events'));
+      const updatePromises = eventsSnap.docs.map(async (docSnap) => {
+        const stats = statsMap[docSnap.id] || { counts: {}, amounts: {}, totalBets: 0, totalPool: 0 };
+        await updateDoc(doc(db, 'events', docSnap.id), { stats });
+      });
+
+      await Promise.all(updatePromises);
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
   return (
     <AppContext.Provider value={{
-      user, signup, signin, logout, updateUser, submitIdea, deleteAccount, demoteSelf,
+      user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
       events, createEvent, resolveEvent, deleteEvent,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas
     }}>

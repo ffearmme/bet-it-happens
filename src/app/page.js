@@ -243,23 +243,40 @@ export default function Home() {
                         )}
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            {event.outcomes.map(outcome => (
-                                <button
-                                    key={outcome.id}
-                                    disabled={event.status !== 'open'}
-                                    className="btn btn-outline"
-                                    style={{
-                                        display: 'flex', flexDirection: 'column', padding: '10px',
-                                        borderColor: (selectedOutcome?.outcomeId === outcome.id && selectedOutcome?.eventId === event.id) ? 'var(--primary)' : 'var(--border)',
-                                        background: (selectedOutcome?.outcomeId === outcome.id && selectedOutcome?.eventId === event.id) ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
-                                        opacity: event.status !== 'open' ? 0.5 : 1
-                                    }}
-                                    onClick={() => setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title })}
-                                >
-                                    <span style={{ fontSize: '14px' }}>{outcome.label}</span>
-                                    <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>x{outcome.odds.toFixed(2)}</span>
-                                </button>
-                            ))}
+                            {event.outcomes.map(outcome => {
+                                const stats = event.stats || {};
+                                const total = stats.totalBets || 0;
+                                const count = stats.counts?.[outcome.id] || 0;
+                                const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+
+                                return (
+                                    <button
+                                        key={outcome.id}
+                                        disabled={event.status !== 'open'}
+                                        className="btn btn-outline"
+                                        style={{
+                                            display: 'flex', flexDirection: 'column', padding: '10px',
+                                            borderColor: (selectedOutcome?.outcomeId === outcome.id && selectedOutcome?.eventId === event.id) ? 'var(--primary)' : 'var(--border)',
+                                            background: (selectedOutcome?.outcomeId === outcome.id && selectedOutcome?.eventId === event.id) ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
+                                            opacity: event.status !== 'open' ? 0.5 : 1,
+                                            position: 'relative',
+                                            overflow: 'hidden'
+                                        }}
+                                        onClick={() => setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title })}
+                                    >
+                                        <span style={{ fontSize: '14px', zIndex: 2 }}>{outcome.label}</span>
+                                        <span style={{ color: 'var(--primary)', fontWeight: 'bold', zIndex: 2 }}>x{outcome.odds.toFixed(2)}</span>
+                                        <span style={{ fontSize: '11px', color: '#a1a1aa', marginTop: '4px', zIndex: 2 }}>
+                                            {pct}% picked
+                                        </span>
+                                        {/* Subtle progress bar background */}
+                                        <div style={{
+                                            position: 'absolute', bottom: 0, left: 0, height: '4px', width: `${pct}%`,
+                                            background: 'var(--primary)', opacity: 0.5, transition: 'width 0.5s ease'
+                                        }}></div>
+                                    </button>
+                                )
+                            })}
                         </div>
                     </div>
                 ))}

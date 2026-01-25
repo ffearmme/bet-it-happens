@@ -7,11 +7,12 @@ import { db } from '../../lib/firebase';
 import { collection, query, limit, onSnapshot } from 'firebase/firestore';
 
 export default function Admin() {
-    const { user, events, createEvent, resolveEvent, deleteEvent, ideas, users } = useApp();
+    const { user, events, createEvent, resolveEvent, deleteEvent, ideas, deleteIdea, users, deleteUser, syncEventStats } = useApp();
     const router = useRouter();
     const [newEvent, setNewEvent] = useState({
         title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: ''
     });
+    const [showRules, setShowRules] = useState(false);
     const [allBets, setAllBets] = useState([]);
 
     useEffect(() => {
@@ -111,20 +112,57 @@ export default function Admin() {
 
             <div className="card">
                 <h2>User Bet Ideas</h2>
-                <div style={{ display: 'none' }}>{console.log("ADMIN IDEAS:", ideas)}</div>
+
                 {ideas && ideas.length > 0 ? (
                     ideas.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).map(idea => (
                         <div key={idea.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '12px', marginBottom: '12px' }}>
                             <p style={{ fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>"{idea.text}"</p>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span className="text-sm" style={{ fontSize: '12px', color: 'var(--primary)' }}>By: {idea.username}</span>
-                                <span className="text-sm" style={{ fontSize: '10px' }}>{new Date(idea.submittedAt).toLocaleDateString()}</span>
+                                <div>
+                                    <span className="text-sm" style={{ fontSize: '12px', color: 'var(--primary)', marginRight: '8px' }}>By: {idea.username}</span>
+                                    <span className="text-sm" style={{ fontSize: '10px' }}>{new Date(idea.submittedAt).toLocaleDateString()}</span>
+                                </div>
+                                <button
+                                    onClick={() => { if (confirm('Delete idea?')) deleteIdea(idea.id) }}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-loss)', fontSize: '12px' }}
+                                >
+                                    ✕
+                                </button>
                             </div>
                         </div>
                     ))
                 ) : (
                     <p className="text-sm">No ideas submitted yet.</p>
                 )}
+            </div>
+
+            <div className="card">
+                <h2>Manage Users (Clean up Leaderboard)</h2>
+                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                    {users.sort((a, b) => (b.balance || 0) - (a.balance || 0)).map(u => (
+                        <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', padding: '8px 0' }}>
+                            <div>
+                                <div style={{ fontWeight: 'bold' }}>{u.username} <span style={{ fontSize: '10px', color: '#666', fontWeight: 'normal' }}>({u.role})</span></div>
+                                <div style={{ fontSize: '12px', color: '#888' }}>ID: {u.id} • Balance: ${u.balance?.toFixed(2)}</div>
+                            </div>
+                            {u.id !== user.id && (
+                                <button
+                                    className="btn btn-outline"
+                                    style={{ padding: '4px 8px', fontSize: '12px', color: 'var(--accent-loss)', borderColor: 'var(--accent-loss)' }}
+                                    onClick={async () => {
+                                        if (confirm(`Permanently delete user "${u.username}" and all their data?`)) {
+                                            const res = await deleteUser(u.id);
+                                            if (res.success) alert('User deleted.');
+                                            else alert('Error: ' + res.error);
+                                        }
+                                    }}
+                                >
+                                    Delete
+                                </button>
+                            )}
+                        </div>
+                    ))}
+                </div>
             </div>
 
             <div className="card">
@@ -153,8 +191,127 @@ export default function Admin() {
                 )}
             </div>
 
+            <div style={{ textAlign: 'center', marginTop: '40px' }}>
+                <button
+                    onClick={async () => {
+                        if (confirm('Recalculate all event stats? This fetches ALL bets.')) {
+                            const res = await syncEventStats();
+                            if (res.success) alert('Stats synced!');
+                            else alert('Error: ' + res.error);
+                        }
+                    }}
+                    style={{ background: 'transparent', border: '1px solid #333', color: '#666', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}
+                >
+                    Sync / Recalculate Stats
+                </button>
+            </div>
+
+            <div style={{ textAlign: 'center', marginTop: '40px', marginBottom: '20px' }}>
+                <button
+                    onClick={() => setShowRules(!showRules)}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--accent-loss)', textDecoration: 'underline', cursor: 'pointer', fontSize: '12px' }}
+                >
+                    ⚠️ Fix "Missing Permissions" Error
+                </button>
+            </div>
+
+            {showRules && (
+                <div className="card" style={{ border: '1px solid var(--accent-loss)', background: 'rgba(239, 68, 68, 0.05)' }}>
+                    <h3 style={{ color: 'var(--accent-loss)', fontSize: '16px' }}>Update Firestore Rules</h3>
+                    <p className="text-sm" style={{ marginBottom: '12px' }}>
+                        To delete other users, you need to update your rules in the Firebase Console.
+                        <br />
+                        <b>Go to:</b> Firebase Console {'>'} Firestore Database {'>'} Rules
+                    </p>
+                    <div style={{ position: 'relative' }}>
+                        <textarea
+                            readOnly
+                            style={{
+                                width: '100%', height: '300px',
+                                background: '#1e1e1e', color: '#a6e3a1',
+                                padding: '10px', fontSize: '11px',
+                                fontFamily: 'monospace', borderRadius: '6px',
+                                border: '1px solid #333'
+                            }}
+                            value={`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Check if user is Admin
+    function isAdmin() {
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // USERS: Users manage themselves, Admins manage all
+    match /users/{userId} {
+      allow read, create: if true;
+      allow update, delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+
+    // BETS & IDEAS: Owners can manage, Admins can manage all
+    match /bets/{betId} {
+      allow read, create: if true;
+      allow update, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+    match /ideas/{ideaId} {
+      allow read, create: if true;
+      allow update, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // EVENTS: Admins full control, Users can update (for betting stats)
+    match /events/{eventId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if request.auth != null; 
+    }
+  }
+}`}
+                        />
+                        <button
+                            className="btn"
+                            style={{ position: 'absolute', top: '10px', right: '10px', padding: '4px 8px', fontSize: '10px' }}
+                            onClick={() => {
+                                navigator.clipboard.writeText(`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAdmin() {
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /users/{userId} {
+      allow read, create: if true;
+      allow update, delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /bets/{betId} {
+      allow read, create: if true;
+      allow update, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+    
+    match /ideas/{ideaId} {
+      allow read, create: if true;
+      allow update, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if request.auth != null; 
+    }
+  }
+}`);
+                                alert("Production Rules copied! Paste them in Firebase Console.");
+                            }}
+                        >
+                            Copy Rules
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                System Version V0.12
+                System Version V0.13
             </p>
         </div>
     );

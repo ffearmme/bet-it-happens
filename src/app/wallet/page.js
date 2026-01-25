@@ -27,7 +27,7 @@ export default function Wallet() {
         if (res.success) {
             setMsg({ type: 'success', text: res.message });
             setIdea('');
-            alert("Idea submitted successfully! You've earned $15 for your contribution.");
+            // Removed alert for better UX
         } else {
             setMsg({ type: 'error', text: res.error });
         }
@@ -83,7 +83,24 @@ export default function Wallet() {
                         style={{ resize: 'none', marginBottom: '12px', fontFamily: 'inherit' }}
                     />
 
-                    {msg.text && <p style={{ color: msg.type === 'success' ? 'var(--accent-win)' : 'var(--accent-loss)', marginBottom: '12px', fontSize: '14px' }}>{msg.text}</p>}
+                    {msg.text && (
+                        <div style={{
+                            padding: '10px',
+                            borderRadius: '6px',
+                            marginBottom: '12px',
+                            background: msg.type === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                            border: `1px solid ${msg.type === 'success' ? 'var(--accent-win)' : 'var(--accent-loss)'}`
+                        }}>
+                            <p style={{
+                                color: msg.type === 'success' ? 'var(--accent-win)' : 'var(--accent-loss)',
+                                margin: 0,
+                                fontSize: '14px',
+                                fontWeight: '500'
+                            }}>
+                                {msg.text}
+                            </p>
+                        </div>
+                    )}
 
                     <button className="btn btn-outline" style={{ borderColor: 'var(--primary)', color: 'var(--primary)' }}>
                         Submit & Earn
