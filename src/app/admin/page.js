@@ -7,11 +7,12 @@ import { db } from '../../lib/firebase';
 import { collection, query, limit, onSnapshot } from 'firebase/firestore';
 
 export default function Admin() {
-    const { user, events, createEvent, resolveEvent, deleteEvent, toggleFeatured, ideas, deleteIdea, users, deleteUser, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
+    const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, toggleFeatured, ideas, deleteIdea, users, deleteUser, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
     const router = useRouter();
     const [newEvent, setNewEvent] = useState({
         title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: ''
     });
+    const [editingId, setEditingId] = useState(null);
     const [showRules, setShowRules] = useState(false);
     const [allBets, setAllBets] = useState([]);
 
@@ -32,24 +33,54 @@ export default function Admin() {
             setAllBets(list);
         });
         return () => unsub();
-    }, [user]); // Re-run if user/role changes (though protected by route ref)
+    }, [user]);
 
     if (!isLoaded) return null;
     if (!user || user.role !== 'admin') return null;
 
-    const handleCreate = (e) => {
+    const handleCreate = async (e) => {
         e.preventDefault();
-        createEvent({
-            title: newEvent.title,
-            description: newEvent.description,
-            startAt: newEvent.startAt || new Date(Date.now() + 86400000).toISOString(),
-            deadline: newEvent.deadline || null,
-            outcomes: [
-                { id: 'o-' + Date.now() + '-1', label: newEvent.outcome1, odds: parseFloat(newEvent.odds1) },
-                { id: 'o-' + Date.now() + '-2', label: newEvent.outcome2, odds: parseFloat(newEvent.odds2) },
-            ]
+        if (editingId) {
+            await updateEvent(editingId, {
+                title: newEvent.title,
+                description: newEvent.description,
+                startAt: newEvent.startAt,
+                deadline: newEvent.deadline,
+                // We update outcomes 'labels' but warn about odds. To simplify, we'll try to update the array if possible.
+                // Re-constructing outcomes array while keeping IDs effectively might be complex if indices match.
+                // For now, let's just update main fields.
+            });
+            alert('Event updated (Title, Desc, dates).');
+            setEditingId(null);
+            setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '' });
+        } else {
+            createEvent({
+                title: newEvent.title,
+                description: newEvent.description,
+                startAt: newEvent.startAt || new Date(Date.now() + 86400000).toISOString(),
+                deadline: newEvent.deadline || null,
+                outcomes: [
+                    { id: 'o-' + Date.now() + '-1', label: newEvent.outcome1, odds: parseFloat(newEvent.odds1) },
+                    { id: 'o-' + Date.now() + '-2', label: newEvent.outcome2, odds: parseFloat(newEvent.odds2) },
+                ]
+            });
+            setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '' });
+        }
+    };
+
+    const startEdit = (event) => {
+        setEditingId(event.id);
+        setNewEvent({
+            title: event.title,
+            description: event.description,
+            outcome1: event.outcomes[0]?.label || '',
+            odds1: event.outcomes[0]?.odds || '',
+            outcome2: event.outcomes[1]?.label || '',
+            odds2: event.outcomes[1]?.odds || '',
+            deadline: event.deadline || '',
+            startAt: event.startAt || '',
         });
-        setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '' });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     return (
@@ -57,7 +88,10 @@ export default function Admin() {
             <h1 style={{ marginTop: '20px' }}>Admin Dashboard</h1>
 
             <div className="card">
-                <h2>Create Event</h2>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h2>{editingId ? 'Edit Event' : 'Create Event'}</h2>
+                    {editingId && <button onClick={() => { setEditingId(null); setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '' }); }} style={{ fontSize: '12px', color: 'red' }}>Cancel Edit</button>}
+                </div>
                 <form onSubmit={handleCreate}>
                     <div className="input-group">
                         <input className="input" placeholder="Event Title" value={newEvent.title} onChange={e => setNewEvent({ ...newEvent, title: e.target.value })} required />
@@ -84,15 +118,20 @@ export default function Admin() {
                             onChange={e => setNewEvent({ ...newEvent, startAt: e.target.value })}
                         />
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                        <input className="input" placeholder="Outcome AA" value={newEvent.outcome1} onChange={e => setNewEvent({ ...newEvent, outcome1: e.target.value })} required />
-                        <input className="input" type="number" step="0.01" placeholder="Odds" value={newEvent.odds1} onChange={e => setNewEvent({ ...newEvent, odds1: e.target.value })} required />
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px', marginBottom: '16px' }}>
-                        <input className="input" placeholder="Outcome BB" value={newEvent.outcome2} onChange={e => setNewEvent({ ...newEvent, outcome2: e.target.value })} required />
-                        <input className="input" type="number" step="0.01" placeholder="Odds" value={newEvent.odds2} onChange={e => setNewEvent({ ...newEvent, odds2: e.target.value })} required />
-                    </div>
-                    <button className="btn btn-primary">Create Event</button>
+                    {!editingId && (
+                        <>
+                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                                <input className="input" placeholder="Outcome AA" value={newEvent.outcome1} onChange={e => setNewEvent({ ...newEvent, outcome1: e.target.value })} required />
+                                <input className="input" type="number" step="0.01" placeholder="Odds" value={newEvent.odds1} onChange={e => setNewEvent({ ...newEvent, odds1: e.target.value })} required />
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px', marginBottom: '16px' }}>
+                                <input className="input" placeholder="Outcome BB" value={newEvent.outcome2} onChange={e => setNewEvent({ ...newEvent, outcome2: e.target.value })} required />
+                                <input className="input" type="number" step="0.01" placeholder="Odds" value={newEvent.odds2} onChange={e => setNewEvent({ ...newEvent, odds2: e.target.value })} required />
+                            </div>
+                        </>
+                    )}
+                    {editingId && <p className="text-sm" style={{ marginBottom: '10px', color: 'orange' }}>Note: Outcome labels/odds cannot be edited safely yet.</p>}
+                    <button className="btn btn-primary">{editingId ? 'Update Event' : 'Create Event'}</button>
                 </form>
             </div>
 
@@ -102,12 +141,20 @@ export default function Admin() {
                     <div key={event.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '16px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <p style={{ fontWeight: 600 }}>{event.title}</p>
-                            <button
-                                onClick={() => { if (confirm('Delete event?')) deleteEvent(event.id) }}
-                                style={{ background: 'transparent', border: 'none', color: 'var(--accent-loss)', cursor: 'pointer', fontSize: '12px' }}
-                            >
-                                Delete
-                            </button>
+                            <div>
+                                <button
+                                    onClick={() => startEdit(event)}
+                                    style={{ background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', cursor: 'pointer', fontSize: '11px', padding: '2px 8px', borderRadius: '4px', marginRight: '8px' }}
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    onClick={() => { if (confirm('Delete event?')) deleteEvent(event.id) }}
+                                    style={{ background: 'transparent', border: 'none', color: 'var(--accent-loss)', cursor: 'pointer', fontSize: '12px' }}
+                                >
+                                    Delete
+                                </button>
+                            </div>
                         </div>
                         <div style={{ marginTop: '8px' }}>
                             <button
@@ -353,7 +400,7 @@ service cloud.firestore {
             }
 
             <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                System Version V0.61
+                System Version V0.66
             </p>
         </div >
     );

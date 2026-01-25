@@ -117,6 +117,7 @@ export default function Home() {
         return (
             <div className="container animate-fade" style={{ height: '90vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+                    <img src="/logo.png" alt="Bet It Happens" style={{ width: '160px', height: 'auto', marginBottom: '16px', display: 'inline-block' }} />
                     <h1 style={{ color: 'var(--primary)', fontSize: '42px', lineHeight: '1.1', marginBottom: '10px' }}>BET IT<br />HAPPENS</h1>
                     <p className="text-sm">The risk is fake. The thrill is real.</p>
                 </div>
@@ -218,35 +219,7 @@ export default function Home() {
     return (
         <div className="container animate-fade">
             <header style={{ marginBottom: '32px', paddingTop: '10px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                        <img src="/logo.png" alt="Logo" style={{ height: '80px', width: 'auto' }} />
-                        <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '800', letterSpacing: '-0.5px' }}>Bet It Happens</h1>
-                    </div>
 
-                    <Link href="/profile" style={{ textDecoration: 'none', color: 'inherit' }}>
-                        <div style={{
-                            padding: '8px 12px',
-                            borderRadius: '20px',
-                            background: 'var(--bg-card)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            border: '1px solid var(--border)',
-                            fontSize: '12px',
-                            fontWeight: 'bold',
-                            gap: '6px',
-                            cursor: 'pointer'
-                        }}>
-                            {user.profilePic ? (
-                                <img src={user.profilePic} style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }} alt="" />
-                            ) : (
-                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)' }}></div>
-                            )}
-                            {user.username}
-                        </div>
-                    </Link>
-                </div>
 
                 <div style={{ textAlign: 'center' }}>
                     <p style={{

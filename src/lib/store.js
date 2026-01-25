@@ -374,6 +374,16 @@ export function AppProvider({ children }) {
 
 
 
+  const updateEvent = async (eventId, data) => {
+    try {
+      await updateDoc(doc(db, 'events', eventId), data);
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
   const submitIdea = async (ideaText) => {
     if (!user) return { success: false, error: 'Not logged in' };
 
@@ -766,7 +776,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-      events, createEvent, resolveEvent, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, markNotificationRead, getUserStats, getWeeklyLeaderboard,
+      events, createEvent, resolveEvent, updateEvent, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, markNotificationRead, getUserStats, getWeeklyLeaderboard,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db
     }}>
       {children}

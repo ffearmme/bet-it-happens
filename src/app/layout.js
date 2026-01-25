@@ -1,6 +1,7 @@
 import { Inter } from 'next/font/google';
 import './globals.css';
 import Navbar from '../components/Navbar';
+import TopHeader from '../components/TopHeader';
 import { AppProvider } from '../lib/store';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -28,6 +29,7 @@ export default function RootLayout({ children }) {
             <body className={inter.className}>
                 <AppProvider>
                     <BetaBanner />
+                    <TopHeader />
                     {children}
                     <Navbar />
                 </AppProvider>
