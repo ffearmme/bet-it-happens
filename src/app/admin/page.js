@@ -111,7 +111,7 @@ export default function Admin() {
             </div>
 
             <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                System Version 0.09
+                System Version V0.1
             </p>
         </div>
     );
