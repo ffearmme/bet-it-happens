@@ -146,14 +146,14 @@ export default function Home() {
     const activeEvents = events.filter(e => e.status === 'open' || e.status === 'locked');
     const finishedEvents = events.filter(e => e.status === 'settled');
 
-    const handleBet = () => {
+    const handleBet = async () => {
         setError('');
         setSuccess('');
         if (!wager || parseFloat(wager) <= 0) {
             setError('Enter a valid amount');
             return;
         }
-        const res = placeBet(selectedOutcome.eventId, selectedOutcome.outcomeId, parseFloat(wager));
+        const res = await placeBet(selectedOutcome.eventId, selectedOutcome.outcomeId, parseFloat(wager));
         if (res.success) {
             setSuccess('Bet Placed Successfully! Good Luck Soldier🫡');
             setWager('');

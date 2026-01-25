@@ -118,9 +118,15 @@ export function AppProvider({ children }) {
     });
 
     // Listen to Ideas (Limit 50 recent)
-    const ideasQuery = query(collection(db, 'ideas'), orderBy('submittedAt', 'desc'), limit(50));
+    // Listen to Ideas (Limit 50 recent)
+    // Removed orderBy to avoid missing index issues. Sorting client-side.
+    const ideasQuery = query(collection(db, 'ideas'), limit(50));
     const unsubIdeas = onSnapshot(ideasQuery, (snapshot) => {
-      setIdeas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      list.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+      setIdeas(list);
+    }, (error) => {
+      console.error("Error listening to ideas:", error);
     });
 
     return () => {
@@ -304,18 +310,44 @@ export function AppProvider({ children }) {
 
   const submitIdea = async (ideaText) => {
     if (!user) return { success: false, error: 'Not logged in' };
+
+    // Check Daily Limit (Client-side check based on local user data, ideally backend does this)
+    const today = new Date().toDateString();
+    let currentCount = 0;
+
+    if (user.submissionData && user.submissionData.date === today) {
+      currentCount = user.submissionData.count;
+    }
+
+    if (currentCount >= 5) {
+      return { success: false, error: 'Daily limit reached (5/5). Come back tomorrow!' };
+    }
+
     try {
+      // 1. Create Idea Doc
       await addDoc(collection(db, 'ideas'), {
         userId: user.id,
         username: user.username,
         text: ideaText,
         submittedAt: new Date().toISOString()
       });
-      // Reward user (Simplified, no daily limit check database side for now)
+
+      // 2. Update User (Reward + Submission Count)
+      // If date different, simple set. If same, increment.
+      // Firestore update is tricky with nested objects, so we set the whole object.
+      // We calculate new count locally to ensure sync with the check.
+
+      const newCount = currentCount + 1;
+
       await updateDoc(doc(db, 'users', user.id), {
-        balance: increment(15) // Reward
+        balance: increment(15), // Reward
+        submissionData: {
+          date: today,
+          count: newCount
+        }
       });
-      return { success: true };
+
+      return { success: true, message: 'Idea submitted! +$15.00' };
     } catch (e) {
       return { success: false, error: e.message };
     }
@@ -375,7 +407,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteAccount, demoteSelf,
       events, createEvent, resolveEvent, deleteEvent,
-      bets, placeBet, isLoaded, isFirebase: true, users
+      bets, placeBet, isLoaded, isFirebase: true, users, ideas
     }}>
       {children}
     </AppContext.Provider>

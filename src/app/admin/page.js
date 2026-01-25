@@ -94,6 +94,7 @@ export default function Admin() {
 
             <div className="card">
                 <h2>User Bet Ideas</h2>
+                <div style={{ display: 'none' }}>{console.log("ADMIN IDEAS:", ideas)}</div>
                 {ideas && ideas.length > 0 ? (
                     ideas.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).map(idea => (
                         <div key={idea.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '12px', marginBottom: '12px' }}>
