@@ -4,19 +4,20 @@
   --bg-app: #09090b;
   --bg-card: #18181b;
   --bg-input: #27272a;
-  
-  --primary: #22c55e; /* Vibrant Green */
+
+  --primary: #22c55e;
+  /* Vibrant Green */
   --primary-glow: rgba(34, 197, 94, 0.4);
-  
+
   --text-main: #ffffff;
   --text-muted: #a1a1aa;
-  
+
   --border: #27272a;
-  
+
   --accent-win: #22c55e;
   --accent-loss: #ef4444;
   --accent-lock: #eab308;
-  
+
   --nav-height: 64px;
 }
 
@@ -37,9 +38,15 @@ body {
 
 /* Utilities */
 .container {
-  max-width: 600px; /* Mobile focused max-width */
+  max-width: 600px;
   margin: 0 auto;
   padding: 16px;
+}
+
+@media (min-width: 768px) {
+  .container {
+    max-width: 1000px;
+  }
 }
 
 .card {
@@ -110,10 +117,27 @@ body {
 }
 
 /* Typography */
-h1, h2, h3 { font-weight: 800; letter-spacing: -0.5px; }
-h1 { font-size: 28px; margin-bottom: 16px; }
-h2 { font-size: 20px; margin-bottom: 12px; }
-.text-sm { font-size: 14px; color: var(--text-muted); }
+h1,
+h2,
+h3 {
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+h1 {
+  font-size: 28px;
+  margin-bottom: 16px;
+}
+
+h2 {
+  font-size: 20px;
+  margin-bottom: 12px;
+}
+
+.text-sm {
+  font-size: 14px;
+  color: var(--text-muted);
+}
 
 /* Navigation */
 .bottom-nav {
@@ -153,8 +177,15 @@ h2 { font-size: 20px; margin-bottom: 12px; }
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade {

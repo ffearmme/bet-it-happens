@@ -302,6 +302,14 @@ export function AppProvider({ children }) {
     }
   };
 
+  const toggleFeatured = async (eventId, currentStatus) => {
+    try {
+      await updateDoc(doc(db, 'events', eventId), {
+        featured: !currentStatus
+      });
+    } catch (e) { console.error(e); }
+  };
+
   const resolveEvent = async (eventId, winnerOutcomeId) => {
     try {
       // 1. Mark Event as Settled
@@ -654,7 +662,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-      events, createEvent, resolveEvent, deleteEvent,
+      events, createEvent, resolveEvent, deleteEvent, toggleFeatured,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas
     }}>
       {children}

@@ -7,7 +7,7 @@ import { db } from '../../lib/firebase';
 import { collection, query, limit, onSnapshot } from 'firebase/firestore';
 
 export default function Admin() {
-    const { user, events, createEvent, resolveEvent, deleteEvent, ideas, deleteIdea, users, deleteUser, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
+    const { user, events, createEvent, resolveEvent, deleteEvent, toggleFeatured, ideas, deleteIdea, users, deleteUser, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
     const router = useRouter();
     const [newEvent, setNewEvent] = useState({
         title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: ''
@@ -109,6 +109,24 @@ export default function Admin() {
                                 Delete
                             </button>
                         </div>
+                        <div style={{ marginTop: '8px' }}>
+                            <button
+                                onClick={() => toggleFeatured(event.id, event.featured)}
+                                style={{
+                                    background: event.featured ? 'var(--primary)' : 'transparent',
+                                    color: event.featured ? '#000' : 'var(--primary)',
+                                    border: '1px solid var(--primary)',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    cursor: 'pointer',
+                                    marginRight: '10px'
+                                }}
+                            >
+                                {event.featured ? '★ Featured' : '☆ set Featured'}
+                            </button>
+                        </div>
+
                         <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                             {event.outcomes.map(o => (
                                 <button key={o.id} className="btn btn-outline" style={{ fontSize: '12px', padding: '8px' }} onClick={() => resolveEvent(event.id, o.id)}>
@@ -237,25 +255,26 @@ export default function Admin() {
                 </button>
             </div>
 
-            {showRules && (
-                <div className="card" style={{ border: '1px solid var(--accent-loss)', background: 'rgba(239, 68, 68, 0.05)' }}>
-                    <h3 style={{ color: 'var(--accent-loss)', fontSize: '16px' }}>Update Firestore Rules</h3>
-                    <p className="text-sm" style={{ marginBottom: '12px' }}>
-                        To delete other users, you need to update your rules in the Firebase Console.
-                        <br />
-                        <b>Go to:</b> Firebase Console {'>'} Firestore Database {'>'} Rules
-                    </p>
-                    <div style={{ position: 'relative' }}>
-                        <textarea
-                            readOnly
-                            style={{
-                                width: '100%', height: '300px',
-                                background: '#1e1e1e', color: '#a6e3a1',
-                                padding: '10px', fontSize: '11px',
-                                fontFamily: 'monospace', borderRadius: '6px',
-                                border: '1px solid #333'
-                            }}
-                            value={`rules_version = '2';
+            {
+                showRules && (
+                    <div className="card" style={{ border: '1px solid var(--accent-loss)', background: 'rgba(239, 68, 68, 0.05)' }}>
+                        <h3 style={{ color: 'var(--accent-loss)', fontSize: '16px' }}>Update Firestore Rules</h3>
+                        <p className="text-sm" style={{ marginBottom: '12px' }}>
+                            To delete other users, you need to update your rules in the Firebase Console.
+                            <br />
+                            <b>Go to:</b> Firebase Console {'>'} Firestore Database {'>'} Rules
+                        </p>
+                        <div style={{ position: 'relative' }}>
+                            <textarea
+                                readOnly
+                                style={{
+                                    width: '100%', height: '300px',
+                                    background: '#1e1e1e', color: '#a6e3a1',
+                                    padding: '10px', fontSize: '11px',
+                                    fontFamily: 'monospace', borderRadius: '6px',
+                                    border: '1px solid #333'
+                                }}
+                                value={`rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
@@ -288,12 +307,12 @@ service cloud.firestore {
     }
   }
 }`}
-                        />
-                        <button
-                            className="btn"
-                            style={{ position: 'absolute', top: '10px', right: '10px', padding: '4px 8px', fontSize: '10px' }}
-                            onClick={() => {
-                                navigator.clipboard.writeText(`rules_version = '2';
+                            />
+                            <button
+                                className="btn"
+                                style={{ position: 'absolute', top: '10px', right: '10px', padding: '4px 8px', fontSize: '10px' }}
+                                onClick={() => {
+                                    navigator.clipboard.writeText(`rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
@@ -323,18 +342,19 @@ service cloud.firestore {
     }
   }
 }`);
-                                alert("Production Rules copied! Paste them in Firebase Console.");
-                            }}
-                        >
-                            Copy Rules
-                        </button>
+                                    alert("Production Rules copied! Paste them in Firebase Console.");
+                                }}
+                            >
+                                Copy Rules
+                            </button>
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                System Version V0.33
+                System Version V0.38
             </p>
-        </div>
+        </div >
     );
 }

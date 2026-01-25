@@ -136,7 +136,12 @@ export default function Home() {
                             />
                         </div>
                         <div className="input-group">
-                            <label className="text-sm" style={{ marginBottom: '8px', display: 'block' }}>Password</label>
+                            <label className="text-sm" style={{ marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                                Password
+                                <span style={{ fontSize: '10px', color: '#a1a1aa', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    🔒 Secure & Encrypted
+                                </span>
+                            </label>
                             <input
                                 type="password"
                                 required
@@ -232,6 +237,60 @@ export default function Home() {
                 </div>
             </Link>
 
+            {/* --- Featured Events --- */}
+            {activeEvents.filter(e => e.featured).length > 0 && (
+                <div style={{ marginBottom: '40px' }}>
+                    <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: '#fbbf24' }}>
+                        <span style={{ fontSize: '24px' }}>🔥</span>
+                        Featured Bets
+                    </h2>
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                        gap: '20px',
+                        marginBottom: '40px'
+                    }}>
+                        {activeEvents.filter(e => e.featured).slice(0, 3).map(event => (
+                            <div key={event.id} className="card" style={{
+                                border: '1px solid #fbbf24',
+                                background: 'linear-gradient(145deg, var(--bg-card), rgba(251, 191, 36, 0.05))',
+                                display: 'flex',
+                                flexDirection: 'column'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                                    <span className="badge" style={{ background: '#fbbf24', color: '#000', fontWeight: 'bold' }}>FEATURED</span>
+                                    <span className="text-sm" style={{ color: '#fbbf24' }}>{new Date(event.startAt).toLocaleDateString()}</span>
+                                </div>
+                                <h3 style={{ fontSize: '18px', marginBottom: '8px', color: '#fbbf24', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</h3>
+                                <p className="text-sm" style={{ marginBottom: '16px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{event.description}</p>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                    {event.outcomes.slice(0, 2).map(outcome => (
+                                        <button
+                                            key={outcome.id}
+                                            disabled={event.status !== 'open'}
+                                            onClick={() => {
+                                                if (user) {
+                                                    setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, label: outcome.label, odds: outcome.odds, title: event.title });
+                                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                } else {
+                                                    alert("Login to bet!");
+                                                }
+                                            }}
+                                            className="btn btn-outline"
+                                            style={{ borderColor: '#fbbf24', color: '#fbbf24', padding: '6px' }}
+                                        >
+                                            <div style={{ fontWeight: 'bold', fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{outcome.label}</div>
+                                            <div style={{ fontSize: '11px' }}>{outcome.odds.toFixed(2)}x</div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* --- Active Events --- */}
             <div style={{ marginBottom: '32px' }}>
                 <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
@@ -239,73 +298,79 @@ export default function Home() {
                     Live & Upcoming
                 </h2>
 
-                {activeEvents.length === 0 ? <p className="text-sm" style={{ fontStyle: 'italic' }}>No active events right now.</p> : null}
+                {activeEvents.filter(e => !e.featured).length === 0 ? <p className="text-sm" style={{ fontStyle: 'italic' }}>No other active events.</p> : null}
 
-                {activeEvents.map((event) => (
-                    <div key={event.id} className="card">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                            <span className="badge" style={{ background: event.status === 'open' ? '#22c55e20' : '#eab30820', color: event.status === 'open' ? '#22c55e' : '#eab308' }}>
-                                {event.status === 'open' ? 'OPEN' : 'LOCKED'}
-                            </span>
-                            <span className="text-sm">{new Date(event.startAt).toLocaleDateString()}</span>
-                        </div>
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                    gap: '20px'
+                }}>
+                    {activeEvents.filter(e => !e.featured).map((event) => (
+                        <div key={event.id} className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                                <span className="badge" style={{ background: event.status === 'open' ? '#22c55e20' : '#eab30820', color: event.status === 'open' ? '#22c55e' : '#eab308' }}>
+                                    {event.status === 'open' ? 'OPEN' : 'LOCKED'}
+                                </span>
+                                <span className="text-sm">{new Date(event.startAt).toLocaleDateString()}</span>
+                            </div>
 
-                        <h3 style={{ fontSize: '18px', marginBottom: '4px' }}>{event.title}</h3>
-                        <p className="text-sm" style={{ marginBottom: '12px' }}>{event.description}</p>
+                            <h3 style={{ fontSize: '18px', marginBottom: '4px' }}>{event.title}</h3>
+                            <p className="text-sm" style={{ marginBottom: '12px' }}>{event.description}</p>
 
-                        <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', fontSize: '12px', background: 'var(--bg-input)', padding: '8px', borderRadius: '6px' }}>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>🛑 Betting Closes:</div>
-                                <div style={{ color: 'var(--accent-loss)', fontWeight: 'bold' }}>
-                                    {event.deadline ? new Date(event.deadline).toLocaleString() : 'No deadline'}
+                            <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', fontSize: '12px', background: 'var(--bg-input)', padding: '8px', borderRadius: '6px' }}>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>🛑 Betting Closes:</div>
+                                    <div style={{ color: 'var(--accent-loss)', fontWeight: 'bold' }}>
+                                        {event.deadline ? new Date(event.deadline).toLocaleString() : 'No deadline'}
+                                    </div>
+                                </div>
+                                <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: '16px' }}>
+                                    <div style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>🏁 Resolution/Cashout:</div>
+                                    <div style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
+                                        {new Date(event.startAt).toLocaleString()}
+                                    </div>
                                 </div>
                             </div>
-                            <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: '16px' }}>
-                                <div style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>🏁 Resolution/Cashout:</div>
-                                <div style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
-                                    {new Date(event.startAt).toLocaleString()}
-                                </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                {event.outcomes.map(outcome => {
+                                    const stats = event.stats || {};
+                                    const total = stats.totalBets || 0;
+                                    const count = stats.counts?.[outcome.id] || 0;
+                                    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+
+                                    return (
+                                        <button
+                                            key={outcome.id}
+                                            disabled={event.status !== 'open'}
+                                            className="btn btn-outline"
+                                            style={{
+                                                display: 'flex', flexDirection: 'column', padding: '10px',
+                                                borderColor: (selectedOutcome?.outcomeId === outcome.id && selectedOutcome?.eventId === event.id) ? 'var(--primary)' : 'var(--border)',
+                                                background: (selectedOutcome?.outcomeId === outcome.id && selectedOutcome?.eventId === event.id) ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
+                                                opacity: event.status !== 'open' ? 0.5 : 1,
+                                                position: 'relative',
+                                                overflow: 'hidden'
+                                            }}
+                                            onClick={() => setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title })}
+                                        >
+                                            <span style={{ fontSize: '14px', zIndex: 2 }}>{outcome.label}</span>
+                                            <span style={{ color: 'var(--primary)', fontWeight: 'bold', zIndex: 2 }}>x{outcome.odds.toFixed(2)}</span>
+                                            <span style={{ fontSize: '11px', color: '#a1a1aa', marginTop: '4px', zIndex: 2 }}>
+                                                {pct}% picked
+                                            </span>
+                                            {/* Subtle progress bar background */}
+                                            <div style={{
+                                                position: 'absolute', bottom: 0, left: 0, height: '4px', width: `${pct}%`,
+                                                background: 'var(--primary)', opacity: 0.5, transition: 'width 0.5s ease'
+                                            }}></div>
+                                        </button>
+                                    )
+                                })}
                             </div>
                         </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            {event.outcomes.map(outcome => {
-                                const stats = event.stats || {};
-                                const total = stats.totalBets || 0;
-                                const count = stats.counts?.[outcome.id] || 0;
-                                const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-
-                                return (
-                                    <button
-                                        key={outcome.id}
-                                        disabled={event.status !== 'open'}
-                                        className="btn btn-outline"
-                                        style={{
-                                            display: 'flex', flexDirection: 'column', padding: '10px',
-                                            borderColor: (selectedOutcome?.outcomeId === outcome.id && selectedOutcome?.eventId === event.id) ? 'var(--primary)' : 'var(--border)',
-                                            background: (selectedOutcome?.outcomeId === outcome.id && selectedOutcome?.eventId === event.id) ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
-                                            opacity: event.status !== 'open' ? 0.5 : 1,
-                                            position: 'relative',
-                                            overflow: 'hidden'
-                                        }}
-                                        onClick={() => setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title })}
-                                    >
-                                        <span style={{ fontSize: '14px', zIndex: 2 }}>{outcome.label}</span>
-                                        <span style={{ color: 'var(--primary)', fontWeight: 'bold', zIndex: 2 }}>x{outcome.odds.toFixed(2)}</span>
-                                        <span style={{ fontSize: '11px', color: '#a1a1aa', marginTop: '4px', zIndex: 2 }}>
-                                            {pct}% picked
-                                        </span>
-                                        {/* Subtle progress bar background */}
-                                        <div style={{
-                                            position: 'absolute', bottom: 0, left: 0, height: '4px', width: `${pct}%`,
-                                            background: 'var(--primary)', opacity: 0.5, transition: 'width 0.5s ease'
-                                        }}></div>
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    </div>
-                ))}
+                    ))}
+                </div>
             </div>
 
             {/* --- Finished Events --- */}
