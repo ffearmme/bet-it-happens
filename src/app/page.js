@@ -24,6 +24,14 @@ export default function Home() {
     const [comments, setComments] = useState([]);
     const [commentText, setCommentText] = useState('');
     const [showWelcome, setShowWelcome] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [now, setNow] = useState(new Date()); // Live clock
+
+    useEffect(() => {
+        // Update 'now' every second to keep time-sensitive UI (like betting deadlines) accurate
+        const timer = setInterval(() => setNow(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         if (typeof window !== 'undefined' && localStorage.getItem('justSignedUp')) {
@@ -127,6 +135,9 @@ export default function Home() {
                 if (!username) { setAuthError('Username required'); return; }
                 const res = await signup(email, username, password);
                 if (res.success) {
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('justSignedUp', 'true');
+                    }
                     window.location.reload();
                 } else {
                     setAuthError(getFriendlyError(res.error));
@@ -214,27 +225,69 @@ export default function Home() {
 
     // --- MAIN APP (LOGGED IN) ---
     const rawActiveEvents = events.filter(e => e.status === 'open' || e.status === 'locked');
-    const pendingResolutionEvents = rawActiveEvents.filter(e => new Date() >= new Date(e.startAt));
-    const activeEvents = rawActiveEvents.filter(e => new Date() < new Date(e.startAt));
+
+    // Robust date parsing helper
+    const getDate = (dateStr) => {
+        if (!dateStr) return new Date(0);
+        if (dateStr.seconds) return new Date(dateStr.seconds * 1000);
+        return new Date(dateStr);
+    };
+
+    // 1. LIVE (Betting Open): Now < Deadline
+    const activeEvents = rawActiveEvents.filter(e => {
+        const deadline = e.deadline ? getDate(e.deadline) : getDate(e.startAt);
+        return now < deadline;
+    });
+
+    // 2. CLOSED (Betting Closed, Game is Running): Deadline <= Now < Resolution
+    const closedEvents = rawActiveEvents.filter(e => {
+        const deadline = e.deadline ? getDate(e.deadline) : getDate(e.startAt);
+        const resolution = getDate(e.startAt);
+        // If deadline and resolution are same (legacy), it skips this phase and goes to pending
+        return now >= deadline && now < resolution;
+    });
+
+    // 3. PENDING (Resolution/Game Over): Now >= Resolution
+    const pendingResolutionEvents = rawActiveEvents.filter(e => {
+        const resolution = getDate(e.startAt);
+        return now >= resolution;
+    });
+
     const finishedEvents = events.filter(e => e.status === 'settled');
 
+    console.log("Time:", now.toLocaleTimeString(), "Live:", activeEvents.length, "Closed:", closedEvents.length, "Pending:", pendingResolutionEvents.length);
+
+
+
     const handleBet = async () => {
+        if (isSubmitting) return; // Prevent double click
+
         setError('');
         setSuccess('');
+
         if (!wager || parseFloat(wager) <= 0) {
             setError('Enter a valid amount');
             return;
         }
-        const res = await placeBet(selectedOutcome.eventId, selectedOutcome.outcomeId, parseFloat(wager));
-        if (res.success) {
-            setSuccess('Bet Placed Successfully! Good Luck Soldier🫡');
-            setWager('');
-            setTimeout(() => {
-                setSelectedOutcome(null);
-                setSuccess('');
-            }, 1500);
-        } else {
-            setError(res.error);
+
+        setIsSubmitting(true);
+
+        try {
+            const res = await placeBet(selectedOutcome.eventId, selectedOutcome.outcomeId, parseFloat(wager));
+            if (res.success) {
+                setSuccess('Bet Placed Successfully! Good Luck Soldier🫡');
+                setWager('');
+                setTimeout(() => {
+                    setSelectedOutcome(null);
+                    setSuccess('');
+                }, 1500);
+            } else {
+                setError(res.error);
+            }
+        } catch (e) {
+            setError("Something went wrong. Try again.");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -374,7 +427,7 @@ export default function Home() {
             )}
 
 
-            {/* --- Pending Resolution Events --- */}
+            {/* --- Pending Resolution Events (Game Over) --- */}
             {
                 pendingResolutionEvents.length > 0 && (
                     <div style={{ marginBottom: '32px' }}>
@@ -383,13 +436,64 @@ export default function Home() {
                         </h2>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
                             {pendingResolutionEvents.map(event => (
-                                <div key={event.id} className="card" style={{ border: '1px solid #eab308', background: 'rgba(234, 179, 8, 0.05)' }}>
+                                <div
+                                    key={event.id}
+                                    className="card"
+                                    onClick={() => setExpandedEvent(event)}
+                                    style={{ border: '1px solid #eab308', background: 'rgba(234, 179, 8, 0.05)', cursor: 'pointer' }}
+                                >
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                        <span className="badge" style={{ background: '#eab308', color: '#000' }}>{event.status === 'locked' ? 'LOCKED' : 'AWAITING RESULT'}</span>
-                                        <span style={{ fontSize: '12px', color: '#eab308' }}>Resolving Now...</span>
+                                        <span className="badge" style={{ background: '#eab308', color: '#000' }}>FINISHED</span>
+                                        <span style={{ fontSize: '12px', color: '#eab308' }}>Awaiting Admin...</span>
                                     </div>
                                     <h3 style={{ fontSize: '18px', color: '#eab308' }}>{event.title}</h3>
-                                    <p className="text-sm" style={{ color: '#a1a1aa' }}>Admin decision pending.</p>
+                                    <p className="text-sm" style={{ color: '#a1a1aa' }}>Event over. Decisions coming soon.</p>
+
+                                    {event.lastComment && (
+                                        <div style={{ marginTop: '8px', padding: '6px', background: 'rgba(234, 179, 8, 0.1)', borderRadius: '4px', textAlign: 'left', fontSize: '11px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                            <span style={{ fontWeight: 'bold', color: '#eab308' }}>{event.lastComment.username}:</span>
+                                            <span style={{ color: '#eab308', fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px' }}>
+                                                "{event.lastComment.text}"
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* --- Betting Closed Events (Game Running) --- */}
+            {
+                closedEvents.length > 0 && (
+                    <div style={{ marginBottom: '32px' }}>
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: '#f59e0b' }}>
+                            🔒 Betting Closed
+                        </h2>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+                            {closedEvents.map(event => (
+                                <div
+                                    key={event.id}
+                                    className="card"
+                                    onClick={() => setExpandedEvent(event)}
+                                    style={{ border: '1px solid #f59e0b', background: 'rgba(245, 158, 11, 0.05)', cursor: 'pointer' }}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                        <span className="badge" style={{ background: '#f59e0b', color: '#000' }}>LIVE</span>
+                                        <span style={{ fontSize: '12px', color: '#f59e0b', fontWeight: 'bold' }}>BETS LOCKED</span>
+                                    </div>
+                                    <h3 style={{ fontSize: '18px', color: '#f59e0b' }}>{event.title}</h3>
+                                    <p className="text-sm" style={{ color: '#a1a1aa' }}>Game in progress. Good luck!</p>
+
+                                    {event.lastComment && (
+                                        <div style={{ marginTop: '8px', padding: '6px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '4px', textAlign: 'left', fontSize: '11px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                            <span style={{ fontWeight: 'bold', color: '#f59e0b' }}>{event.lastComment.username}:</span>
+                                            <span style={{ color: '#f59e0b', fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px' }}>
+                                                "{event.lastComment.text}"
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -592,25 +696,42 @@ export default function Home() {
 
                                     <div className="input-group">
                                         <input
-                                            type="number"
+                                            type="text"
+                                            inputMode="decimal"
                                             className="input"
                                             placeholder="Wager Amount ($)"
                                             value={wager}
-                                            onChange={(e) => setWager(e.target.value)}
+                                            onChange={(e) => {
+                                                // Allow user to type '$', but strip it for state
+                                                // We want to show what they type? No, standard is to strip currency symbols immediately or format on blur.
+                                                // Simple approach: Strip non-numeric chars immediately EXCEPT '.'
+                                                const val = e.target.value;
+                                                // If start with $, remove it
+                                                const clean = val.replace(/^\$/, '');
+                                                // Ensure only numbers and one dot
+                                                if (/^\d*\.?\d*$/.test(clean)) {
+                                                    setWager(clean);
+                                                }
+                                            }}
                                         />
                                     </div>
 
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', fontSize: '14px', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px' }}>
                                         <span className="text-sm">Potential Payout:</span>
                                         <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
-                                            ${wager ? (parseFloat(wager) * selectedOutcome.odds).toFixed(2) : '0.00'}
+                                            ${(parseFloat(wager || '0') * selectedOutcome.odds).toFixed(2)}
                                         </span>
                                     </div>
 
                                     {error && <p style={{ color: 'var(--accent-loss)', marginBottom: '12px', fontSize: '14px', textAlign: 'center' }}>{error}</p>}
 
-                                    <button className="btn btn-primary" onClick={handleBet}>
-                                        Place Bet
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={handleBet}
+                                        disabled={isSubmitting}
+                                        style={{ opacity: isSubmitting ? 0.7 : 1, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}
+                                    >
+                                        {isSubmitting ? 'Processing...' : 'Place Bet'}
                                     </button>
                                 </>
                             )}
@@ -643,6 +764,23 @@ export default function Home() {
                             </div>
                             <p style={{ marginBottom: '24px', lineHeight: '1.5' }}>{expandedEvent.description}</p>
 
+                            {/* Expiration Check */}
+                            {(now >= (expandedEvent.deadline ? getDate(expandedEvent.deadline) : getDate(expandedEvent.startAt))) && (
+                                <div style={{
+                                    background: 'rgba(234, 179, 8, 0.15)',
+                                    border: '1px solid #eab308',
+                                    color: '#eab308',
+                                    padding: '10px',
+                                    borderRadius: '8px',
+                                    textAlign: 'center',
+                                    marginBottom: '20px',
+                                    fontWeight: 'bold',
+                                    fontSize: '14px'
+                                }}>
+                                    🔒 BETTING CLOSED
+                                </div>
+                            )}
+
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                                 {expandedEvent.outcomes.map(outcome => {
                                     const stats = expandedEvent.stats || {};
@@ -650,11 +788,16 @@ export default function Home() {
                                     const count = stats.counts?.[outcome.id] || 0;
                                     const percent = total > 0 ? Math.round((count / total) * 100) : 0;
 
+                                    const bettingDeadline = expandedEvent.deadline ? getDate(expandedEvent.deadline) : getDate(expandedEvent.startAt);
+                                    const isExpired = now >= bettingDeadline;
+                                    const isDisabled = expandedEvent.status !== 'open' || isExpired;
+
                                     return (
                                         <button
                                             key={outcome.id}
-                                            disabled={expandedEvent.status !== 'open'}
+                                            disabled={isDisabled}
                                             onClick={() => {
+                                                if (isDisabled) return;
                                                 if (user) {
                                                     setSelectedOutcome({ eventId: expandedEvent.id, outcomeId: outcome.id, label: outcome.label, odds: outcome.odds, title: expandedEvent.title });
                                                     setExpandedEvent(null);
@@ -663,7 +806,16 @@ export default function Home() {
                                                 }
                                             }}
                                             className="btn btn-outline"
-                                            style={{ borderColor: '#fbbf24', color: '#fbbf24', padding: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}
+                                            style={{
+                                                borderColor: '#fbbf24',
+                                                color: '#fbbf24',
+                                                padding: '16px',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '4px',
+                                                opacity: isDisabled ? 0.5 : 1,
+                                                cursor: isDisabled ? 'not-allowed' : 'pointer'
+                                            }}
                                         >
                                             <div style={{ fontSize: '24px', fontWeight: '800' }}>{outcome.odds.toFixed(2)}x</div>
                                             <div style={{ fontWeight: '600', fontSize: '14px' }}>{outcome.label}</div>
@@ -804,7 +956,7 @@ export default function Home() {
                 }}>
                     <div className="card" style={{ maxWidth: '400px', textAlign: 'center', border: '1px solid var(--primary)', background: '#000' }}>
                         <div style={{ fontSize: '48px', marginBottom: '16px' }}>👋</div>
-                        <h2 style={{ fontSize: '24px', color: 'var(--primary)', marginBottom: '8px' }}>Welcome to the Arena!</h2>
+                        <h2 style={{ fontSize: '24px', color: 'var(--primary)', marginBottom: '8px' }}>Welcome to Bet It Happens!</h2>
                         <p style={{ marginBottom: '20px', lineHeight: '1.6', color: '#e4e4e7' }}>
                             <b>Bet It Happens</b> is a social prediction market.
                             <br /><br />

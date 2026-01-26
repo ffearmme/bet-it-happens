@@ -177,8 +177,10 @@ export default function Admin() {
                         <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                             {event.outcomes.map(o => (
                                 <button key={o.id} className="btn btn-outline" style={{ fontSize: '12px', padding: '8px' }} onClick={async () => {
-                                    const res = await resolveEvent(event.id, o.id);
-                                    if (!res.success) alert("Error resolving: " + res.error);
+                                    if (window.confirm(`Are you sure you want to resolve this event?\n\nWinner: ${o.label}\n\nThis action cannot be undone.`)) {
+                                        const res = await resolveEvent(event.id, o.id);
+                                        if (!res.success) alert("Error resolving: " + res.error);
+                                    }
                                 }}>
                                     {o.label} Wins
                                 </button>
@@ -432,7 +434,7 @@ service cloud.firestore {
             }
 
             <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                System Version V0.94
+                System Version V2.0
             </p>
         </div >
     );
