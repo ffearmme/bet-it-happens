@@ -14,8 +14,8 @@ const FUNNY_QUOTES = [
 ];
 
 export default function Home() {
-    const { user, events, placeBet, signup, signin, isLoaded, addComment, db, getUserStats } = useApp();
-    const chatEndRef = useRef(null);
+    const { user, events, placeBet, signup, signin, isLoaded, addComment, db, getUserStats, deleteEvent } = useApp();
+    const chatContainerRef = useRef(null);
     const [selectedOutcome, setSelectedOutcome] = useState(null);
     const [wager, setWager] = useState('');
     const [error, setError] = useState('');
@@ -48,9 +48,11 @@ export default function Home() {
         return () => unsub();
     }, [expandedEvent, db]);
 
+
+
     useEffect(() => {
-        if (chatEndRef.current) {
-            chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+        if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
         }
     }, [comments, expandedEvent]);
 
@@ -200,7 +202,9 @@ export default function Home() {
     }
 
     // --- MAIN APP (LOGGED IN) ---
-    const activeEvents = events.filter(e => e.status === 'open' || e.status === 'locked');
+    const rawActiveEvents = events.filter(e => e.status === 'open' || e.status === 'locked');
+    const pendingResolutionEvents = rawActiveEvents.filter(e => new Date() >= new Date(e.startAt));
+    const activeEvents = rawActiveEvents.filter(e => new Date() < new Date(e.startAt));
     const finishedEvents = events.filter(e => e.status === 'settled');
 
     const handleBet = async () => {
@@ -373,7 +377,6 @@ export default function Home() {
                                             if (user) {
                                                 setSelectedOutcome({ eventId: expandedEvent.id, outcomeId: outcome.id, label: outcome.label, odds: outcome.odds, title: expandedEvent.title });
                                                 setExpandedEvent(null);
-                                                window.scrollTo({ top: 0, behavior: 'smooth' });
                                             } else {
                                                 alert("Login to bet!");
                                             }
@@ -393,7 +396,7 @@ export default function Home() {
 
                         <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #333' }}>
                             <h3 style={{ fontSize: '16px', marginBottom: '12px', color: '#a1a1aa' }}>Trash Talk 🗣️</h3>
-                            <div style={{ maxHeight: '150px', overflowY: 'auto', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div ref={chatContainerRef} style={{ maxHeight: '150px', overflowY: 'auto', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 {comments.length === 0 && <p className="text-sm">No chatter yet. Start the beef!</p>}
                                 {comments.map(c => (
                                     <div key={c.id} style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px' }}>
@@ -408,7 +411,6 @@ export default function Home() {
                                         <div style={{ fontSize: '12px' }}>{c.text}</div>
                                     </div>
                                 ))}
-                                <div ref={chatEndRef} />
                             </div>
                             {user ? (
                                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -509,6 +511,27 @@ export default function Home() {
                 </div>
             )}
 
+            {/* --- Pending Resolution Events --- */}
+            {pendingResolutionEvents.length > 0 && (
+                <div style={{ marginBottom: '32px' }}>
+                    <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: '#eab308' }}>
+                        ⏳ Pending Resolution
+                    </h2>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+                        {pendingResolutionEvents.map(event => (
+                            <div key={event.id} className="card" style={{ border: '1px solid #eab308', background: 'rgba(234, 179, 8, 0.05)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                    <span className="badge" style={{ background: '#eab308', color: '#000' }}>{event.status === 'locked' ? 'LOCKED' : 'AWAITING RESULT'}</span>
+                                    <span style={{ fontSize: '12px', color: '#eab308' }}>Resolving Now...</span>
+                                </div>
+                                <h3 style={{ fontSize: '18px', color: '#eab308' }}>{event.title}</h3>
+                                <p className="text-sm" style={{ color: '#a1a1aa' }}>Admin decision pending.</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* --- Active Events --- */}
             <div style={{ marginBottom: '32px' }}>
                 <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
@@ -584,7 +607,6 @@ export default function Home() {
                                                 e.stopPropagation();
                                                 if (user) {
                                                     setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
-                                                    window.scrollTo({ top: 0, behavior: 'smooth' });
                                                 } else {
                                                     alert("Login to bet!");
                                                 }
@@ -617,7 +639,23 @@ export default function Home() {
                         Completed
                     </h2>
                     {finishedEvents.map(event => (
-                        <div key={event.id} className="card" style={{ opacity: 0.7, background: 'transparent', border: '1px solid #27272a' }}>
+                        <div key={event.id} className="card" style={{ opacity: 0.7, background: 'transparent', border: '1px solid #27272a', position: 'relative' }}>
+                            {user && user.role === 'admin' && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (confirm('Delete this completed event?')) deleteEvent(event.id);
+                                    }}
+                                    style={{
+                                        position: 'absolute', top: '10px', right: '10px',
+                                        background: 'rgba(239, 68, 68, 0.2)', color: 'var(--accent-loss)',
+                                        border: 'none', borderRadius: '4px', padding: '4px 8px',
+                                        fontSize: '11px', cursor: 'pointer', fontWeight: 'bold'
+                                    }}
+                                >
+                                    DELETE EVENT
+                                </button>
+                            )}
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <h3 style={{ fontSize: '16px', color: 'var(--text-muted)' }}>{event.title}</h3>
                                 <span className="badge" style={{ background: '#27272a', color: '#fff' }}>ENDED</span>
@@ -672,13 +710,16 @@ export default function Home() {
 
                                 <p className="text-sm" style={{ marginBottom: '12px' }}>{selectedOutcome.eventTitle}</p>
 
+                                <p className="text-sm" style={{ marginBottom: '8px', color: 'var(--primary)', fontWeight: 'bold' }}>
+                                    Your Balance: ${user.balance.toFixed(2)}
+                                </p>
+
                                 <div className="input-group">
                                     <input
                                         type="number"
                                         className="input"
                                         placeholder="Wager Amount ($)"
                                         value={wager}
-                                        autoFocus
                                         onChange={(e) => setWager(e.target.value)}
                                     />
                                 </div>

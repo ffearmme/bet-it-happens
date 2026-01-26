@@ -437,6 +437,16 @@ export function AppProvider({ children }) {
 
 
 
+  const deleteBet = async (betId) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      await deleteDoc(doc(db, 'bets', betId));
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
   const updateEvent = async (eventId, data) => {
     try {
       await updateDoc(doc(db, 'events', eventId), data);
@@ -846,7 +856,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-      events, createEvent, resolveEvent, updateEvent, fixStuckBets, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, markNotificationRead, getUserStats, getWeeklyLeaderboard,
+      events, createEvent, resolveEvent, updateEvent, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, markNotificationRead, getUserStats, getWeeklyLeaderboard,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db
     }}>
       {children}

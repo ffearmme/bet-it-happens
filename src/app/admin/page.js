@@ -7,7 +7,7 @@ import { db } from '../../lib/firebase';
 import { collection, query, limit, onSnapshot } from 'firebase/firestore';
 
 export default function Admin() {
-    const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, fixStuckBets, toggleFeatured, ideas, deleteIdea, users, deleteUser, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
+    const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, fixStuckBets, deleteBet, toggleFeatured, ideas, deleteIdea, users, deleteUser, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
     const router = useRouter();
     const [newEvent, setNewEvent] = useState({
         title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: ''
@@ -176,7 +176,10 @@ export default function Admin() {
 
                         <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                             {event.outcomes.map(o => (
-                                <button key={o.id} className="btn btn-outline" style={{ fontSize: '12px', padding: '8px' }} onClick={() => resolveEvent(event.id, o.id)}>
+                                <button key={o.id} className="btn btn-outline" style={{ fontSize: '12px', padding: '8px' }} onClick={async () => {
+                                    const res = await resolveEvent(event.id, o.id);
+                                    if (!res.success) alert("Error resolving: " + res.error);
+                                }}>
                                     {o.label} Wins
                                 </button>
                             ))}
@@ -252,8 +255,25 @@ export default function Admin() {
                             return (
                                 <div key={bet.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '8px', marginBottom: '8px' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                        <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{displayName}</span>
-                                        <span style={{ fontSize: '12px', color: '#888' }}>{new Date(bet.placedAt).toLocaleTimeString()}</span>
+                                        <div>
+                                            <span style={{ fontWeight: 'bold', color: 'var(--primary)', marginRight: '8px' }}>{displayName}</span>
+                                            {bet.status !== 'pending' && <span style={{ fontSize: '10px', background: '#333', padding: '2px 4px', borderRadius: '4px' }}>{bet.status.toUpperCase()}</span>}
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: '12px', color: '#888', marginRight: '8px' }}>{new Date(bet.placedAt).toLocaleTimeString()}</span>
+                                            <button
+                                                onClick={async () => {
+                                                    if (confirm('Delete this bet record? (History only, no refund)')) {
+                                                        const res = await deleteBet(bet.id);
+                                                        if (!res.success) alert(res.error);
+                                                    }
+                                                }}
+                                                style={{ color: 'var(--accent-loss)', border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}
+                                                title="Delete Bet Record"
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
                                     </div>
                                     <div style={{ fontSize: '14px' }}>
                                         Bet <b>${bet.amount}</b> on <b>{bet.outcomeLabel}</b>
@@ -306,26 +326,89 @@ export default function Admin() {
             <div style={{ textAlign: 'center', marginTop: '40px', marginBottom: '20px' }}>
                 <button
                     onClick={() => setShowRules(!showRules)}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--accent-loss)', textDecoration: 'underline', cursor: 'pointer', fontSize: '12px' }}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--accent-loss)', textDecoration: 'underline', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}
                 >
-                    ⚠️ Fix "Missing Permissions" Error
+                    ⚠️ FIX "Insufficient Permissions" ERROR (REQUIRED)
                 </button>
             </div>
 
             {
                 showRules && (
                     <div className="card" style={{ border: '1px solid var(--accent-loss)', background: 'rgba(239, 68, 68, 0.05)' }}>
-                        <h3 style={{ color: 'var(--accent-loss)', fontSize: '16px' }}>Update Firestore Rules</h3>
+                        <h3 style={{ color: 'var(--accent-loss)', fontSize: '16px' }}>REQUIRED: Update Firestore Rules</h3>
                         <p className="text-sm" style={{ marginBottom: '12px' }}>
-                            To delete other users, you need to update your rules in the Firebase Console.
+                            You cannot resolve bets or delete users until you update these rules.
                             <br />
-                            <b>Go to:</b> Firebase Console {'>'} Firestore Database {'>'} Rules
+                            <b>1. Go to:</b> <a href="https://console.firebase.google.com/" target="_blank" style={{ textDecoration: 'underline' }}>Firebase Console</a> {'>'} Firestore Database {'>'} Rules
+                            <br />
+                            <b>2. Copy & Paste this EXACTLY:</b>
                         </p>
                         <div style={{ position: 'relative' }}>
+                            <button
+                                onClick={() => {
+                                    const r = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Check if user is Admin (Hardcoded to bypass 'get' limits for batches)
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == '${user?.id || 'YOUR_ADMIN_UID'}';
+    }
+
+    // USERS: Users manage themselves, Admins manage all
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && (request.auth.uid == userId || isAdmin()); 
+      allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+    
+    // EVENTS: Public read, Admin manage, Users partially update for stats
+    match /events/{eventId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if request.auth != null; 
+    }
+    
+    // BETS: Public read, User create, Admin full control
+    match /bets/{betId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if isAdmin();
+    }
+
+    // NOTIFICATIONS: Private read/write, Admin create
+    match /notifications/{notifId} {
+        allow read: if request.auth.uid == resource.data.userId;
+        allow create: if isAdmin(); // For resolving
+        allow update: if request.auth.uid == resource.data.userId; // For marking read
+    }
+    
+    // IDEAS: Public read, User create, Admin delete
+    match /ideas/{ideaId} {
+        allow read: if true;
+        allow create: if request.auth != null;
+        allow delete: if isAdmin();
+    }
+    
+    // COMMENTS: Public read, User create
+    match /comments/{commentId} {
+        allow read: if true;
+        allow create: if request.auth != null;
+    }
+  }
+}`;
+                                    navigator.clipboard.writeText(r);
+                                    alert("Rules copied! Now paste into Firebase Console.");
+                                }}
+                                style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 10, background: 'var(--primary)', color: '#000', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                            >
+                                📋 COPY RULES
+                            </button>
                             <textarea
                                 readOnly
                                 style={{
-                                    width: '100%', height: '300px',
+                                    width: '100%', height: '350px',
                                     background: '#1e1e1e', color: '#a6e3a1',
                                     padding: '10px', fontSize: '11px',
                                     fontFamily: 'monospace', borderRadius: '6px',
@@ -335,9 +418,9 @@ export default function Admin() {
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Check if user is Admin
+    // Check if user is Admin (Hardcoded to bypass 'get' limits for batches)
     function isAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return request.auth != null && request.auth.uid == '${user?.id || 'YOUR_ADMIN_UID'}';
     }
 
     // USERS: Users manage themselves, Admins manage all
@@ -365,52 +448,14 @@ service cloud.firestore {
   }
 }`}
                             />
-                            <button
-                                className="btn"
-                                style={{ position: 'absolute', top: '10px', right: '10px', padding: '4px 8px', fontSize: '10px' }}
-                                onClick={() => {
-                                    navigator.clipboard.writeText(`rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    
-    function isAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
 
-    match /users/{userId} {
-      allow read, create: if true;
-      allow update, delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
-    }
-
-    match /bets/{betId} {
-      allow read, create: if true;
-      allow update, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
-    }
-    
-    match /ideas/{ideaId} {
-      allow read, create: if true;
-      allow update, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
-    }
-
-    match /events/{eventId} {
-      allow read: if true;
-      allow create, delete: if isAdmin();
-      allow update: if request.auth != null; 
-    }
-  }
-}`);
-                                    alert("Production Rules copied! Paste them in Firebase Console.");
-                                }}
-                            >
-                                Copy Rules
-                            </button>
                         </div>
                     </div>
                 )
             }
 
             <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                System Version V0.69
+                System Version V0.81
             </p>
         </div >
     );
