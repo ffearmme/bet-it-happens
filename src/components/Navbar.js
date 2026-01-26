@@ -7,6 +7,8 @@ export default function Navbar() {
     const { user } = useApp();
     const pathname = usePathname();
 
+    if (!user) return null; // Hide tabs if not logged in
+
     const isActive = (path) => pathname === path;
 
     return (

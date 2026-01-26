@@ -194,21 +194,102 @@ export function AppProvider({ children }) {
 
   const signin = async (emailOrUsername, password) => {
     try {
-      let email = emailOrUsername;
-      // Simple check: if no '@', assume username
-      if (!email.includes('@')) {
-        const q = query(collection(db, 'users'), where('username', '==', emailOrUsername), limit(1));
-        const snap = await getDocs(q);
-        if (snap.empty) {
-          return { success: false, error: 'User-not-found' };
+      let email = emailOrUsername.trim();
+
+      // If it looks like an email, just try it directly
+      if (email.includes('@')) {
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+          return { success: true };
+        } catch (e) {
+          console.error("Email login failed", e);
+          return { success: false, error: e.message };
         }
-        email = snap.docs[0].data().email;
       }
 
-      await signInWithEmailAndPassword(auth, email, password);
-      return { success: true };
+      // Username lookup logic
+      const usernameInput = email;
+      const col = collection(db, 'users');
+      let candidateEmails = new Set();
+
+      // Helper to fetch and add emails (No LIMIT to ensure we find the right one)
+      const addCandidates = async (param, val) => {
+        try {
+          const q = query(col, where(param, '==', val)); // Removed limit
+          const snap = await getDocs(q);
+          snap.forEach(doc => {
+            const data = doc.data();
+            if (data.email) candidateEmails.add(data.email);
+          });
+        } catch (err) {
+          console.error("Query failed for", val, err);
+        }
+      };
+
+      // 1. Exact Match
+      await addCandidates('username', usernameInput);
+      // 2. Lowercase
+      await addCandidates('username', usernameInput.toLowerCase());
+      // 3. Capitalized (Try standard First Capital)
+      const capitalized = usernameInput.charAt(0).toUpperCase() + usernameInput.slice(1).toLowerCase();
+      await addCandidates('username', capitalized);
+
+      // 4. UPPERCASE
+      await addCandidates('username', usernameInput.toUpperCase());
+
+      if (candidateEmails.size === 0) {
+        return { success: false, error: `Username '${usernameInput}' does not exist.` };
+      }
+
+      // Try each email
+      let tried = [];
+      for (let candidateEmail of candidateEmails) {
+        if (typeof candidateEmail !== 'string') continue;
+        candidateEmail = candidateEmail.trim();
+
+        try {
+          // Attempt 1: Standard
+          await signInWithEmailAndPassword(auth, candidateEmail, password);
+          return { success: true };
+        } catch (error) {
+          // Attempt 2: Trimmed Password
+          if (password.trim() !== password) {
+            try {
+              await signInWithEmailAndPassword(auth, candidateEmail, password.trim());
+              return { success: true };
+            } catch (e2) { }
+          }
+
+          // Attempt 3: Email with all whitespace removed (just in case)
+          const emailNoWhitespace = candidateEmail.replace(/\s/g, '');
+          if (emailNoWhitespace !== candidateEmail) {
+            try {
+              await signInWithEmailAndPassword(auth, emailNoWhitespace, password);
+              return { success: true };
+            } catch (e3) { }
+          }
+
+          tried.push(candidateEmail);
+          if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+            continue;
+          }
+          // Return technical error
+          return { success: false, error: `System Error (${error.code})` };
+        }
+      }
+
+      // If loop finishes, none worked.
+      // Return the email found so the UI can switch to it.
+      const firstEmail = tried[0];
+      return {
+        success: false,
+        suggestedEmail: firstEmail,
+        error: 'Password incorrect.'
+      };
+
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error(error);
+      return { success: false, error: "System Error: " + error.message };
     }
   };
 
@@ -766,13 +847,24 @@ export function AppProvider({ children }) {
   const addComment = async (eventId, text) => {
     if (!user) return { success: false, error: 'Login to comment' };
     try {
-      await addDoc(collection(db, 'comments'), {
+      const commentData = {
         eventId,
         userId: user.id,
         username: user.username,
         text,
         createdAt: new Date().toISOString()
+      };
+      await addDoc(collection(db, 'comments'), commentData);
+
+      // Update Event with lastComment for preview
+      await updateDoc(doc(db, 'events', eventId), {
+        lastComment: {
+          username: user.username,
+          text: text.length > 50 ? text.substring(0, 50) + '...' : text,
+          createdAt: commentData.createdAt
+        }
       });
+
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };

@@ -344,67 +344,6 @@ export default function Admin() {
                             <b>2. Copy & Paste this EXACTLY:</b>
                         </p>
                         <div style={{ position: 'relative' }}>
-                            <button
-                                onClick={() => {
-                                    const r = `rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    
-    // Check if user is Admin (Hardcoded to bypass 'get' limits for batches)
-    function isAdmin() {
-      return request.auth != null && request.auth.uid == '${user?.id || 'YOUR_ADMIN_UID'}';
-    }
-
-    // USERS: Users manage themselves, Admins manage all
-    match /users/{userId} {
-      allow read: if true;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && (request.auth.uid == userId || isAdmin()); 
-      allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
-    }
-    
-    // EVENTS: Public read, Admin manage, Users partially update for stats
-    match /events/{eventId} {
-      allow read: if true;
-      allow create, delete: if isAdmin();
-      allow update: if request.auth != null; 
-    }
-    
-    // BETS: Public read, User create, Admin full control
-    match /bets/{betId} {
-      allow read: if true;
-      allow create: if request.auth != null;
-      allow update, delete: if isAdmin();
-    }
-
-    // NOTIFICATIONS: Private read/write, Admin create
-    match /notifications/{notifId} {
-        allow read: if request.auth.uid == resource.data.userId;
-        allow create: if isAdmin(); // For resolving
-        allow update: if request.auth.uid == resource.data.userId; // For marking read
-    }
-    
-    // IDEAS: Public read, User create, Admin delete
-    match /ideas/{ideaId} {
-        allow read: if true;
-        allow create: if request.auth != null;
-        allow delete: if isAdmin();
-    }
-    
-    // COMMENTS: Public read, User create
-    match /comments/{commentId} {
-        allow read: if true;
-        allow create: if request.auth != null;
-    }
-  }
-}`;
-                                    navigator.clipboard.writeText(r);
-                                    alert("Rules copied! Now paste into Firebase Console.");
-                                }}
-                                style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 10, background: 'var(--primary)', color: '#000', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
-                            >
-                                📋 COPY RULES
-                            </button>
                             <textarea
                                 readOnly
                                 style={{
@@ -448,14 +387,52 @@ service cloud.firestore {
   }
 }`}
                             />
+                            <button
+                                className="btn"
+                                style={{ position: 'absolute', top: '10px', right: '10px', padding: '4px 8px', fontSize: '10px' }}
+                                onClick={() => {
+                                    navigator.clipboard.writeText(`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAdmin() {
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
 
+    match /users/{userId} {
+      allow read, create: if true;
+      allow update, delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /bets/{betId} {
+      allow read, create: if true;
+      allow update, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+    
+    match /ideas/{ideaId} {
+      allow read, create: if true;
+      allow update, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if request.auth != null; 
+    }
+  }
+}`);
+                                    alert("Production Rules copied! Paste them in Firebase Console.");
+                                }}
+                            >
+                                Copy Rules
+                            </button>
                         </div>
                     </div>
                 )
             }
 
             <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                System Version V0.81
+                System Version V0.94
             </p>
         </div >
     );

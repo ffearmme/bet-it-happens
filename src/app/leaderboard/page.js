@@ -131,7 +131,7 @@ export default function Leaderboard() {
                                     </div>
                                 )}
                                 <div>
-                                    <p style={{ fontWeight: '600', fontSize: '1.1em' }}>{player.username}</p>
+                                    <p style={{ fontWeight: '600', fontSize: '1.1em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>{player.username}</p>
                                     <p style={{ fontSize: '0.8em', color: 'var(--text-secondary)' }}>
                                         {tab === 'all' ? 'Net Worth' : 'Weekly Profit'}
                                     </p>
