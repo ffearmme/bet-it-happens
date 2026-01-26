@@ -321,8 +321,11 @@ export function AppProvider({ children }) {
 
   const resolveEvent = async (eventId, winnerOutcomeId) => {
     try {
-      // 1. Mark Event as Settled
-      await updateDoc(doc(db, 'events', eventId), {
+      const batch = writeBatch(db);
+      const eventRef = doc(db, 'events', eventId);
+
+      // 1. Mark Event as Settled (In Batch)
+      batch.update(eventRef, {
         status: 'settled',
         winnerOutcomeId
       });
@@ -331,10 +334,11 @@ export function AppProvider({ children }) {
       const betsQ = query(collection(db, 'bets'), where('eventId', '==', eventId));
       const betsSnap = await getDocs(betsQ); // Need all bets to settle
 
-      const batch = writeBatch(db);
-
       betsSnap.docs.forEach((betDoc) => {
         const bet = betDoc.data();
+        // Skip if already settled to avoid double-pay/deduct
+        if (bet.status !== 'pending') return;
+
         const isWinner = bet.outcomeId === winnerOutcomeId;
         const userRef = doc(db, 'users', bet.userId);
 
@@ -345,8 +349,6 @@ export function AppProvider({ children }) {
         });
 
         // Update User Balance & Invested
-        // Always decrease 'invested' because the bet is over.
-        // Increase 'balance' only if they won.
         if (isWinner) {
           batch.update(userRef, {
             balance: increment(bet.potentialPayout),
@@ -377,6 +379,58 @@ export function AppProvider({ children }) {
       return { success: true };
     } catch (e) {
       console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const fixStuckBets = async () => {
+    try {
+      const eventsQ = query(collection(db, 'events'), where('status', '==', 'settled'));
+      const eventsSnap = await getDocs(eventsQ);
+
+      let totalFixed = 0;
+      const batch = writeBatch(db);
+
+      for (const eventDoc of eventsSnap.docs) {
+        const event = eventDoc.data();
+        const winnerOutcomeId = event.winnerOutcomeId;
+        if (!winnerOutcomeId) continue;
+
+        const betsQ = query(collection(db, 'bets'), where('eventId', '==', eventDoc.id), where('status', '==', 'pending'));
+        const betsSnap = await getDocs(betsQ);
+
+        betsSnap.docs.forEach(betDoc => {
+          const bet = betDoc.data();
+          // Double check it's pending
+          if (bet.status !== 'pending') return;
+
+          const isWinner = bet.outcomeId === winnerOutcomeId;
+          const userRef = doc(db, 'users', bet.userId);
+
+          batch.update(betDoc.ref, {
+            status: isWinner ? 'won' : 'lost',
+            settledAt: new Date().toISOString()
+          });
+
+          if (isWinner) {
+            batch.update(userRef, {
+              balance: increment(bet.potentialPayout),
+              invested: increment(-bet.amount)
+            });
+          } else {
+            batch.update(userRef, {
+              invested: increment(-bet.amount)
+            });
+          }
+          totalFixed++;
+        });
+      }
+
+      if (totalFixed > 0) {
+        await batch.commit();
+      }
+      return { success: true, message: `Fixed ${totalFixed} stuck bets.` };
+    } catch (e) {
       return { success: false, error: e.message };
     }
   };
@@ -792,7 +846,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-      events, createEvent, resolveEvent, updateEvent, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, markNotificationRead, getUserStats, getWeeklyLeaderboard,
+      events, createEvent, resolveEvent, updateEvent, fixStuckBets, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, markNotificationRead, getUserStats, getWeeklyLeaderboard,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db
     }}>
       {children}

@@ -7,7 +7,7 @@ import { db } from '../../lib/firebase';
 import { collection, query, limit, onSnapshot } from 'firebase/firestore';
 
 export default function Admin() {
-    const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, toggleFeatured, ideas, deleteIdea, users, deleteUser, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
+    const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, fixStuckBets, toggleFeatured, ideas, deleteIdea, users, deleteUser, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
     const router = useRouter();
     const [newEvent, setNewEvent] = useState({
         title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: ''
@@ -200,9 +200,9 @@ export default function Admin() {
                                 </div>
                                 <button
                                     onClick={() => { if (confirm('Delete idea?')) deleteIdea(idea.id) }}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-loss)', fontSize: '12px' }}
+                                    style={{ background: 'var(--accent-loss)', border: 'none', cursor: 'pointer', color: '#fff', fontSize: '10px', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold' }}
                                 >
-                                    ✕
+                                    DELETE IDEA
                                 </button>
                             </div>
                         </div>
@@ -290,6 +290,16 @@ export default function Admin() {
                     style={{ background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', marginLeft: '10px' }}
                 >
                     🔄 Recalc User Net Worth
+                </button>
+                <button
+                    onClick={async () => {
+                        if (!confirm("This will find ALL pending bets on settled events and force-resolve them. Continue?")) return;
+                        const res = await fixStuckBets();
+                        alert(res.message || res.error);
+                    }}
+                    style={{ background: 'var(--primary)', border: 'none', color: '#000', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', marginLeft: '10px' }}
+                >
+                    🛠️ Fix Stuck Bets
                 </button>
             </div>
 
@@ -400,7 +410,7 @@ service cloud.firestore {
             }
 
             <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                System Version V0.68
+                System Version V0.69
             </p>
         </div >
     );
