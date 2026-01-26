@@ -10,7 +10,7 @@ export default function Admin() {
     const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, fixStuckBets, deleteBet, toggleFeatured, ideas, deleteIdea, users, deleteUser, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
     const router = useRouter();
     const [newEvent, setNewEvent] = useState({
-        title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: ''
+        title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Sports'
     });
     const [editingId, setEditingId] = useState(null);
     const [showRules, setShowRules] = useState(false);
@@ -46,17 +46,19 @@ export default function Admin() {
                 description: newEvent.description,
                 startAt: newEvent.startAt,
                 deadline: newEvent.deadline,
+                category: newEvent.category,
                 // We update outcomes 'labels' but warn about odds. To simplify, we'll try to update the array if possible.
                 // Re-constructing outcomes array while keeping IDs effectively might be complex if indices match.
                 // For now, let's just update main fields.
             });
-            alert('Event updated (Title, Desc, dates).');
+            alert('Event updated (Title, Desc, dates, category).');
             setEditingId(null);
-            setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '' });
+            setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Sports' });
         } else {
             createEvent({
                 title: newEvent.title,
                 description: newEvent.description,
+                category: newEvent.category,
                 startAt: newEvent.startAt || new Date(Date.now() + 86400000).toISOString(),
                 deadline: newEvent.deadline || null,
                 outcomes: [
@@ -90,11 +92,28 @@ export default function Admin() {
             <div className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h2>{editingId ? 'Edit Event' : 'Create Event'}</h2>
-                    {editingId && <button onClick={() => { setEditingId(null); setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '' }); }} style={{ fontSize: '12px', color: 'red' }}>Cancel Edit</button>}
+                    {editingId && <button onClick={() => { setEditingId(null); setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Sports' }); }} style={{ fontSize: '12px', color: 'red' }}>Cancel Edit</button>}
                 </div>
                 <form onSubmit={handleCreate}>
                     <div className="input-group">
                         <input className="input" placeholder="Event Title" value={newEvent.title} onChange={e => setNewEvent({ ...newEvent, title: e.target.value })} required />
+                    </div>
+                    <div className="input-group">
+                        <label className="text-sm" style={{ marginBottom: '4px', display: 'block' }}>Category</label>
+                        <select
+                            className="input"
+                            value={newEvent.category || 'Sports'}
+                            onChange={e => setNewEvent({ ...newEvent, category: e.target.value })}
+                            style={{ background: 'var(--bg-card)', color: '#fff' }}
+                        >
+                            <option value="Super Bowl">Super Bowl 🏆</option>
+                            <option value="Sports">Sports</option>
+                            <option value="Video Games">Video Games</option>
+                            <option value="Local/Community">Local/Community</option>
+                            <option value="Weather">Weather</option>
+                            <option value="Tech">Tech</option>
+                            <option value="Pop Culture">Pop Culture</option>
+                        </select>
                     </div>
                     <div className="input-group">
                         <input className="input" placeholder="Description" value={newEvent.description} onChange={e => setNewEvent({ ...newEvent, description: e.target.value })} required />
@@ -434,7 +453,7 @@ service cloud.firestore {
             }
 
             <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                System Version V2.0
+                System Version V4.1
             </p>
         </div >
     );
