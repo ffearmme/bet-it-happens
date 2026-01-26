@@ -14,7 +14,7 @@ const FUNNY_QUOTES = [
 ];
 
 export default function Home() {
-    const { user, events, placeBet, signup, signin, isLoaded, addComment, db, getUserStats, deleteEvent } = useApp();
+    const { user, events, placeBet, signup, signin, isLoaded, addComment, deleteComment, db, getUserStats, deleteEvent } = useApp();
     const chatContainerRef = useRef(null);
     const [selectedOutcome, setSelectedOutcome] = useState(null);
     const [wager, setWager] = useState('');
@@ -431,6 +431,22 @@ export default function Home() {
                             `}</style>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* --- Profile Update Prompt --- */}
+            {user && (!user.profilePic || !user.bio) && (
+                <div className="card" style={{ marginBottom: '24px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid var(--primary)', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ fontSize: '32px' }}>🤳</div>
+                    <div style={{ flex: 1 }}>
+                        <h3 style={{ fontSize: '16px', color: '#fff', marginBottom: '4px' }}>Stand out in the crowd!</h3>
+                        <p className="text-sm" style={{ color: '#bae6fd', margin: 0 }}>
+                            Add a profile picture and bio to let others know who they're betting against.
+                        </p>
+                    </div>
+                    <Link href="/profile" className="btn btn-primary" style={{ width: 'auto', fontSize: '12px', whiteSpace: 'nowrap', textDecoration: 'none', padding: '8px 16px' }}>
+                        Update Profile
+                    </Link>
                 </div>
             )}
 
@@ -974,7 +990,27 @@ export default function Home() {
                                 <div ref={chatContainerRef} style={{ maxHeight: '150px', overflowY: 'auto', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                     {comments.length === 0 && <p className="text-sm">No chatter yet. Start the beef!</p>}
                                     {comments.map(c => (
-                                        <div key={c.id} style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px' }}>
+                                        <div key={c.id} style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px', position: 'relative' }}>
+                                            {user && user.role === 'admin' && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (confirm('Delete message?')) {
+                                                            deleteComment(c.id).then(res => {
+                                                                if (!res.success) alert("Delete Failed: " + res.error);
+                                                            });
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        position: 'absolute', top: '4px', right: '4px',
+                                                        background: 'none', border: 'none', color: '#ef4444',
+                                                        fontSize: '10px', cursor: 'pointer', padding: '2px', opacity: 0.7
+                                                    }}
+                                                    title="Delete Message"
+                                                >
+                                                    (x)
+                                                </button>
+                                            )}
                                             <div
                                                 style={{ fontSize: '10px', color: 'var(--primary)', fontWeight: 'bold', cursor: 'pointer', display: 'inline-block', marginBottom: '2px' }}
                                                 onClick={() => setViewingUser({ id: c.userId, username: c.username })}
@@ -983,7 +1019,7 @@ export default function Home() {
                                             >
                                                 {c.username || 'Anon'}
                                             </div>
-                                            <div style={{ fontSize: '12px' }}>{c.text}</div>
+                                            <div style={{ fontSize: '12px', paddingRight: '16px' }}>{c.text}</div>
                                         </div>
                                     ))}
                                 </div>

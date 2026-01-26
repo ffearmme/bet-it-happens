@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   collection, addDoc, onSnapshot, query, orderBy,
-  doc, setDoc, updateDoc, getDoc, where, increment, deleteDoc, getDocs, limit, writeBatch
+  doc, setDoc, updateDoc, getDoc, where, increment, deleteDoc, getDocs, limit, writeBatch, deleteField
 } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -871,6 +871,68 @@ export function AppProvider({ children }) {
     }
   };
 
+  const deleteComment = async (commentId) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      // 1. Get comment details before deleting (to find parent event)
+      const commentRef = doc(db, 'comments', commentId);
+      const commentSnap = await getDoc(commentRef);
+
+      if (!commentSnap.exists()) {
+        return { success: false, error: 'Comment already deleted' };
+      }
+
+      const val = commentSnap.data();
+      const eventId = val.eventId;
+      const commentCreatedAt = val.createdAt;
+
+      // 2. Delete the comment
+      await deleteDoc(commentRef);
+
+      // 3. Check if this was the "lastComment" on the event card
+      if (eventId) {
+        const eventRef = doc(db, 'events', eventId);
+        const eventSnap = await getDoc(eventRef);
+
+        if (eventSnap.exists()) {
+          const eventData = eventSnap.data();
+          // Check if the displayed lastComment matches the one we just deleted
+          if (eventData.lastComment && eventData.lastComment.createdAt === commentCreatedAt) {
+            // It was the one displayed! We need to find the new latest comment.
+            // Fetch all remaining comments for this event
+            const q = query(collection(db, 'comments'), where('eventId', '==', eventId));
+            const snap = await getDocs(q);
+
+            if (!snap.empty) {
+              // Find the newest one
+              const all = snap.docs.map(d => d.data());
+              all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+              const newest = all[0];
+
+              await updateDoc(eventRef, {
+                lastComment: {
+                  username: newest.username,
+                  text: newest.text.length > 50 ? newest.text.substring(0, 50) + '...' : newest.text,
+                  createdAt: newest.createdAt
+                }
+              });
+            } else {
+              // No comments left
+              await updateDoc(eventRef, {
+                lastComment: deleteField()
+              });
+            }
+          }
+        }
+      }
+
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
   const markNotificationRead = async (notifId) => {
     try {
       await updateDoc(doc(db, 'notifications', notifId), { read: true });
@@ -948,7 +1010,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-      events, createEvent, resolveEvent, updateEvent, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, markNotificationRead, getUserStats, getWeeklyLeaderboard,
+      events, createEvent, resolveEvent, updateEvent, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, deleteComment, markNotificationRead, getUserStats, getWeeklyLeaderboard,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db
     }}>
       {children}
