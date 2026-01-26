@@ -31,9 +31,12 @@ export default function Leaderboard() {
                 if (res.success) {
                     const enriched = res.data.map(item => {
                         const u = users.find(u => u.id === item.userId);
-                        return u ? { ...u, profit: item.profit } : null;
+                        // Filter out admins (Production Ready)
+                        return (u && u.role !== 'admin') ? { ...u, profit: item.profit } : null;
                     }).filter(u => u);
                     setWeeklyData(enriched);
+                } else {
+                    console.error(res.error);
                 }
             });
         }

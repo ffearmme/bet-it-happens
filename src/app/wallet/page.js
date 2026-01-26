@@ -14,6 +14,19 @@ export default function Wallet() {
         if (isLoaded && !user) router.push('/');
     }, [user, isLoaded, router]);
 
+    // Force re-render on day change (midnight)
+    const [currentDateStr, setCurrentDateStr] = useState('');
+    useEffect(() => {
+        setCurrentDateStr(new Date().toDateString());
+        const interval = setInterval(() => {
+            const now = new Date().toDateString();
+            if (now !== currentDateStr) {
+                setCurrentDateStr(now);
+            }
+        }, 60000); // Check every minute
+        return () => clearInterval(interval);
+    }, [currentDateStr]);
+
     if (!isLoaded) return null; // or a spinner
     if (!user) return null;
 
@@ -72,14 +85,18 @@ export default function Wallet() {
                 <h3 style={{ fontSize: '18px' }}>Submit Bet Idea</h3>
                 {(() => {
                     const DAILY_LIMIT = 5;
-                    const today = new Date().toDateString();
-                    const count = (user.submissionData && user.submissionData.date === today) ? user.submissionData.count : 0;
+                    // We use the state 'today' (which updates live) to ensure the UI flips at midnight 
+                    // even if the user doesn't refresh the page.
+                    const nowStr = new Date().toDateString();
+                    const count = (user.submissionData && user.submissionData.date === nowStr) ? user.submissionData.count : 0;
                     const remaining = Math.max(0, DAILY_LIMIT - count);
 
                     return (
                         <p className="text-sm" style={{ marginBottom: '12px' }}>
                             Got a good idea for a bet? Submit it to the admin! <br />
                             Reward: <span style={{ color: 'var(--primary)' }}>$15.00</span> per idea.
+                            <br />
+                            <span style={{ fontSize: '10px', color: '#71717a' }}>Quota resets daily at midnight.</span>
                             <span style={{ display: 'block', marginTop: '8px', fontSize: '12px', fontWeight: 'bold', color: remaining === 0 ? 'var(--accent-loss)' : 'var(--text-muted)' }}>
                                 Submissions left today: {remaining}/{DAILY_LIMIT}
                             </span>

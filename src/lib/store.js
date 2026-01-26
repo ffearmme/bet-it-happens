@@ -980,12 +980,15 @@ export function AppProvider({ children }) {
 
   const getWeeklyLeaderboard = async () => {
     try {
-      const d = new Date();
-      const day = d.getDay();
-      const diff = d.getDate() - day;
-      const startOfWeek = new Date(d.setDate(diff));
+      const now = new Date();
+      const dayOfWeek = now.getDay(); // 0 (Sun) - 6 (Sat)
+      const startOfWeek = new Date(now);
+      // Reset to most recent Sunday (or today if it is Sunday)
+      startOfWeek.setDate(now.getDate() - dayOfWeek);
       startOfWeek.setHours(0, 0, 0, 0);
       const isoStr = startOfWeek.toISOString();
+
+      console.log("Fetching weekly stats since:", isoStr);
 
       const q = query(collection(db, 'bets'), where('status', 'in', ['won', 'lost']), where('settledAt', '>=', isoStr));
       const snap = await getDocs(q);
@@ -995,8 +998,11 @@ export function AppProvider({ children }) {
         const b = doc.data();
         if (!stats[b.userId]) stats[b.userId] = 0;
         if (b.status === 'won') {
-          stats[b.userId] += ((b.potentialPayout || (b.amount * b.odds)) - b.amount);
+          // Profit = Payout - Wager
+          const payout = b.potentialPayout || (b.amount * b.odds);
+          stats[b.userId] += (payout - b.amount);
         } else {
+          // Loss = -Wager
           stats[b.userId] -= b.amount;
         }
       });
@@ -1004,7 +1010,12 @@ export function AppProvider({ children }) {
       const leaderboard = Object.entries(stats).map(([userId, profit]) => ({ userId, profit }));
       leaderboard.sort((a, b) => b.profit - a.profit);
       return { success: true, data: leaderboard };
-    } catch (e) { console.error(e); return { success: false, error: e.message }; }
+    } catch (e) {
+      console.error("Weekly Leaderboard Error:", e);
+      let msg = e.message;
+      if (msg.includes("index")) msg = "Missing Index! Check console (F12) for the creation link.";
+      return { success: false, error: msg };
+    }
   };
 
   return (
