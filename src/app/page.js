@@ -537,71 +537,154 @@ export default function Home() {
                                 })}
 
                                 {/* 2. OTHER SUPER BOWL EVENTS (Horizontal Scroll) */}
-                                <div style={{
-                                    display: 'flex',
-                                    gap: '16px',
-                                    overflowX: 'auto',
-                                    paddingBottom: '16px', // Space for scrollbar
-                                    scrollSnapType: 'x mandatory'
-                                }}>
-                                    {activeEvents.filter(e => e.category === 'Super Bowl').map(event => {
-                                        const hasMain = event.outcomes.some(o => o.type === 'main');
-                                        if (hasMain) return null; // Skip main event (already rendered above)
+                                <div style={{ position: 'relative' }}>
 
-                                        return (
-                                            <div key={event.id} onClick={() => setExpandedEvent(event)} style={{
-                                                minWidth: '320px', // Fixed width for carousel items
-                                                maxWidth: '320px',
-                                                cursor: 'pointer',
-                                                border: '1px solid rgba(255, 255, 255, 0.1)',
-                                                background: 'rgba(255, 255, 255, 0.02)',
-                                                borderRadius: '16px',
-                                                padding: '20px',
-                                                position: 'relative',
-                                                overflow: 'hidden',
-                                                scrollSnapAlign: 'start',
-                                                display: 'flex',
-                                                flexDirection: 'column'
-                                            }}>
-                                                {/* Title & Info Section */}
-                                                <div style={{
-                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'
+                                    {/* Left Arrow Indicator */}
+                                    <div
+                                        className="scroll-arrow-left"
+                                        onClick={() => {
+                                            const container = document.getElementById('superbowl-scroll-container');
+                                            if (container) container.scrollBy({ left: -320, behavior: 'smooth' });
+                                        }}
+                                        style={{
+                                            position: 'absolute',
+                                            left: '-12px',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            width: '40px',
+                                            height: '40px',
+                                            background: 'rgba(0,0,0,0.8)',
+                                            borderRadius: '50%',
+                                            border: '1px solid #333',
+                                            cursor: 'pointer',
+                                            zIndex: 20,
+                                            boxShadow: '0 0 15px rgba(0,0,0,0.8)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            opacity: 0,
+                                            pointerEvents: 'none',
+                                            transition: 'opacity 0.2s',
+                                            backdropFilter: 'blur(4px)'
+                                        }}
+                                    >
+                                        <span style={{ fontSize: '18px', color: '#fff', paddingRight: '2px' }}>❮</span>
+                                    </div>
+
+                                    {/* Scroll Container */}
+                                    <div
+                                        id="superbowl-scroll-container"
+                                        onScroll={(e) => {
+                                            const t = e.target;
+                                            const leftArrow = t.parentElement.querySelector('.scroll-arrow-left');
+                                            const rightArrow = t.parentElement.querySelector('.scroll-arrow-right');
+
+                                            // Show/Hide Left
+                                            if (leftArrow) {
+                                                leftArrow.style.opacity = t.scrollLeft > 20 ? '1' : '0';
+                                                leftArrow.style.pointerEvents = t.scrollLeft > 20 ? 'auto' : 'none';
+                                            }
+
+                                            // Show/Hide Right
+                                            const maxScroll = t.scrollWidth - t.clientWidth - 20;
+                                            if (rightArrow) {
+                                                rightArrow.style.opacity = t.scrollLeft < maxScroll ? '1' : '0';
+                                                rightArrow.style.pointerEvents = t.scrollLeft < maxScroll ? 'auto' : 'none';
+                                            }
+                                        }}
+                                        style={{
+                                            display: 'flex',
+                                            gap: '16px',
+                                            overflowX: 'auto',
+                                            padding: '0 4px 16px 4px', // Add slight side padding
+                                            scrollSnapType: 'x mandatory',
+                                        }}
+                                    >
+                                        {activeEvents.filter(e => e.category === 'Super Bowl').map(event => {
+                                            const hasMain = event.outcomes.some(o => o.type === 'main');
+                                            if (hasMain) return null; // Skip main event (already rendered above)
+
+                                            return (
+                                                <div key={event.id} onClick={() => setExpandedEvent(event)} style={{
+                                                    minWidth: '320px', // Fixed width for carousel items
+                                                    maxWidth: '320px',
+                                                    cursor: 'pointer',
+                                                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                    background: 'rgba(255, 255, 255, 0.02)',
+                                                    borderRadius: '16px',
+                                                    padding: '20px',
+                                                    position: 'relative',
+                                                    overflow: 'hidden',
+                                                    scrollSnapAlign: 'start',
+                                                    display: 'flex',
+                                                    flexDirection: 'column'
                                                 }}>
-                                                    <div style={{ textAlign: 'left', overflow: 'hidden' }}>
-                                                        <h3 style={{ fontSize: '18px', color: '#fff', marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{event.title}</h3>
-                                                        <p style={{ fontSize: '13px', color: '#a1a1aa' }}>{event.description}</p>
+                                                    {/* Title & Info Section */}
+                                                    <div style={{
+                                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'
+                                                    }}>
+                                                        <div style={{ textAlign: 'left', overflow: 'hidden' }}>
+                                                            <h3 style={{ fontSize: '18px', color: '#fff', marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{event.title}</h3>
+                                                            <p style={{ fontSize: '13px', color: '#a1a1aa' }}>{event.description}</p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Outcomes (Vertical inside the card for familiarity, or could be grid) */}
+                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                                        {event.outcomes.map(outcome => (
+                                                            <button
+                                                                key={outcome.id}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (user) setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
+                                                                    else alert("Login to bet!");
+                                                                }}
+                                                                className="btn"
+                                                                style={{
+                                                                    background: '#18181b', // Darker background
+                                                                    border: '1px solid #3f3f46',
+                                                                    padding: '16px 8px', // Slightly smaller padding for side cards
+                                                                    borderRadius: '8px',
+                                                                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+                                                                    height: 'auto',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                <span style={{ color: '#fff', fontWeight: '900', fontSize: '14px', textTransform: 'uppercase', textAlign: 'center' }}>{outcome.label}</span>
+                                                                <span style={{ color: '#4ade80', fontWeight: 'bold', fontSize: '12px' }}>x{outcome.odds.toFixed(2)}</span>
+                                                            </button>
+                                                        ))}
                                                     </div>
                                                 </div>
+                                            );
+                                        })}
+                                    </div>
 
-                                                {/* Outcomes (Vertical inside the card for familiarity, or could be grid) */}
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                                                    {event.outcomes.map(outcome => (
-                                                        <button
-                                                            key={outcome.id}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (user) setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
-                                                                else alert("Login to bet!");
-                                                            }}
-                                                            className="btn"
-                                                            style={{
-                                                                background: '#18181b', // Darker background
-                                                                border: '1px solid #3f3f46',
-                                                                padding: '16px 8px', // Slightly smaller padding for side cards
-                                                                borderRadius: '8px',
-                                                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-                                                                height: 'auto',
-                                                                cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            <span style={{ color: '#fff', fontWeight: '900', fontSize: '14px', textTransform: 'uppercase', textAlign: 'center' }}>{outcome.label}</span>
-                                                            <span style={{ color: '#4ade80', fontWeight: 'bold', fontSize: '12px' }}>x{outcome.odds.toFixed(2)}</span>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                                    {/* Right Arrow Indicator */}
+                                    <div
+                                        className="scroll-arrow-right"
+                                        onClick={() => {
+                                            const container = document.getElementById('superbowl-scroll-container');
+                                            if (container) container.scrollBy({ left: 320, behavior: 'smooth' });
+                                        }}
+                                        style={{
+                                            position: 'absolute',
+                                            right: '-12px',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            width: '40px',
+                                            height: '40px',
+                                            background: 'rgba(0,0,0,0.8)',
+                                            borderRadius: '50%',
+                                            border: '1px solid #333',
+                                            cursor: 'pointer',
+                                            zIndex: 20,
+                                            boxShadow: '0 0 15px rgba(0,0,0,0.8)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            transition: 'opacity 0.2s',
+                                            backdropFilter: 'blur(4px)'
+                                        }}
+                                    >
+                                        <span style={{ fontSize: '18px', color: '#fff', paddingLeft: '2px' }}>❯</span>
+                                    </div>
                                 </div>
                             </div>
                             <style jsx>{`
