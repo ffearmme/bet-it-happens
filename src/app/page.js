@@ -450,17 +450,12 @@ export default function Home() {
                                                 </div>
                                             </div>
 
-                                            {/* Main Bets Buttons - Scrollable on mobile */}
+                                            {/* Main Bets Buttons - Fixed Grid (Fit Screen) */}
                                             <div style={{
                                                 display: 'grid',
-                                                gridAutoFlow: 'column',
-                                                gridAutoColumns: 'minmax(160px, 1fr)',
+                                                gridTemplateColumns: '1fr 1fr',
                                                 gap: '16px',
                                                 marginBottom: '24px',
-                                                overflowX: 'auto',
-                                                paddingBottom: '12px',
-                                                scrollSnapType: 'x mandatory',
-                                                WebkitOverflowScrolling: 'touch'
                                             }}>
                                                 {event.outcomes.filter(o => o.type === 'main').map(outcome => (
                                                     <button
@@ -475,16 +470,16 @@ export default function Home() {
                                                             background: 'linear-gradient(180deg, #18181b 0%, #000 100%)',
                                                             border: '2px solid var(--primary)',
                                                             boxShadow: '0 0 30px rgba(34, 197, 94, 0.2)',
-                                                            padding: '40px 20px',
-                                                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px',
+                                                            padding: '24px 12px', // Reduced padding to fit screen improved
+                                                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
                                                             transition: 'transform 0.2s',
                                                             cursor: 'pointer',
                                                             borderRadius: '12px',
-                                                            scrollSnapAlign: 'center'
+                                                            width: '100%'
                                                         }}
                                                     >
-                                                        <span style={{ fontSize: '28px', fontWeight: '900', color: '#fff', textTransform: 'uppercase', textAlign: 'center', lineHeight: '1.2' }}>{outcome.label}</span>
-                                                        <span style={{ fontSize: '22px', color: 'var(--primary)', fontWeight: 'bold' }}>x{outcome.odds.toFixed(2)}</span>
+                                                        <span style={{ fontSize: '20px', fontWeight: '900', color: '#fff', textTransform: 'uppercase', textAlign: 'center', lineHeight: '1.2', wordBreak: 'break-word' }}>{outcome.label}</span>
+                                                        <span style={{ fontSize: '18px', color: 'var(--primary)', fontWeight: 'bold' }}>x{outcome.odds.toFixed(2)}</span>
                                                     </button>
                                                 ))}
                                             </div>
