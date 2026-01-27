@@ -637,6 +637,17 @@ export function AppProvider({ children }) {
     }
   };
 
+  const updateUserGroups = async (targetUserId, groups) => {
+    try {
+      if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+      const userRef = doc(db, 'users', targetUserId);
+      await updateDoc(userRef, { groups: groups || [] });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
   const deleteIdea = async (ideaId) => {
     if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
     try {
@@ -821,36 +832,45 @@ export function AppProvider({ children }) {
   const deleteUser = async (targetUserId) => {
     if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
     try {
-      const batch = writeBatch(db);
-      let opCount = 0;
+      // Helper to delete in batches
+      const commitBatchBuffer = async (docsToDelete) => {
+        const CHUNK_SIZE = 400; // Safety margin below 500
+        for (let i = 0; i < docsToDelete.length; i += CHUNK_SIZE) {
+          const chunk = docsToDelete.slice(i, i + CHUNK_SIZE);
+          const batch = writeBatch(db);
+          chunk.forEach(ref => batch.delete(ref));
+          await batch.commit();
+        }
+      };
 
-      // 1. Delete all user's bets
-      const betsQ = query(collection(db, 'bets'), where('userId', '==', targetUserId));
-      const betsSnap = await getDocs(betsQ);
-      betsSnap.docs.forEach(doc => {
-        batch.delete(doc.ref);
-        opCount++;
-      });
+      const allDocsToDelete = [];
 
-      // 2. Delete all user's ideas
-      const ideasQ = query(collection(db, 'ideas'), where('userId', '==', targetUserId));
-      const ideasSnap = await getDocs(ideasQ);
-      ideasSnap.docs.forEach(doc => {
-        batch.delete(doc.ref);
-        opCount++;
-      });
+      // 1. Bets
+      const betsSnap = await getDocs(query(collection(db, 'bets'), where('userId', '==', targetUserId)));
+      betsSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
 
-      // 3. Delete User Profile
-      const userRef = doc(db, 'users', targetUserId);
-      batch.delete(userRef);
-      opCount++;
+      // 2. Ideas
+      const ideasSnap = await getDocs(query(collection(db, 'ideas'), where('userId', '==', targetUserId)));
+      ideasSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
 
-      if (opCount > 0) {
-        await batch.commit();
-      }
+      // 3. Comments (New)
+      const commentsSnap = await getDocs(query(collection(db, 'comments'), where('userId', '==', targetUserId)));
+      commentsSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
+
+      // 4. Notifications (New)
+      const notifSnap = await getDocs(query(collection(db, 'notifications'), where('userId', '==', targetUserId)));
+      notifSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
+
+      // 5. User Profile
+      allDocsToDelete.push(doc(db, 'users', targetUserId));
+
+      console.log(`Deleting user ${targetUserId}: ${allDocsToDelete.length} documents total.`);
+
+      await commitBatchBuffer(allDocsToDelete);
 
       return { success: true };
     } catch (e) {
+      console.error("Delete User Error:", e);
       return { success: false, error: e.message };
     }
   };
@@ -1068,7 +1088,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-      events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, deleteComment, markNotificationRead, getUserStats, getWeeklyLeaderboard, setMainBet,
+      events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, deleteComment, markNotificationRead, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db
     }}>
       {children}

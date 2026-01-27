@@ -7,7 +7,7 @@ import { db } from '../../lib/firebase';
 import { collection, query, limit, onSnapshot } from 'firebase/firestore';
 
 export default function Admin() {
-    const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, toggleFeatured, ideas, deleteIdea, users, deleteUser, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
+    const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, toggleFeatured, ideas, deleteIdea, users, deleteUser, updateUserGroups, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
     const router = useRouter();
     const [newEvent, setNewEvent] = useState({
         title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Sports'
@@ -66,6 +66,8 @@ export default function Admin() {
                 title: newEvent.title,
                 description: newEvent.description,
                 category: newEvent.category,
+                // If category is a private group, restrict it. Otherwise null.
+                restrictedToGroup: ['The Boys', 'The Fam'].includes(newEvent.category) ? newEvent.category : null,
                 startAt: newEvent.startAt || new Date(Date.now() + 86400000).toISOString(),
                 deadline: newEvent.deadline || null,
                 outcomes: outcomes
@@ -117,6 +119,9 @@ export default function Admin() {
                             <option value="Weather">Weather</option>
                             <option value="Tech">Tech</option>
                             <option value="Pop Culture">Pop Culture</option>
+                            <option disabled>───────</option>
+                            <option value="The Boys">🔒 The Boys</option>
+                            <option value="The Fam">🔒 The Fam</option>
                         </select>
                     </div>
                     <div className="input-group">
@@ -384,19 +389,44 @@ export default function Admin() {
                                 <div style={{ fontSize: '12px', color: '#888' }}>ID: {u.id} • Balance: ${u.balance?.toFixed(2)}</div>
                             </div>
                             {u.id !== user.id && (
-                                <button
-                                    className="btn btn-outline"
-                                    style={{ padding: '4px 8px', fontSize: '12px', color: 'var(--accent-loss)', borderColor: 'var(--accent-loss)' }}
-                                    onClick={async () => {
-                                        if (confirm(`Permanently delete user "${u.username}" and all their data?`)) {
-                                            const res = await deleteUser(u.id);
-                                            if (res.success) alert('User deleted.');
-                                            else alert('Error: ' + res.error);
-                                        }
-                                    }}
-                                >
-                                    Delete
-                                </button>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                        {['The Boys', 'The Fam'].map(g => {
+                                            const hasGroup = (u.groups || []).includes(g);
+                                            return (
+                                                <button
+                                                    key={g}
+                                                    onClick={() => {
+                                                        const current = u.groups || [];
+                                                        const newGroups = hasGroup ? current.filter(x => x !== g) : [...current, g];
+                                                        updateUserGroups(u.id, newGroups);
+                                                    }}
+                                                    style={{
+                                                        padding: '2px 6px', fontSize: '10px',
+                                                        background: hasGroup ? 'var(--primary)' : '#333',
+                                                        color: hasGroup ? '#000' : '#888',
+                                                        border: 'none', borderRadius: '4px', cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    {g}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <button
+                                        className="btn btn-outline"
+                                        style={{ padding: '4px 8px', fontSize: '12px', color: 'var(--accent-loss)', borderColor: 'var(--accent-loss)' }}
+                                        onClick={async () => {
+                                            if (confirm(`Permanently delete user "${u.username}" and all their data?`)) {
+                                                const res = await deleteUser(u.id);
+                                                if (res.success) alert('User deleted.');
+                                                else alert('Error: ' + res.error);
+                                            }
+                                        }}
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
                             )}
                         </div>
                     ))}

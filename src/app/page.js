@@ -225,7 +225,36 @@ export default function Home() {
     }
 
     // --- MAIN APP (LOGGED IN) ---
-    const rawActiveEvents = events.filter(e => e.status === 'open' || e.status === 'locked');
+    const rawActiveEvents = events.filter(e => {
+        // 1. Status Check
+        if (e.status !== 'open' && e.status !== 'locked') return false;
+
+        // 2. Group Access Check (Private Bets)
+        // Ensure restrictedToGroup is a valid string and not empty
+        if (e.restrictedToGroup && typeof e.restrictedToGroup === 'string' && e.restrictedToGroup.trim() !== '') {
+
+            // If user is not logged in, they can't belong to a group -> HIDE
+            if (!user) return false;
+
+            // Admin sees everything (with a visual indicator later maybe)
+            if (user.role === 'admin') return true;
+
+            // Check if user has the group
+            const userGroups = user.groups || [];
+            if (Array.isArray(userGroups)) {
+                if (userGroups.includes(e.restrictedToGroup)) return true;
+            } else if (typeof userGroups === 'string') {
+                // Fallback if somehow stored as string
+                if (userGroups === e.restrictedToGroup) return true;
+            }
+
+            // If we reached here, it's a private bet and user doesn't have access -> HIDE
+            return false;
+        }
+
+        // Public event -> SHOW
+        return true;
+    });
 
     // Robust date parsing helper
     const getDate = (dateStr) => {
@@ -693,19 +722,27 @@ export default function Home() {
             {/* --- Active Events By Category --- */}
             {(() => {
                 const grouped = {};
-                const categories = ['Sports', 'Video Games', 'Local/Community', 'Weather', 'Tech', 'Pop Culture', 'Other'];
+                const categories = ['The Boys', 'The Fam', 'Sports', 'Video Games', 'Local/Community', 'Weather', 'Tech', 'Pop Culture', 'Other'];
                 categories.forEach(c => grouped[c] = []);
 
                 activeEvents.filter(e => !e.featured && e.category !== 'Super Bowl').forEach(e => {
                     const cat = e.category || 'Sports';
-                    if (!grouped[cat]) grouped[cat] = [];
-                    grouped[cat].push(e);
+                    // If event has a category we don't track explicitly, dump it in 'Other' or create it?
+                    // For now, if it matches one of our private groups, it will be caught.
+                    if (grouped[cat]) {
+                        grouped[cat].push(e);
+                    } else {
+                        // Fallback handling if you add new categories later without updating this list
+                        if (!grouped['Other']) grouped['Other'] = [];
+                        grouped['Other'].push(e);
+                    }
                 });
 
                 return Object.entries(grouped).map(([category, catEvents]) => {
                     if (catEvents.length === 0) return null;
 
                     const isExpanded = expandedCategories[category];
+                    const isPrivate = ['The Boys', 'The Fam'].includes(category);
 
                     return (
                         <div key={category} style={{ marginBottom: '40px' }}>
@@ -714,7 +751,8 @@ export default function Home() {
                                 onClick={() => setExpandedCategories(prev => ({ ...prev, [category]: !prev[category] }))}
                             >
                                 <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                                    <span style={{ width: '4px', height: '20px', background: 'var(--primary)', borderRadius: '2px' }}></span>
+                                    <span style={{ width: '4px', height: '20px', background: isPrivate ? '#ef4444' : 'var(--primary)', borderRadius: '2px' }}></span>
+                                    {isPrivate && <span>🔒</span>}
                                     {category}
                                 </h2>
                                 <button
