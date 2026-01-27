@@ -114,10 +114,16 @@ export function AppProvider({ children }) {
     const unsubEvents = onSnapshot(eventsQuery, (snapshot) => {
       const eventsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       eventsList.sort((a, b) => {
-        // Open events first
+        // 1. Sort by manual order if exists (ascending: low numbers first)
+        const orderA = a.order !== undefined ? a.order : 9999;
+        const orderB = b.order !== undefined ? b.order : 9999;
+        if (orderA !== orderB) return orderA - orderB;
+
+        // 2. Open events first
         if (a.status === 'open' && b.status !== 'open') return -1;
         if (a.status !== 'open' && b.status === 'open') return 1;
-        // Then sort by startAt date (ascending: earliest date first)
+
+        // 3. Then sort by startAt date (ascending: earliest date first)
         return new Date(a.startAt) - new Date(b.startAt);
       });
       setEvents(eventsList);
@@ -374,6 +380,16 @@ export function AppProvider({ children }) {
     }
   };
 
+  const updateEventOrder = async (eventId, newOrder) => {
+    try {
+      if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+      await updateDoc(doc(db, 'events', eventId), { order: newOrder });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
   const deleteEvent = async (eventId) => {
     try {
       // Note: This does NOT refund bets automatically in this simple version
@@ -534,6 +550,37 @@ export function AppProvider({ children }) {
       return { success: true };
     } catch (e) {
       console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const setMainBet = async (eventId, mainOutcomeId) => {
+    try {
+      if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+      const eventRef = doc(db, 'events', eventId);
+      const snap = await getDoc(eventRef);
+      if (!snap.exists()) return { success: false, error: "Event not found" };
+
+      const evt = snap.data();
+      // Remove 'main' type from all, then set it for the chosen one plus its sibling?
+      // Wait, "Main Bet" usually implies a PAIR of outcomes (e.g. Chiefs vs 49ers).
+      // If the user selects "Chiefs" as main, we likely want "49ers" (the other one in that pair) to also be main.
+      // But outcomes are just a flat list. 
+      // Simplification: The admin clicks "Highlight This Pair" on one outcome, and we assume the next one is its pair?
+      // Or we just flag THIS outcome's pair as main.
+
+      // Let's iterate and just toggle the type 'main' for the targeted outcome(s).
+      // Actually, cleaner design: toggle "type: main" for specific outcomes.
+
+      const newOutcomes = evt.outcomes.map(o => {
+        if (o.id === mainOutcomeId) return { ...o, type: 'main' };
+        // If we want to unset others? Maybe not, maybe multiple main bets allowed.
+        return o;
+      });
+
+      await updateDoc(eventRef, { outcomes: newOutcomes });
+      return { success: true };
+    } catch (e) {
       return { success: false, error: e.message };
     }
   };
@@ -1021,7 +1068,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-      events, createEvent, resolveEvent, updateEvent, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, deleteComment, markNotificationRead, getUserStats, getWeeklyLeaderboard,
+      events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, deleteComment, markNotificationRead, getUserStats, getWeeklyLeaderboard, setMainBet,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db
     }}>
       {children}

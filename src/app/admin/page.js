@@ -7,7 +7,7 @@ import { db } from '../../lib/firebase';
 import { collection, query, limit, onSnapshot } from 'firebase/firestore';
 
 export default function Admin() {
-    const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, fixStuckBets, deleteBet, toggleFeatured, ideas, deleteIdea, users, deleteUser, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
+    const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, toggleFeatured, ideas, deleteIdea, users, deleteUser, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
     const router = useRouter();
     const [newEvent, setNewEvent] = useState({
         title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Sports'
@@ -47,26 +47,30 @@ export default function Admin() {
                 startAt: newEvent.startAt,
                 deadline: newEvent.deadline,
                 category: newEvent.category,
-                // We update outcomes 'labels' but warn about odds. To simplify, we'll try to update the array if possible.
-                // Re-constructing outcomes array while keeping IDs effectively might be complex if indices match.
-                // For now, let's just update main fields.
+                // Simple update logic, keeping it focused on text updates for now.
+                // Complex sub-bet modification would ideally require a more advanced UI.
             });
             alert('Event updated (Title, Desc, dates, category).');
             setEditingId(null);
             setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Sports' });
         } else {
+            // Build Outcomes Array (Simple Single Pair)
+            const outcomes = [];
+            if (newEvent.outcome1 && newEvent.outcome2) {
+                // Default to 'sub' type so they can be promoted to main if desired
+                outcomes.push({ id: 'o-' + Date.now() + '-1', label: newEvent.outcome1, odds: parseFloat(newEvent.odds1), type: 'sub' });
+                outcomes.push({ id: 'o-' + Date.now() + '-2', label: newEvent.outcome2, odds: parseFloat(newEvent.odds2), type: 'sub' });
+            }
+
             createEvent({
                 title: newEvent.title,
                 description: newEvent.description,
                 category: newEvent.category,
                 startAt: newEvent.startAt || new Date(Date.now() + 86400000).toISOString(),
                 deadline: newEvent.deadline || null,
-                outcomes: [
-                    { id: 'o-' + Date.now() + '-1', label: newEvent.outcome1, odds: parseFloat(newEvent.odds1) },
-                    { id: 'o-' + Date.now() + '-2', label: newEvent.outcome2, odds: parseFloat(newEvent.odds2) },
-                ]
+                outcomes: outcomes
             });
-            setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '' });
+            setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Sports' });
         }
     };
 
@@ -140,12 +144,12 @@ export default function Admin() {
                     {!editingId && (
                         <>
                             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                                <input className="input" placeholder="Outcome AA" value={newEvent.outcome1} onChange={e => setNewEvent({ ...newEvent, outcome1: e.target.value })} required />
-                                <input className="input" type="number" step="0.01" placeholder="Odds" value={newEvent.odds1} onChange={e => setNewEvent({ ...newEvent, odds1: e.target.value })} required />
+                                <input className="input" placeholder="Outcome AA" value={newEvent.outcome1 || ''} onChange={e => setNewEvent({ ...newEvent, outcome1: e.target.value })} />
+                                <input className="input" type="number" step="0.01" placeholder="Odds" value={newEvent.odds1 || ''} onChange={e => setNewEvent({ ...newEvent, odds1: e.target.value })} />
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px', marginBottom: '16px' }}>
-                                <input className="input" placeholder="Outcome BB" value={newEvent.outcome2} onChange={e => setNewEvent({ ...newEvent, outcome2: e.target.value })} required />
-                                <input className="input" type="number" step="0.01" placeholder="Odds" value={newEvent.odds2} onChange={e => setNewEvent({ ...newEvent, odds2: e.target.value })} required />
+                                <input className="input" placeholder="Outcome BB" value={newEvent.outcome2 || ''} onChange={e => setNewEvent({ ...newEvent, outcome2: e.target.value })} />
+                                <input className="input" type="number" step="0.01" placeholder="Odds" value={newEvent.odds2 || ''} onChange={e => setNewEvent({ ...newEvent, odds2: e.target.value })} />
                             </div>
                         </>
                     )}
@@ -156,59 +160,193 @@ export default function Admin() {
 
             <div className="card">
                 <h2>Resolve Events</h2>
-                {events.filter(e => e.status === 'open' || e.status === 'locked').map(event => (
-                    <div key={event.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '16px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <p style={{ fontWeight: 600 }}>{event.title}</p>
-                            <div>
-                                <button
-                                    onClick={() => startEdit(event)}
-                                    style={{ background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', cursor: 'pointer', fontSize: '11px', padding: '2px 8px', borderRadius: '4px', marginRight: '8px' }}
-                                >
-                                    Edit
-                                </button>
-                                <button
-                                    onClick={() => { if (confirm('Delete event?')) deleteEvent(event.id) }}
-                                    style={{ background: 'transparent', border: 'none', color: 'var(--accent-loss)', cursor: 'pointer', fontSize: '12px' }}
-                                >
-                                    Delete
-                                </button>
-                            </div>
-                        </div>
-                        <div style={{ marginTop: '8px' }}>
-                            <button
-                                onClick={() => toggleFeatured(event.id, event.featured)}
-                                style={{
-                                    background: event.featured ? 'var(--primary)' : 'transparent',
-                                    color: event.featured ? '#000' : 'var(--primary)',
-                                    border: '1px solid var(--primary)',
-                                    padding: '4px 8px',
-                                    borderRadius: '4px',
-                                    fontSize: '11px',
-                                    cursor: 'pointer',
-                                    marginRight: '10px'
-                                }}
-                            >
-                                {event.featured ? '★ Featured' : '☆ set Featured'}
-                            </button>
-                        </div>
+                {(() => {
+                    const activeEvents = events.filter(e => e.status === 'open' || e.status === 'locked');
+                    if (activeEvents.length === 0) return <p className="text-sm">No active events to resolve.</p>;
 
-                        <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                            {event.outcomes.map(o => (
-                                <button key={o.id} className="btn btn-outline" style={{ fontSize: '12px', padding: '8px' }} onClick={async () => {
-                                    if (window.confirm(`Are you sure you want to resolve this event?\n\nWinner: ${o.label}\n\nThis action cannot be undone.`)) {
-                                        const res = await resolveEvent(event.id, o.id);
-                                        if (!res.success) alert("Error resolving: " + res.error);
-                                    }
-                                }}>
-                                    {o.label} Wins
-                                </button>
+                    // Group by category
+                    const grouped = activeEvents.reduce((acc, event) => {
+                        const cat = event.category || 'Uncategorized';
+                        if (!acc[cat]) acc[cat] = [];
+                        acc[cat].push(event);
+                        return acc;
+                    }, {});
+
+                    // Sort groups: Super Bowl first, then others
+                    const sortedCategories = Object.keys(grouped).sort((a, b) => {
+                        if (a === 'Super Bowl') return -1;
+                        if (b === 'Super Bowl') return 1;
+                        return a.localeCompare(b);
+                    });
+
+                    return sortedCategories.map(category => (
+                        <div key={category} style={{ marginBottom: '24px' }}>
+                            <h3 style={{
+                                fontSize: '14px',
+                                textTransform: 'uppercase',
+                                color: category === 'Super Bowl' ? 'var(--primary)' : '#a1a1aa',
+                                borderBottom: '1px solid #333',
+                                paddingBottom: '4px',
+                                marginBottom: '12px'
+                            }}>
+                                {category}
+                            </h3>
+                            {grouped[category].map(event => (
+                                <div key={event.id} style={{ border: '1px solid #333', borderRadius: '8px', padding: '12px', marginBottom: '12px', background: 'rgba(255,255,255,0.02)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <p style={{ fontWeight: 600 }}>{event.title}</p>
+                                        <div>
+                                            <button
+                                                onClick={() => startEdit(event)}
+                                                style={{ background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', cursor: 'pointer', fontSize: '11px', padding: '2px 8px', borderRadius: '4px', marginRight: '8px' }}
+                                            >
+                                                Edit
+                                            </button>
+                                            <button
+                                                onClick={() => { if (confirm('Delete event?')) deleteEvent(event.id) }}
+                                                style={{ background: 'transparent', border: 'none', color: 'var(--accent-loss)', cursor: 'pointer', fontSize: '12px' }}
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div style={{ marginTop: '8px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <button
+                                            onClick={() => toggleFeatured(event.id, event.featured)}
+                                            style={{
+                                                background: event.featured ? 'var(--primary)' : 'transparent',
+                                                color: event.featured ? '#000' : 'var(--primary)',
+                                                border: '1px solid var(--primary)',
+                                                padding: '4px 8px',
+                                                borderRadius: '4px',
+                                                fontSize: '11px',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            {event.featured ? '★ Featured' : '☆ set Featured'}
+                                        </button>
+
+                                        {/* Order Controls */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#333', padding: '2px 6px', borderRadius: '4px' }}>
+                                            <span style={{ fontSize: '10px', color: '#aaa', marginRight: '4px' }}>Sort: {event.order ?? 'Auto'}</span>
+                                            <button
+                                                onClick={() => updateEventOrder(event.id, (event.order ?? 9999) - 1)}
+                                                style={{ cursor: 'pointer', background: 'none', border: 'none', color: '#fff', fontSize: '12px' }}>
+                                                ⬆
+                                            </button>
+                                            <button
+                                                onClick={() => updateEventOrder(event.id, (event.order ?? 9999) + 1)}
+                                                style={{ cursor: 'pointer', background: 'none', border: 'none', color: '#fff', fontSize: '12px' }}>
+                                                ⬇
+                                            </button>
+                                        </div>
+
+                                        <span style={{ fontSize: '10px', color: '#666' }}>ID: {event.id}</span>
+                                    </div>
+
+                                    {/* Group outcomes into logical pairs if possible, otherwise list */}
+                                    {(() => {
+                                        // Heuristic: Group by 2s for display
+                                        let pairs = [];
+                                        for (let i = 0; i < event.outcomes.length; i += 2) {
+                                            pairs.push(event.outcomes.slice(i, i + 2));
+                                        }
+
+                                        // Separate Main from Sub for clear display
+                                        const mainPairs = pairs.filter(p => p.some(o => o.type === 'main'));
+                                        const subPairs = pairs.filter(p => !p.some(o => o.type === 'main'));
+
+                                        const renderPair = (pair, pIdx, isMain) => (
+                                            <div key={pair[0].id} style={{
+                                                background: isMain ? 'rgba(34, 197, 94, 0.1)' : 'rgba(0,0,0,0.2)',
+                                                padding: '12px',
+                                                borderRadius: '8px',
+                                                marginBottom: '12px',
+                                                border: isMain ? '2px solid var(--primary)' : '1px solid #333'
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
+                                                    <span style={{
+                                                        fontSize: '11px',
+                                                        textTransform: 'uppercase',
+                                                        color: isMain ? 'var(--primary)' : '#666',
+                                                        fontWeight: 'bold',
+                                                        letterSpacing: '1px'
+                                                    }}>
+                                                        {isMain ? '★ MAIN HEADER EVENT (DISPLAYED AT TOP)' : `Side Bet Pair`}
+                                                    </span>
+                                                    <button
+                                                        onClick={async () => {
+                                                            const newTargetType = isMain ? 'sub' : 'main';
+                                                            const validIds = pair.map(x => x.id);
+
+                                                            let newOutcomes = event.outcomes.map(oc => {
+                                                                if (validIds.includes(oc.id)) return { ...oc, type: newTargetType };
+                                                                return oc;
+                                                            });
+
+                                                            // Consistent Sort: Main > Sub
+                                                            const mains = newOutcomes.filter(o => o.type === 'main');
+                                                            const others = newOutcomes.filter(o => o.type !== 'main');
+                                                            newOutcomes = [...mains, ...others];
+
+                                                            await updateEvent(event.id, { outcomes: newOutcomes });
+                                                        }}
+                                                        style={{
+                                                            fontSize: '11px',
+                                                            padding: '6px 12px',
+                                                            background: isMain ? 'var(--primary)' : '#27272a',
+                                                            color: isMain ? '#000' : '#a1a1aa',
+                                                            border: 'none',
+                                                            borderRadius: '4px',
+                                                            fontWeight: 'bold',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        {isMain ? '★ MAIN BET' : 'Make Main'}
+                                                    </button>
+                                                </div>
+
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    {pair.map(o => (
+                                                        <button
+                                                            key={o.id}
+                                                            className="btn btn-outline"
+                                                            style={{ flex: 1, fontSize: '11px', padding: '8px', borderColor: '#444' }}
+                                                            onClick={async () => {
+                                                                if (window.confirm(`RESOLVE: ${o.label} WINS?`)) {
+                                                                    await resolveEvent(event.id, o.id);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{o.label}</span>
+                                                            <br />
+                                                            <span style={{ color: '#a1a1aa', fontSize: '10px' }}>x{o.odds}</span>
+                                                            <div style={{ color: 'var(--primary)', fontWeight: 'bold', marginTop: '4px', fontSize: '11px' }}>CLICK TO WIN</div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+
+                                        return (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                {mainPairs.length > 0 && (
+                                                    <div style={{ marginBottom: '16px' }}>
+                                                        {mainPairs.map((p, i) => renderPair(p, i, true))}
+                                                        {subPairs.length > 0 && <div style={{ borderBottom: '1px solid #333', margin: '8px 0' }}></div>}
+                                                    </div>
+                                                )}
+                                                {subPairs.map((p, i) => renderPair(p, i, false))}
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
                             ))}
                         </div>
-                    </div>
-                ))}
-                {events.filter(e => e.status === 'open' || e.status === 'locked').length === 0 && <p className="text-sm">No active events to resolve.</p>}
+                    ));
+                })()}
             </div>
+
 
             <div className="card">
                 <h2>User Bet Ideas</h2>
