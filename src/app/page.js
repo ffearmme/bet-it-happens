@@ -400,41 +400,42 @@ export default function Home() {
                                 <p style={{ color: '#a1a1aa', fontSize: '14px' }}>The Big Game is Here. Place your bets.</p>
                             </div>
 
-                            <div style={{ display: 'grid', gap: '24px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                                {/* 1. The MAIN EVENT (Vertical, Full Width) */}
                                 {activeEvents.filter(e => e.category === 'Super Bowl').map(event => {
                                     const hasMain = event.outcomes.some(o => o.type === 'main');
+                                    if (!hasMain) return null; // Skip non-main events here
+
                                     return (
                                         <div key={event.id} onClick={() => setExpandedEvent(event)} style={{
                                             cursor: 'pointer',
-                                            border: hasMain ? '2px solid rgba(74, 222, 128, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
-                                            background: hasMain ? 'linear-gradient(180deg, rgba(34, 197, 94, 0.05) 0%, rgba(0,0,0,0.2) 100%)' : 'rgba(255, 255, 255, 0.02)',
+                                            border: '2px solid rgba(74, 222, 128, 0.4)',
+                                            background: 'linear-gradient(180deg, rgba(34, 197, 94, 0.05) 0%, rgba(0,0,0,0.2) 100%)',
                                             borderRadius: '16px',
                                             padding: '20px',
-                                            boxShadow: hasMain ? '0 0 40px rgba(34, 197, 94, 0.15)' : 'none',
+                                            boxShadow: '0 0 40px rgba(34, 197, 94, 0.15)',
                                             position: 'relative',
                                             overflow: 'hidden',
                                             transition: 'transform 0.2s',
                                         }}
-                                            className={hasMain ? "animate-pulse-slow" : ""}
+                                            className="animate-pulse-slow"
                                         >
                                             {/* Main Event Badge at TOP */}
-                                            {hasMain && (
-                                                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-                                                    <h2 style={{
-                                                        fontSize: '16px', fontWeight: '900', color: 'var(--primary)',
-                                                        textTransform: 'uppercase', letterSpacing: '4px',
-                                                        textShadow: '0 0 15px rgba(34, 197, 94, 0.8)',
-                                                        marginTop: '0',
-                                                        marginBottom: '0'
-                                                    }}>★ MAIN EVENT ★</h2>
-                                                </div>
-                                            )}
+                                            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                                                <h2 style={{
+                                                    fontSize: '16px', fontWeight: '900', color: 'var(--primary)',
+                                                    textTransform: 'uppercase', letterSpacing: '4px',
+                                                    textShadow: '0 0 15px rgba(34, 197, 94, 0.8)',
+                                                    marginTop: '0',
+                                                    marginBottom: '0'
+                                                }}>★ MAIN EVENT ★</h2>
+                                            </div>
 
                                             {/* Title & Info Section */}
                                             <div style={{
                                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px',
-                                                borderBottom: hasMain ? '1px solid rgba(255,255,255,0.1)' : 'none',
-                                                paddingBottom: hasMain ? '16px' : '0'
+                                                borderBottom: '1px solid rgba(255,255,255,0.1)',
+                                                paddingBottom: '16px'
                                             }}>
                                                 <div style={{ textAlign: 'left' }}>
                                                     <h3 style={{ fontSize: '22px', color: '#fff', marginBottom: '6px', fontWeight: 'bold' }}>{event.title}</h3>
@@ -449,64 +450,40 @@ export default function Home() {
                                                 </div>
                                             </div>
 
-                                            {/* Main Bets Buttons - Scrollable on mobile */}
-                                            {hasMain && (
-                                                <div style={{
-                                                    display: 'grid',
-                                                    gridAutoFlow: 'column',
-                                                    gridAutoColumns: 'minmax(160px, 1fr)', // Ensures they don't squish too much, scroll instead
-                                                    gap: '16px',
-                                                    marginBottom: '24px',
-                                                    overflowX: 'auto',
-                                                    paddingBottom: '12px', // Space for scrollbar (hidden but interactable)
-                                                    scrollSnapType: 'x mandatory',
-                                                    WebkitOverflowScrolling: 'touch'
-                                                }}>
-                                                    {event.outcomes.filter(o => o.type === 'main').map(outcome => (
-                                                        <button
-                                                            key={outcome.id}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (user) setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
-                                                                else alert("Login to bet!");
-                                                            }}
-                                                            className="btn"
-                                                            style={{
-                                                                background: 'linear-gradient(180deg, #18181b 0%, #000 100%)',
-                                                                border: '2px solid var(--primary)',
-                                                                boxShadow: '0 0 30px rgba(34, 197, 94, 0.2)',
-                                                                padding: '40px 20px',
-                                                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px',
-                                                                transition: 'transform 0.2s',
-                                                                cursor: 'pointer',
-                                                                borderRadius: '12px',
-                                                                scrollSnapAlign: 'center'
-                                                            }}
-                                                        >
-                                                            <span style={{ fontSize: '28px', fontWeight: '900', color: '#fff', textTransform: 'uppercase', textAlign: 'center', lineHeight: '1.2' }}>{outcome.label}</span>
-                                                            <span style={{ fontSize: '22px', color: 'var(--primary)', fontWeight: 'bold' }}>x{outcome.odds.toFixed(2)}</span>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
+                                            {/* Main Bets Buttons */}
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+                                                {event.outcomes.filter(o => o.type === 'main').map(outcome => (
+                                                    <button
+                                                        key={outcome.id}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (user) setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
+                                                            else alert("Login to bet!");
+                                                        }}
+                                                        className="btn"
+                                                        style={{
+                                                            background: 'linear-gradient(180deg, #18181b 0%, #000 100%)',
+                                                            border: '2px solid var(--primary)',
+                                                            boxShadow: '0 0 30px rgba(34, 197, 94, 0.2)',
+                                                            padding: '40px 20px',
+                                                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px',
+                                                            transition: 'transform 0.2s',
+                                                            cursor: 'pointer',
+                                                            borderRadius: '12px'
+                                                        }}
+                                                    >
+                                                        <span style={{ fontSize: '28px', fontWeight: '900', color: '#fff', textTransform: 'uppercase', textAlign: 'center', lineHeight: '1.2' }}>{outcome.label}</span>
+                                                        <span style={{ fontSize: '22px', color: 'var(--primary)', fontWeight: 'bold' }}>x{outcome.odds.toFixed(2)}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
 
                                             {/* Sub Bets / Props Section */}
-                                            {(hasMain ? event.outcomes.filter(o => o.type !== 'main') : event.outcomes).length > 0 && (
-                                                <div style={{ borderTop: hasMain ? '1px dashed #333' : 'none', paddingTop: hasMain ? '16px' : '0' }}>
-                                                    {hasMain && (
-                                                        <h4 style={{ fontSize: '11px', color: '#71717a', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '2px', textAlign: 'center' }}>- Side Bets & Props -</h4>
-                                                    )}
-                                                    <div style={{
-                                                        display: 'grid',
-                                                        gridAutoFlow: 'column',
-                                                        gridAutoColumns: 'minmax(140px, 1fr)',
-                                                        gap: '12px',
-                                                        overflowX: 'auto',
-                                                        paddingBottom: '12px',
-                                                        scrollSnapType: 'x mandatory',
-                                                        WebkitOverflowScrolling: 'touch'
-                                                    }}>
-                                                        {(hasMain ? event.outcomes.filter(o => o.type !== 'main') : event.outcomes).map(outcome => (
+                                            {event.outcomes.filter(o => o.type !== 'main').length > 0 && (
+                                                <div style={{ borderTop: '1px dashed #333', paddingTop: '16px' }}>
+                                                    <h4 style={{ fontSize: '11px', color: '#71717a', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '2px', textAlign: 'center' }}>- Side Bets & Props -</h4>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                                        {event.outcomes.filter(o => o.type !== 'main').map(outcome => (
                                                             <button
                                                                 key={outcome.id}
                                                                 onClick={(e) => {
@@ -524,8 +501,7 @@ export default function Home() {
                                                                     height: 'auto',
                                                                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
                                                                     transition: 'transform 0.1s, border-color 0.1s',
-                                                                    cursor: 'pointer',
-                                                                    scrollSnapAlign: 'center'
+                                                                    cursor: 'pointer'
                                                                 }}
                                                             >
                                                                 <span style={{ color: '#fff', fontWeight: '900', fontSize: '18px', textTransform: 'uppercase' }}>{outcome.label}</span>
@@ -548,6 +524,74 @@ export default function Home() {
                                         </div>
                                     );
                                 })}
+
+                                {/* 2. OTHER SUPER BOWL EVENTS (Horizontal Scroll) */}
+                                <div style={{
+                                    display: 'flex',
+                                    gap: '16px',
+                                    overflowX: 'auto',
+                                    paddingBottom: '16px', // Space for scrollbar
+                                    scrollSnapType: 'x mandatory'
+                                }}>
+                                    {activeEvents.filter(e => e.category === 'Super Bowl').map(event => {
+                                        const hasMain = event.outcomes.some(o => o.type === 'main');
+                                        if (hasMain) return null; // Skip main event (already rendered above)
+
+                                        return (
+                                            <div key={event.id} onClick={() => setExpandedEvent(event)} style={{
+                                                minWidth: '320px', // Fixed width for carousel items
+                                                maxWidth: '320px',
+                                                cursor: 'pointer',
+                                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                background: 'rgba(255, 255, 255, 0.02)',
+                                                borderRadius: '16px',
+                                                padding: '20px',
+                                                position: 'relative',
+                                                overflow: 'hidden',
+                                                scrollSnapAlign: 'start',
+                                                display: 'flex',
+                                                flexDirection: 'column'
+                                            }}>
+                                                {/* Title & Info Section */}
+                                                <div style={{
+                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'
+                                                }}>
+                                                    <div style={{ textAlign: 'left', overflow: 'hidden' }}>
+                                                        <h3 style={{ fontSize: '18px', color: '#fff', marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{event.title}</h3>
+                                                        <p style={{ fontSize: '13px', color: '#a1a1aa' }}>{event.description}</p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Outcomes (Vertical inside the card for familiarity, or could be grid) */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                                    {event.outcomes.map(outcome => (
+                                                        <button
+                                                            key={outcome.id}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (user) setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
+                                                                else alert("Login to bet!");
+                                                            }}
+                                                            className="btn"
+                                                            style={{
+                                                                background: '#18181b', // Darker background
+                                                                border: '1px solid #3f3f46',
+                                                                padding: '16px 8px', // Slightly smaller padding for side cards
+                                                                borderRadius: '8px',
+                                                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+                                                                height: 'auto',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            <span style={{ color: '#fff', fontWeight: '900', fontSize: '14px', textTransform: 'uppercase', textAlign: 'center' }}>{outcome.label}</span>
+                                                            <span style={{ color: '#4ade80', fontWeight: 'bold', fontSize: '12px' }}>x{outcome.odds.toFixed(2)}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                             <style jsx>{`
                                 @keyframes gradientborder { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
