@@ -15,6 +15,35 @@ export default function Admin() {
     const [editingId, setEditingId] = useState(null);
     const [showRules, setShowRules] = useState(false);
     const [allBets, setAllBets] = useState([]);
+    const [collapsed, setCollapsed] = useState({
+        form: true,
+        resolve: true,
+        ideas: true,
+        users: true,
+        bets: true
+    });
+
+    const toggle = (key) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
+    const Minimizer = ({ section }) => (
+        <button
+            onClick={() => toggle(section)}
+            style={{
+                background: 'transparent',
+                border: '1px solid #333',
+                color: '#888',
+                width: '24px',
+                height: '24px',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                marginLeft: 'auto'
+            }}
+        >
+            {collapsed[section] ? '+' : '−'}
+        </button>
+    );
 
     useEffect(() => {
         if (isLoaded && (!user || user.role !== 'admin')) {
@@ -96,76 +125,84 @@ export default function Admin() {
             <h1 style={{ marginTop: '20px' }}>Admin Dashboard</h1>
 
             <div className="card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h2>{editingId ? 'Edit Event' : 'Create Event'}</h2>
-                    {editingId && <button onClick={() => { setEditingId(null); setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Sports' }); }} style={{ fontSize: '12px', color: 'red' }}>Cancel Edit</button>}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: collapsed.form ? '0' : '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
+                        <h2>{editingId ? 'Edit Event' : 'Create Event'}</h2>
+                        {editingId && <button onClick={() => { setEditingId(null); setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Sports' }); }} style={{ fontSize: '12px', color: 'red' }}>Cancel Edit</button>}
+                        <Minimizer section="form" />
+                    </div>
                 </div>
-                <form onSubmit={handleCreate}>
-                    <div className="input-group">
-                        <input className="input" placeholder="Event Title" value={newEvent.title} onChange={e => setNewEvent({ ...newEvent, title: e.target.value })} required />
-                    </div>
-                    <div className="input-group">
-                        <label className="text-sm" style={{ marginBottom: '4px', display: 'block' }}>Category</label>
-                        <select
-                            className="input"
-                            value={newEvent.category || 'Sports'}
-                            onChange={e => setNewEvent({ ...newEvent, category: e.target.value })}
-                            style={{ background: 'var(--bg-card)', color: '#fff' }}
-                        >
-                            <option value="Super Bowl">Super Bowl 🏆</option>
-                            <option value="Sports">Sports</option>
-                            <option value="Video Games">Video Games</option>
-                            <option value="Local/Community">Local/Community</option>
-                            <option value="Weather">Weather</option>
-                            <option value="Tech">Tech</option>
-                            <option value="Pop Culture">Pop Culture</option>
-                            <option disabled>───────</option>
-                            <option value="The Boys">🔒 The Boys</option>
-                            <option value="The Fam">🔒 The Fam</option>
-                        </select>
-                    </div>
-                    <div className="input-group">
-                        <input className="input" placeholder="Description" value={newEvent.description} onChange={e => setNewEvent({ ...newEvent, description: e.target.value })} required />
-                    </div>
-                    <div className="input-group">
-                        <label className="text-sm" style={{ marginBottom: '4px', display: 'block' }}>Betting Deadline (Locks Bets)</label>
-                        <input
-                            className="input"
-                            type="datetime-local"
-                            value={newEvent.deadline}
-                            onChange={e => setNewEvent({ ...newEvent, deadline: e.target.value })}
-                        />
-                    </div>
-                    <div className="input-group">
-                        <label className="text-sm" style={{ marginBottom: '4px', display: 'block' }}>Resolution Date (Event Starts/Ends)</label>
-                        <input
-                            className="input"
-                            type="datetime-local"
-                            required
-                            value={newEvent.startAt}
-                            onChange={e => setNewEvent({ ...newEvent, startAt: e.target.value })}
-                        />
-                    </div>
-                    {!editingId && (
-                        <>
-                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                                <input className="input" placeholder="Outcome AA" value={newEvent.outcome1 || ''} onChange={e => setNewEvent({ ...newEvent, outcome1: e.target.value })} />
-                                <input className="input" type="number" step="0.01" placeholder="Odds" value={newEvent.odds1 || ''} onChange={e => setNewEvent({ ...newEvent, odds1: e.target.value })} />
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px', marginBottom: '16px' }}>
-                                <input className="input" placeholder="Outcome BB" value={newEvent.outcome2 || ''} onChange={e => setNewEvent({ ...newEvent, outcome2: e.target.value })} />
-                                <input className="input" type="number" step="0.01" placeholder="Odds" value={newEvent.odds2 || ''} onChange={e => setNewEvent({ ...newEvent, odds2: e.target.value })} />
-                            </div>
-                        </>
-                    )}
-                    {editingId && <p className="text-sm" style={{ marginBottom: '10px', color: 'orange' }}>Note: Outcome labels/odds cannot be edited safely yet.</p>}
-                    <button className="btn btn-primary">{editingId ? 'Update Event' : 'Create Event'}</button>
-                </form>
+                {!collapsed.form && (
+                    <form onSubmit={handleCreate}>
+                        <div className="input-group">
+                            <input className="input" placeholder="Event Title" value={newEvent.title} onChange={e => setNewEvent({ ...newEvent, title: e.target.value })} required />
+                        </div>
+                        <div className="input-group">
+                            <label className="text-sm" style={{ marginBottom: '4px', display: 'block' }}>Category</label>
+                            <select
+                                className="input"
+                                value={newEvent.category || 'Sports'}
+                                onChange={e => setNewEvent({ ...newEvent, category: e.target.value })}
+                                style={{ background: 'var(--bg-card)', color: '#fff' }}
+                            >
+                                <option value="Super Bowl">Super Bowl 🏆</option>
+                                <option value="Sports">Sports</option>
+                                <option value="Video Games">Video Games</option>
+                                <option value="Local/Community">Local/Community</option>
+                                <option value="Weather">Weather</option>
+                                <option value="Tech">Tech</option>
+                                <option value="Pop Culture">Pop Culture</option>
+                                <option disabled>───────</option>
+                                <option value="The Boys">🔒 The Boys</option>
+                                <option value="The Fam">🔒 The Fam</option>
+                            </select>
+                        </div>
+                        <div className="input-group">
+                            <input className="input" placeholder="Description" value={newEvent.description} onChange={e => setNewEvent({ ...newEvent, description: e.target.value })} required />
+                        </div>
+                        <div className="input-group">
+                            <label className="text-sm" style={{ marginBottom: '4px', display: 'block' }}>Betting Deadline (Locks Bets)</label>
+                            <input
+                                className="input"
+                                type="datetime-local"
+                                value={newEvent.deadline}
+                                onChange={e => setNewEvent({ ...newEvent, deadline: e.target.value })}
+                            />
+                        </div>
+                        <div className="input-group">
+                            <label className="text-sm" style={{ marginBottom: '4px', display: 'block' }}>Resolution Date (Event Starts/Ends)</label>
+                            <input
+                                className="input"
+                                type="datetime-local"
+                                required
+                                value={newEvent.startAt}
+                                onChange={e => setNewEvent({ ...newEvent, startAt: e.target.value })}
+                            />
+                        </div>
+                        {!editingId && (
+                            <>
+                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                                    <input className="input" placeholder="Outcome AA" value={newEvent.outcome1 || ''} onChange={e => setNewEvent({ ...newEvent, outcome1: e.target.value })} />
+                                    <input className="input" type="number" step="0.01" placeholder="Odds" value={newEvent.odds1 || ''} onChange={e => setNewEvent({ ...newEvent, odds1: e.target.value })} />
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px', marginBottom: '16px' }}>
+                                    <input className="input" placeholder="Outcome BB" value={newEvent.outcome2 || ''} onChange={e => setNewEvent({ ...newEvent, outcome2: e.target.value })} />
+                                    <input className="input" type="number" step="0.01" placeholder="Odds" value={newEvent.odds2 || ''} onChange={e => setNewEvent({ ...newEvent, odds2: e.target.value })} />
+                                </div>
+                            </>
+                        )}
+                        {editingId && <p className="text-sm" style={{ marginBottom: '10px', color: 'orange' }}>Note: Outcome labels/odds cannot be edited safely yet.</p>}
+                        <button className="btn btn-primary">{editingId ? 'Update Event' : 'Create Event'}</button>
+                    </form>
+                )}
             </div>
 
             <div className="card">
-                <h2>Resolve Events</h2>
-                {(() => {
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: collapsed.resolve ? '0' : '16px' }}>
+                    <h2>Resolve Events</h2>
+                    <Minimizer section="resolve" />
+                </div>
+                {!collapsed.resolve && (() => {
                     const activeEvents = events.filter(e => e.status === 'open' || e.status === 'locked');
                     if (activeEvents.length === 0) return <p className="text-sm">No active events to resolve.</p>;
 
@@ -354,9 +391,12 @@ export default function Admin() {
 
 
             <div className="card">
-                <h2>User Bet Ideas</h2>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: collapsed.ideas ? '0' : '16px' }}>
+                    <h2>User Bet Ideas</h2>
+                    <Minimizer section="ideas" />
+                </div>
 
-                {ideas && ideas.length > 0 ? (
+                {!collapsed.ideas && (ideas && ideas.length > 0 ? (
                     ideas.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).map(idea => (
                         <div key={idea.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '12px', marginBottom: '12px' }}>
                             <p style={{ fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>"{idea.text}"</p>
@@ -376,66 +416,74 @@ export default function Admin() {
                     ))
                 ) : (
                     <p className="text-sm">No ideas submitted yet.</p>
+                ))}
+            </div>
+
+            <div className="card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: collapsed.users ? '0' : '16px' }}>
+                    <h2>Manage Users (Clean up Leaderboard)</h2>
+                    <Minimizer section="users" />
+                </div>
+                {!collapsed.users && (
+                    <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                        {users.sort((a, b) => (b.balance || 0) - (a.balance || 0)).map(u => (
+                            <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', padding: '8px 0' }}>
+                                <div>
+                                    <div style={{ fontWeight: 'bold' }}>{u.username} <span style={{ fontSize: '10px', color: '#666', fontWeight: 'normal' }}>({u.role})</span></div>
+                                    <div style={{ fontSize: '12px', color: '#888' }}>ID: {u.id} • Balance: ${u.balance?.toFixed(2)}</div>
+                                </div>
+                                {u.id !== user.id && (
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            {['The Boys', 'The Fam'].map(g => {
+                                                const hasGroup = (u.groups || []).includes(g);
+                                                return (
+                                                    <button
+                                                        key={g}
+                                                        onClick={() => {
+                                                            const current = u.groups || [];
+                                                            const newGroups = hasGroup ? current.filter(x => x !== g) : [...current, g];
+                                                            updateUserGroups(u.id, newGroups);
+                                                        }}
+                                                        style={{
+                                                            padding: '2px 6px', fontSize: '10px',
+                                                            background: hasGroup ? 'var(--primary)' : '#333',
+                                                            color: hasGroup ? '#000' : '#888',
+                                                            border: 'none', borderRadius: '4px', cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        {g}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        <button
+                                            className="btn btn-outline"
+                                            style={{ padding: '4px 8px', fontSize: '12px', color: 'var(--accent-loss)', borderColor: 'var(--accent-loss)' }}
+                                            onClick={async () => {
+                                                if (confirm(`Permanently delete user "${u.username}" and all their data?`)) {
+                                                    const res = await deleteUser(u.id);
+                                                    if (res.success) alert('User deleted.');
+                                                    else alert('Error: ' + res.error);
+                                                }
+                                            }}
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
                 )}
             </div>
 
             <div className="card">
-                <h2>Manage Users (Clean up Leaderboard)</h2>
-                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                    {users.sort((a, b) => (b.balance || 0) - (a.balance || 0)).map(u => (
-                        <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', padding: '8px 0' }}>
-                            <div>
-                                <div style={{ fontWeight: 'bold' }}>{u.username} <span style={{ fontSize: '10px', color: '#666', fontWeight: 'normal' }}>({u.role})</span></div>
-                                <div style={{ fontSize: '12px', color: '#888' }}>ID: {u.id} • Balance: ${u.balance?.toFixed(2)}</div>
-                            </div>
-                            {u.id !== user.id && (
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                        {['The Boys', 'The Fam'].map(g => {
-                                            const hasGroup = (u.groups || []).includes(g);
-                                            return (
-                                                <button
-                                                    key={g}
-                                                    onClick={() => {
-                                                        const current = u.groups || [];
-                                                        const newGroups = hasGroup ? current.filter(x => x !== g) : [...current, g];
-                                                        updateUserGroups(u.id, newGroups);
-                                                    }}
-                                                    style={{
-                                                        padding: '2px 6px', fontSize: '10px',
-                                                        background: hasGroup ? 'var(--primary)' : '#333',
-                                                        color: hasGroup ? '#000' : '#888',
-                                                        border: 'none', borderRadius: '4px', cursor: 'pointer'
-                                                    }}
-                                                >
-                                                    {g}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                    <button
-                                        className="btn btn-outline"
-                                        style={{ padding: '4px 8px', fontSize: '12px', color: 'var(--accent-loss)', borderColor: 'var(--accent-loss)' }}
-                                        onClick={async () => {
-                                            if (confirm(`Permanently delete user "${u.username}" and all their data?`)) {
-                                                const res = await deleteUser(u.id);
-                                                if (res.success) alert('User deleted.');
-                                                else alert('Error: ' + res.error);
-                                            }
-                                        }}
-                                    >
-                                        Delete
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    ))}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: collapsed.bets ? '0' : '16px' }}>
+                    <h2>Recent Bets (Global)</h2>
+                    <Minimizer section="bets" />
                 </div>
-            </div>
-
-            <div className="card">
-                <h2>Recent Bets (Global)</h2>
-                {allBets.length === 0 ? <p className="text-sm">No bets placed yet.</p> : (
+                {!collapsed.bets && (allBets.length === 0 ? <p className="text-sm">No bets placed yet.</p> : (
                     <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                         {allBets.map(bet => {
                             const betUser = users.find(u => u.id === bet.userId);
@@ -473,7 +521,7 @@ export default function Admin() {
                             )
                         })}
                     </div>
-                )}
+                ))}
             </div>
 
             <div style={{ textAlign: 'center', marginTop: '40px' }}>
