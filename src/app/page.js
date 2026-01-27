@@ -544,7 +544,11 @@ export default function Home() {
                                         className="scroll-arrow-left"
                                         onClick={() => {
                                             const container = document.getElementById('superbowl-scroll-container');
-                                            if (container) container.scrollBy({ left: -320, behavior: 'smooth' });
+                                            if (container) {
+                                                const card = container.querySelector('.sb-carousel-item');
+                                                const scrollAmount = card ? card.offsetWidth + 16 : 320;
+                                                container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+                                            }
                                         }}
                                         style={{
                                             position: 'absolute',
@@ -603,20 +607,20 @@ export default function Home() {
                                             if (hasMain) return null; // Skip main event (already rendered above)
 
                                             return (
-                                                <div key={event.id} onClick={() => setExpandedEvent(event)} style={{
-                                                    minWidth: '320px', // Fixed width for carousel items
-                                                    maxWidth: '320px',
-                                                    cursor: 'pointer',
-                                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                                    background: 'rgba(255, 255, 255, 0.02)',
-                                                    borderRadius: '16px',
-                                                    padding: '20px',
-                                                    position: 'relative',
-                                                    overflow: 'hidden',
-                                                    scrollSnapAlign: 'start',
-                                                    display: 'flex',
-                                                    flexDirection: 'column'
-                                                }}>
+                                                <div key={event.id} onClick={() => setExpandedEvent(event)}
+                                                    className="sb-carousel-item"
+                                                    style={{
+                                                        cursor: 'pointer',
+                                                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                        background: 'rgba(255, 255, 255, 0.02)',
+                                                        borderRadius: '16px',
+                                                        padding: '20px',
+                                                        position: 'relative',
+                                                        overflow: 'hidden',
+                                                        scrollSnapAlign: 'center',
+                                                        display: 'flex',
+                                                        flexDirection: 'column'
+                                                    }}>
                                                     {/* Title & Info Section */}
                                                     <div style={{
                                                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'
@@ -663,7 +667,11 @@ export default function Home() {
                                         className="scroll-arrow-right"
                                         onClick={() => {
                                             const container = document.getElementById('superbowl-scroll-container');
-                                            if (container) container.scrollBy({ left: 320, behavior: 'smooth' });
+                                            if (container) {
+                                                const card = container.querySelector('.sb-carousel-item');
+                                                const scrollAmount = card ? card.offsetWidth + 16 : 320;
+                                                container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+                                            }
                                         }}
                                         style={{
                                             position: 'absolute',
@@ -688,6 +696,16 @@ export default function Home() {
                                 </div>
                             </div>
                             <style jsx>{`
+                                .sb-carousel-item {
+                                    min-width: 320px;
+                                    max-width: 320px;
+                                }
+                                @media (max-width: 768px) {
+                                    .sb-carousel-item {
+                                        min-width: calc(100vw - 64px); 
+                                        max-width: calc(100vw - 64px);
+                                    }
+                                }
                                 @keyframes gradientborder { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
                             `}</style>
                         </div>
