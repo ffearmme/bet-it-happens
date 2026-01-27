@@ -54,6 +54,16 @@ export default function Rules() {
                     <br />
                     <code>Net Worth = Available Cash + Active Bets</code>
                 </p>
+                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px dashed #333' }}>
+                    <h3 style={{ fontSize: '16px', color: '#fff', marginBottom: '8px' }}>📊 Last Bet Impact</h3>
+                    <p style={{ fontSize: '14px', color: '#a1a1aa', lineHeight: '1.5' }}>
+                        The percentage shown next to players on the leaderboard represents their <strong>Portfolio Impact</strong> from their most recently resolved bet.
+                    </p>
+                    <ul style={{ fontSize: '13px', color: '#a1a1aa', marginTop: '8px', paddingLeft: '20px' }}>
+                        <li><b style={{ color: '#4ade80' }}>Positive %</b>: How much their total net worth grew from that win.</li>
+                        <li><b style={{ color: '#ef4444' }}>Negative %</b>: How much of their total net worth was lost on that bet.</li>
+                    </ul>
+                </div>
             </div>
 
             <div className="card">

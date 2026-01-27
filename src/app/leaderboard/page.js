@@ -141,9 +141,24 @@ export default function Leaderboard() {
                                 </div>
                             </div>
                             <div style={{ textAlign: 'right' }}>
-                                <p style={{ fontWeight: 'bold', color: tab === 'all' ? '#4ade80' : (player.profit >= 0 ? '#4ade80' : '#ef4444'), fontSize: '1.1em' }}>
-                                    ${tab === 'all' ? ((player.balance || 0) + (player.invested || 0)).toFixed(2) : player.profit?.toFixed(2)}
-                                </p>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                                    <p style={{ fontWeight: 'bold', color: tab === 'all' ? '#4ade80' : (player.profit >= 0 ? '#4ade80' : '#ef4444'), fontSize: '1.1em', margin: 0 }}>
+                                        ${tab === 'all' ? ((player.balance || 0) + (player.invested || 0)).toFixed(2) : player.profit?.toFixed(2)}
+                                    </p>
+                                    {player.lastBetPercent !== undefined && tab === 'all' && (
+                                        <span style={{
+                                            fontSize: '11px',
+                                            fontWeight: 'bold',
+                                            color: player.lastBetPercent >= 0 ? '#4ade80' : '#ef4444',
+                                            background: player.lastBetPercent >= 0 ? 'rgba(74, 222, 128, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                            padding: '2px 6px',
+                                            borderRadius: '4px',
+                                            border: `1px solid ${player.lastBetPercent >= 0 ? 'rgba(74, 222, 128, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`
+                                        }}>
+                                            {player.lastBetPercent > 0 ? '+' : ''}{player.lastBetPercent.toFixed(1)}%
+                                        </span>
+                                    )}
+                                </div>
                                 {tab === 'all' && (player.invested > 0) && (
                                     <span style={{ fontSize: '10px', color: '#a1a1aa' }}>
                                         (${player.invested.toFixed(2)} in play)

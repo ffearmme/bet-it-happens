@@ -431,13 +431,35 @@ export function AppProvider({ children }) {
       const betsQ = query(collection(db, 'bets'), where('eventId', '==', eventId));
       const betsSnap = await getDocs(betsQ); // Need all bets to settle
 
-      betsSnap.docs.forEach((betDoc) => {
+      for (const betDoc of betsSnap.docs) {
         const bet = betDoc.data();
         // Skip if already settled to avoid double-pay/deduct
-        if (bet.status !== 'pending') return;
+        if (bet.status !== 'pending') continue;
 
         const isWinner = bet.outcomeId === winnerOutcomeId;
         const userRef = doc(db, 'users', bet.userId);
+
+        // Fetch User to Calc Portfolio Impact
+        let percentChange = 0;
+        try {
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            const currentNetWorth = (userData.balance || 0) + (userData.invested || 0);
+
+            // Profit (or Loss) from this specific bet
+            const profit = isWinner
+              ? (bet.potentialPayout - bet.amount) // Net Profit
+              : -bet.amount;                       // Net Loss
+
+            // Portfolio Impact % = (Profit / currentNetWorth) * 100
+            percentChange = currentNetWorth > 0
+              ? (profit / currentNetWorth) * 100
+              : 0;
+          }
+        } catch (err) {
+          console.error("Error calc legacy stats", err);
+        }
 
         // Settle the bet document
         batch.update(betDoc.ref, {
@@ -445,15 +467,17 @@ export function AppProvider({ children }) {
           settledAt: new Date().toISOString()
         });
 
-        // Update User Balance & Invested
+        // Update User Balance & Invested & Last Bet Stats
         if (isWinner) {
           batch.update(userRef, {
             balance: increment(bet.potentialPayout),
-            invested: increment(-bet.amount)
+            invested: increment(-bet.amount),
+            lastBetPercent: percentChange
           });
         } else {
           batch.update(userRef, {
-            invested: increment(-bet.amount)
+            invested: increment(-bet.amount),
+            lastBetPercent: percentChange
           });
         }
 
@@ -470,7 +494,7 @@ export function AppProvider({ children }) {
           read: false,
           createdAt: new Date().toISOString()
         });
-      });
+      }
 
       await batch.commit();
       return { success: true };
@@ -496,13 +520,31 @@ export function AppProvider({ children }) {
         const betsQ = query(collection(db, 'bets'), where('eventId', '==', eventDoc.id), where('status', '==', 'pending'));
         const betsSnap = await getDocs(betsQ);
 
-        betsSnap.docs.forEach(betDoc => {
+        for (const betDoc of betsSnap.docs) {
           const bet = betDoc.data();
           // Double check it's pending
-          if (bet.status !== 'pending') return;
+          if (bet.status !== 'pending') continue;
 
           const isWinner = bet.outcomeId === winnerOutcomeId;
           const userRef = doc(db, 'users', bet.userId);
+
+          let percentChange = 0;
+          try {
+            // Fetch User for Net Worth Calc
+            const userSnap = await getDoc(userRef);
+            const userData = userSnap.exists() ? userSnap.data() : { balance: 0, invested: 0 };
+            const currentNetWorth = (userData.balance || 0) + (userData.invested || 0);
+
+            // Profit (or Loss) from this specific bet
+            const profit = isWinner
+              ? (bet.potentialPayout - bet.amount) // Net Profit
+              : -bet.amount;                       // Net Loss
+
+            // Portfolio Impact % = (Profit / currentNetWorth) * 100
+            percentChange = currentNetWorth > 0
+              ? (profit / currentNetWorth) * 100
+              : 0;
+          } catch (err) { console.error(err); }
 
           batch.update(betDoc.ref, {
             status: isWinner ? 'won' : 'lost',
@@ -512,15 +554,17 @@ export function AppProvider({ children }) {
           if (isWinner) {
             batch.update(userRef, {
               balance: increment(bet.potentialPayout),
-              invested: increment(-bet.amount)
+              invested: increment(-bet.amount),
+              lastBetPercent: percentChange
             });
           } else {
             batch.update(userRef, {
-              invested: increment(-bet.amount)
+              invested: increment(-bet.amount),
+              lastBetPercent: percentChange
             });
           }
           totalFixed++;
-        });
+        }
       }
 
       if (totalFixed > 0) {
@@ -768,6 +812,71 @@ export function AppProvider({ children }) {
       let errMsg = e.message || String(e);
       if (errMsg.includes("index")) errMsg = "Missing Index! Check Browser Console (F12) for the creation link.";
       return { success: false, error: errMsg };
+    }
+  };
+
+  const backfillLastBetPercent = async () => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      console.log("Starting Backfill...");
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const batch = writeBatch(db);
+      let updateCount = 0;
+
+      // Process users in chunks to avoid blowing up memory/batch limits if many users
+      // But for <500 users, loop is fine. Batch limit is 500 ops.
+
+      for (const userDoc of usersSnap.docs) {
+        const uid = userDoc.id;
+
+        // Get all bets for user (we crave the most recent settled one)
+        const betsQ = query(collection(db, 'bets'), where('userId', '==', uid));
+        const betsSnap = await getDocs(betsQ);
+
+        let lastSettledBet = null;
+
+        // Find latest settled bet in memory
+        const settledBets = betsSnap.docs
+          .map(d => ({ ...d.data(), id: d.id }))
+          .filter(b => b.status === 'won' || b.status === 'lost')
+          .sort((a, b) => {
+            const dateA = new Date(a.settledAt || a.placedAt || 0);
+            const dateB = new Date(b.settledAt || b.placedAt || 0);
+            return dateB - dateA; // Descending
+          });
+
+        if (settledBets.length > 0) {
+          lastSettledBet = settledBets[0];
+
+          const isWinner = lastSettledBet.status === 'won';
+          const userData = userDoc.data();
+          const currentNetWorth = (userData.balance || 0) + (userData.invested || 0);
+
+          const profit = isWinner
+            ? (lastSettledBet.potentialPayout - lastSettledBet.amount)
+            : -lastSettledBet.amount;
+
+          // Approximate Pre-Bet Net Worth
+          // Current Net Worth DOES include this bet's result (since it's settled).
+          // So we subtract the profit to get the pre-bet value.
+          const preBetNetWorth = currentNetWorth - profit;
+
+          // Avoid division by zero
+          const percentChange = preBetNetWorth > 0
+            ? (profit / preBetNetWorth) * 100
+            : 0;
+
+          batch.update(userDoc.ref, { lastBetPercent: percentChange });
+          updateCount++;
+        }
+      }
+
+      if (updateCount > 0) await batch.commit();
+      return { success: true, message: `Updated ${updateCount} users with last bet stats.` };
+
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
     }
   };
 
@@ -1088,7 +1197,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-      events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, addComment, deleteComment, markNotificationRead, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups,
+      events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, markNotificationRead, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db
     }}>
       {children}

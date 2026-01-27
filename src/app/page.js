@@ -1461,6 +1461,10 @@ export default function Home() {
                     </div>
                 )
             }
+            {/* Version Tag */}
+            <div style={{ textAlign: 'center', padding: '20px 0 80px 0', color: '#333', fontSize: '10px' }}>
+                System V0.80
+            </div>
         </div >
     );
 }

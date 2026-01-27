@@ -7,7 +7,7 @@ import { db } from '../../lib/firebase';
 import { collection, query, limit, onSnapshot } from 'firebase/firestore';
 
 export default function Admin() {
-    const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, toggleFeatured, ideas, deleteIdea, users, deleteUser, updateUserGroups, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
+    const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, toggleFeatured, ideas, deleteIdea, users, deleteUser, updateUserGroups, syncEventStats, recalculateLeaderboard, backfillLastBetPercent, isLoaded } = useApp();
     const router = useRouter();
     const [newEvent, setNewEvent] = useState({
         title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Uncategorized'
@@ -587,6 +587,17 @@ export default function Admin() {
                 >
                     🛠️ Fix Stuck Bets
                 </button>
+                <button
+                    onClick={async () => {
+                        if (!confirm('Calculate last bet % for ALL users? This checks all bet history.')) return;
+                        const res = await backfillLastBetPercent();
+                        if (res.success) alert(res.message);
+                        else alert('Error: ' + res.error);
+                    }}
+                    style={{ background: '#333', border: '1px solid #666', color: '#fff', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', marginLeft: '10px' }}
+                >
+                    📊 Backfill Last Bet %
+                </button>
             </div>
 
             <div style={{ textAlign: 'center', marginTop: '40px', marginBottom: '20px' }}>
@@ -698,7 +709,7 @@ service cloud.firestore {
             }
 
             <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                System Version V0.76
+                System Version V0.80
             </p>
         </div >
     );
