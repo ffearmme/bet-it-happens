@@ -496,7 +496,16 @@ export default function Home() {
                                                     {hasMain && (
                                                         <h4 style={{ fontSize: '11px', color: '#71717a', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '2px', textAlign: 'center' }}>- Side Bets & Props -</h4>
                                                     )}
-                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                                    <div style={{
+                                                        display: 'grid',
+                                                        gridAutoFlow: 'column',
+                                                        gridAutoColumns: 'minmax(140px, 1fr)',
+                                                        gap: '12px',
+                                                        overflowX: 'auto',
+                                                        paddingBottom: '12px',
+                                                        scrollSnapType: 'x mandatory',
+                                                        WebkitOverflowScrolling: 'touch'
+                                                    }}>
                                                         {(hasMain ? event.outcomes.filter(o => o.type !== 'main') : event.outcomes).map(outcome => (
                                                             <button
                                                                 key={outcome.id}
@@ -515,7 +524,8 @@ export default function Home() {
                                                                     height: 'auto',
                                                                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
                                                                     transition: 'transform 0.1s, border-color 0.1s',
-                                                                    cursor: 'pointer'
+                                                                    cursor: 'pointer',
+                                                                    scrollSnapAlign: 'center'
                                                                 }}
                                                             >
                                                                 <span style={{ color: '#fff', fontWeight: '900', fontSize: '18px', textTransform: 'uppercase' }}>{outcome.label}</span>
