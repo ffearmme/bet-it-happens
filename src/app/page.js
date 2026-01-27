@@ -450,8 +450,18 @@ export default function Home() {
                                                 </div>
                                             </div>
 
-                                            {/* Main Bets Buttons */}
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+                                            {/* Main Bets Buttons - Scrollable on mobile */}
+                                            <div style={{
+                                                display: 'grid',
+                                                gridAutoFlow: 'column',
+                                                gridAutoColumns: 'minmax(160px, 1fr)',
+                                                gap: '16px',
+                                                marginBottom: '24px',
+                                                overflowX: 'auto',
+                                                paddingBottom: '12px',
+                                                scrollSnapType: 'x mandatory',
+                                                WebkitOverflowScrolling: 'touch'
+                                            }}>
                                                 {event.outcomes.filter(o => o.type === 'main').map(outcome => (
                                                     <button
                                                         key={outcome.id}
@@ -469,7 +479,8 @@ export default function Home() {
                                                             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px',
                                                             transition: 'transform 0.2s',
                                                             cursor: 'pointer',
-                                                            borderRadius: '12px'
+                                                            borderRadius: '12px',
+                                                            scrollSnapAlign: 'center'
                                                         }}
                                                     >
                                                         <span style={{ fontSize: '28px', fontWeight: '900', color: '#fff', textTransform: 'uppercase', textAlign: 'center', lineHeight: '1.2' }}>{outcome.label}</span>
