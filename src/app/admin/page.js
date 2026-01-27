@@ -18,6 +18,7 @@ export default function Admin() {
     const [collapsed, setCollapsed] = useState({
         form: true,
         resolve: true,
+        edit: true,
         ideas: true,
         users: true,
         bets: true
@@ -200,12 +201,82 @@ export default function Admin() {
 
             <div className="card">
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: collapsed.resolve ? '0' : '16px' }}>
-                    <h2>Resolve Events</h2>
+                    <h2>Resolve Events (Ending Soonest)</h2>
                     <Minimizer section="resolve" />
                 </div>
                 {!collapsed.resolve && (() => {
                     const activeEvents = events.filter(e => e.status === 'open' || e.status === 'locked');
                     if (activeEvents.length === 0) return <p className="text-sm">No active events to resolve.</p>;
+
+                    // Sort by deadline (soonest first)
+                    activeEvents.sort((a, b) => new Date(a.deadline || a.startAt) - new Date(b.deadline || b.startAt));
+
+                    return activeEvents.map(event => (
+                        <div key={event.id} style={{ border: '1px solid #333', borderRadius: '8px', padding: '12px', marginBottom: '12px', background: 'rgba(255,255,255,0.02)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                <div>
+                                    <p style={{ fontWeight: 600 }}>{event.title}</p>
+                                    <p style={{ fontSize: '11px', color: '#666' }}>ID: {event.id}</p>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                    <p style={{ fontSize: '11px', color: '#ef4444', fontWeight: 'bold' }}>
+                                        DEADLINE: {new Date(event.deadline || event.startAt).toLocaleString()}
+                                    </p>
+                                    <p style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 'bold' }}>
+                                        RESOLVE: {new Date(event.startAt).toLocaleString()}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Resolving Outcomes Only */}
+                            {(() => {
+                                let pairs = [];
+                                for (let i = 0; i < event.outcomes.length; i += 2) pairs.push(event.outcomes.slice(i, i + 2));
+                                const mainPairs = pairs.filter(p => p.some(o => o.type === 'main'));
+                                const subPairs = pairs.filter(p => !p.some(o => o.type === 'main'));
+
+                                const renderPair = (pair) => (
+                                    <div key={pair[0].id} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                                        {pair.map(o => (
+                                            <button
+                                                key={o.id}
+                                                className="btn btn-outline"
+                                                style={{ flex: 1, fontSize: '11px', padding: '8px', borderColor: '#444' }}
+                                                onClick={async () => {
+                                                    if (window.confirm(`RESOLVE: ${o.label} WINS?`)) {
+                                                        await resolveEvent(event.id, o.id);
+                                                    }
+                                                }}
+                                            >
+                                                <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{o.label}</span>
+                                                <span style={{ display: 'block', fontSize: '10px', color: '#888' }}>x{o.odds}</span>
+                                                <div style={{ color: 'var(--primary)', fontWeight: 'bold', fontSize: '10px' }}>WINNER?</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                );
+
+                                return (
+                                    <div>
+                                        {mainPairs.map(p => renderPair(p))}
+                                        {subPairs.length > 0 && <div style={{ borderBottom: '1px solid #333', margin: '8px 0' }}></div>}
+                                        {subPairs.map(p => renderPair(p))}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    ));
+                })()}
+            </div>
+
+            <div className="card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: collapsed.edit ? '0' : '16px' }}>
+                    <h2>Edit Events (Management)</h2>
+                    <Minimizer section="edit" />
+                </div>
+                {!collapsed.edit && (() => {
+                    const activeEvents = events.filter(e => e.status === 'open' || e.status === 'locked');
+                    if (activeEvents.length === 0) return <p className="text-sm">No active events.</p>;
 
                     // Group by category
                     const grouped = activeEvents.reduce((acc, event) => {
@@ -215,7 +286,6 @@ export default function Admin() {
                         return acc;
                     }, {});
 
-                    // Sort groups: Super Bowl first, then others
                     const sortedCategories = Object.keys(grouped).sort((a, b) => {
                         if (a === 'Super Bowl') return -1;
                         if (b === 'Super Bowl') return 1;
@@ -237,23 +307,27 @@ export default function Admin() {
                             {grouped[category].map(event => (
                                 <div key={event.id} style={{ border: '1px solid #333', borderRadius: '8px', padding: '12px', marginBottom: '12px', background: 'rgba(255,255,255,0.02)' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <p style={{ fontWeight: 600 }}>{event.title}</p>
                                         <div>
+                                            <p style={{ fontWeight: 600 }}>{event.title}</p>
+                                            <p style={{ fontSize: '11px', color: '#888' }}>{event.description}</p>
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
                                             <button
                                                 onClick={() => startEdit(event)}
-                                                style={{ background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', cursor: 'pointer', fontSize: '11px', padding: '2px 8px', borderRadius: '4px', marginRight: '8px' }}
+                                                style={{ background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', cursor: 'pointer', fontSize: '11px', padding: '4px 12px', borderRadius: '4px' }}
                                             >
-                                                Edit
+                                                Edit Details
                                             </button>
                                             <button
                                                 onClick={() => { if (confirm('Delete event?')) deleteEvent(event.id) }}
-                                                style={{ background: 'transparent', border: 'none', color: 'var(--accent-loss)', cursor: 'pointer', fontSize: '12px' }}
+                                                style={{ background: 'transparent', border: 'none', color: 'var(--accent-loss)', cursor: 'pointer', fontSize: '11px' }}
                                             >
                                                 Delete
                                             </button>
                                         </div>
                                     </div>
-                                    <div style={{ marginTop: '8px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+
+                                    <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                                         <button
                                             onClick={() => toggleFeatured(event.id, event.featured)}
                                             style={{
@@ -269,120 +343,74 @@ export default function Admin() {
                                             {event.featured ? '★ Featured' : '☆ set Featured'}
                                         </button>
 
-                                        {/* Order Controls */}
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#333', padding: '2px 6px', borderRadius: '4px' }}>
                                             <span style={{ fontSize: '10px', color: '#aaa', marginRight: '4px' }}>Sort: {event.order ?? 'Auto'}</span>
-                                            <button
-                                                onClick={() => updateEventOrder(event.id, (event.order ?? 9999) - 1)}
-                                                style={{ cursor: 'pointer', background: 'none', border: 'none', color: '#fff', fontSize: '12px' }}>
-                                                ⬆
-                                            </button>
-                                            <button
-                                                onClick={() => updateEventOrder(event.id, (event.order ?? 9999) + 1)}
-                                                style={{ cursor: 'pointer', background: 'none', border: 'none', color: '#fff', fontSize: '12px' }}>
-                                                ⬇
-                                            </button>
+                                            <button onClick={() => updateEventOrder(event.id, (event.order ?? 9999) - 1)} style={{ cursor: 'pointer', background: 'none', border: 'none', color: '#fff', fontSize: '12px' }}>⬆</button>
+                                            <button onClick={() => updateEventOrder(event.id, (event.order ?? 9999) + 1)} style={{ cursor: 'pointer', background: 'none', border: 'none', color: '#fff', fontSize: '12px' }}>⬇</button>
                                         </div>
-
-                                        <span style={{ fontSize: '10px', color: '#666' }}>ID: {event.id}</span>
                                     </div>
 
-                                    {/* Group outcomes into logical pairs if possible, otherwise list */}
-                                    {(() => {
-                                        // Heuristic: Group by 2s for display
-                                        let pairs = [];
-                                        for (let i = 0; i < event.outcomes.length; i += 2) {
-                                            pairs.push(event.outcomes.slice(i, i + 2));
-                                        }
+                                    {/* Outcomes Management (Toggle Main/Sub) - REVERTED TO OLD STYLE */}
+                                    <div style={{ marginTop: '12px', borderTop: '1px solid #333', paddingTop: '8px' }}>
+                                        <p style={{ fontSize: '10px', color: '#666', marginBottom: '4px', textTransform: 'uppercase' }}>Structure Management</p>
+                                        {(() => {
+                                            let pairs = [];
+                                            for (let i = 0; i < event.outcomes.length; i += 2) pairs.push(event.outcomes.slice(i, i + 2));
 
-                                        // Separate Main from Sub for clear display
-                                        const mainPairs = pairs.filter(p => p.some(o => o.type === 'main'));
-                                        const subPairs = pairs.filter(p => !p.some(o => o.type === 'main'));
-
-                                        const renderPair = (pair, pIdx, isMain) => (
-                                            <div key={pair[0].id} style={{
-                                                background: isMain ? 'rgba(34, 197, 94, 0.1)' : 'rgba(0,0,0,0.2)',
-                                                padding: '12px',
-                                                borderRadius: '8px',
-                                                marginBottom: '12px',
-                                                border: isMain ? '2px solid var(--primary)' : '1px solid #333'
-                                            }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
-                                                    <span style={{
-                                                        fontSize: '11px',
-                                                        textTransform: 'uppercase',
-                                                        color: isMain ? 'var(--primary)' : '#666',
-                                                        fontWeight: 'bold',
-                                                        letterSpacing: '1px'
+                                            // Revert to visual logic 
+                                            const renderPair = (pair, idx) => {
+                                                const isMain = pair.some(o => o.type === 'main');
+                                                return (
+                                                    <div key={idx} style={{
+                                                        background: isMain ? 'rgba(34, 197, 94, 0.1)' : 'rgba(0,0,0,0.2)',
+                                                        padding: '8px',
+                                                        borderRadius: '8px',
+                                                        marginBottom: '8px',
+                                                        border: isMain ? '1px solid var(--primary)' : '1px solid #333',
+                                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                                                     }}>
-                                                        {isMain ? '★ MAIN HEADER EVENT (DISPLAYED AT TOP)' : `Side Bet Pair`}
-                                                    </span>
-                                                    <button
-                                                        onClick={async () => {
-                                                            const newTargetType = isMain ? 'sub' : 'main';
-                                                            const validIds = pair.map(x => x.id);
+                                                        <div>
+                                                            <div style={{
+                                                                fontSize: '10px',
+                                                                textTransform: 'uppercase',
+                                                                color: isMain ? 'var(--primary)' : '#666',
+                                                                fontWeight: 'bold',
+                                                                marginBottom: '2px'
+                                                            }}>
+                                                                {isMain ? '★ MAIN HEADER EVENT' : 'Side Bet Pair'}
+                                                            </div>
+                                                            <div style={{ fontSize: '11px', color: '#aaa' }}>{pair.map(o => o.label).join(' vs ')}</div>
+                                                        </div>
 
-                                                            let newOutcomes = event.outcomes.map(oc => {
-                                                                if (validIds.includes(oc.id)) return { ...oc, type: newTargetType };
-                                                                return oc;
-                                                            });
-
-                                                            // Consistent Sort: Main > Sub
-                                                            const mains = newOutcomes.filter(o => o.type === 'main');
-                                                            const others = newOutcomes.filter(o => o.type !== 'main');
-                                                            newOutcomes = [...mains, ...others];
-
-                                                            await updateEvent(event.id, { outcomes: newOutcomes });
-                                                        }}
-                                                        style={{
-                                                            fontSize: '11px',
-                                                            padding: '6px 12px',
-                                                            background: isMain ? 'var(--primary)' : '#27272a',
-                                                            color: isMain ? '#000' : '#a1a1aa',
-                                                            border: 'none',
-                                                            borderRadius: '4px',
-                                                            fontWeight: 'bold',
-                                                            cursor: 'pointer'
-                                                        }}
-                                                    >
-                                                        {isMain ? '★ MAIN BET' : 'Make Main'}
-                                                    </button>
-                                                </div>
-
-                                                <div style={{ display: 'flex', gap: '8px' }}>
-                                                    {pair.map(o => (
                                                         <button
-                                                            key={o.id}
-                                                            className="btn btn-outline"
-                                                            style={{ flex: 1, fontSize: '11px', padding: '8px', borderColor: '#444' }}
                                                             onClick={async () => {
-                                                                if (window.confirm(`RESOLVE: ${o.label} WINS?`)) {
-                                                                    await resolveEvent(event.id, o.id);
-                                                                }
+                                                                const newType = isMain ? 'sub' : 'main';
+                                                                const validIds = pair.map(x => x.id);
+                                                                let newOutcomes = event.outcomes.map(oc => validIds.includes(oc.id) ? { ...oc, type: newType } : oc);
+
+                                                                // Re-sort: Main first
+                                                                newOutcomes = [...newOutcomes.filter(o => o.type === 'main'), ...newOutcomes.filter(o => o.type !== 'main')];
+                                                                await updateEvent(event.id, { outcomes: newOutcomes });
+                                                            }}
+                                                            style={{
+                                                                fontSize: '10px',
+                                                                padding: '4px 8px',
+                                                                background: isMain ? 'var(--primary)' : '#27272a',
+                                                                color: isMain ? '#000' : '#888',
+                                                                border: isMain ? 'none' : '1px solid #444',
+                                                                borderRadius: '4px',
+                                                                fontWeight: 'bold',
+                                                                cursor: 'pointer'
                                                             }}
                                                         >
-                                                            <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{o.label}</span>
-                                                            <br />
-                                                            <span style={{ color: '#a1a1aa', fontSize: '10px' }}>x{o.odds}</span>
-                                                            <div style={{ color: 'var(--primary)', fontWeight: 'bold', marginTop: '4px', fontSize: '11px' }}>CLICK TO WIN</div>
+                                                            {isMain ? '★ MAIN BET' : 'Make Main'}
                                                         </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        );
-
-                                        return (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                {mainPairs.length > 0 && (
-                                                    <div style={{ marginBottom: '16px' }}>
-                                                        {mainPairs.map((p, i) => renderPair(p, i, true))}
-                                                        {subPairs.length > 0 && <div style={{ borderBottom: '1px solid #333', margin: '8px 0' }}></div>}
                                                     </div>
-                                                )}
-                                                {subPairs.map((p, i) => renderPair(p, i, false))}
-                                            </div>
-                                        );
-                                    })()}
+                                                );
+                                            };
+                                            return pairs.map((p, i) => renderPair(p, i));
+                                        })()}
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -540,7 +568,7 @@ export default function Admin() {
                 </button>
                 <button
                     onClick={async () => {
-                        if (!confirm("Recalculate everyone's invested amounts?")) return;
+                        if (!confirm('Recalculate everyone\'s invested amounts?')) return;
                         const res = await recalculateLeaderboard();
                         if (res.success) alert(res.message);
                         else alert('Error: ' + res.error);
@@ -551,7 +579,7 @@ export default function Admin() {
                 </button>
                 <button
                     onClick={async () => {
-                        if (!confirm("This will find ALL pending bets on settled events and force-resolve them. Continue?")) return;
+                        if (!confirm('This will find ALL pending bets on settled events and force-resolve them. Continue?')) return;
                         const res = await fixStuckBets();
                         alert(res.message || res.error);
                     }}
@@ -566,7 +594,7 @@ export default function Admin() {
                     onClick={() => setShowRules(!showRules)}
                     style={{ background: 'transparent', border: 'none', color: 'var(--accent-loss)', textDecoration: 'underline', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}
                 >
-                    ⚠️ FIX "Insufficient Permissions" ERROR (REQUIRED)
+                    ⚠️ FIX 'Insufficient Permissions' ERROR (REQUIRED)
                 </button>
             </div>
 
@@ -597,7 +625,7 @@ service cloud.firestore {
     
     // Check if user is Admin (Hardcoded to bypass 'get' limits for batches)
     function isAdmin() {
-      return request.auth != null && request.auth.uid == '${user?.id || 'YOUR_ADMIN_UID'}';
+      return request.auth != null && request.auth.uid == '\${user?.id || 'YOUR_ADMIN_UID'}';
     }
 
     // USERS: Users manage themselves, Admins manage all
