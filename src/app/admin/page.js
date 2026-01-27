@@ -10,7 +10,7 @@ export default function Admin() {
     const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, toggleFeatured, ideas, deleteIdea, users, deleteUser, updateUserGroups, syncEventStats, recalculateLeaderboard, isLoaded } = useApp();
     const router = useRouter();
     const [newEvent, setNewEvent] = useState({
-        title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Sports'
+        title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Uncategorized'
     });
     const [editingId, setEditingId] = useState(null);
     const [showRules, setShowRules] = useState(false);
@@ -81,7 +81,7 @@ export default function Admin() {
             });
             alert('Event updated (Title, Desc, dates, category).');
             setEditingId(null);
-            setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Sports' });
+            setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Uncategorized' });
         } else {
             // Build Outcomes Array (Simple Single Pair)
             const outcomes = [];
@@ -101,7 +101,7 @@ export default function Admin() {
                 deadline: newEvent.deadline || null,
                 outcomes: outcomes
             });
-            setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Sports' });
+            setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Uncategorized' });
         }
     };
 
@@ -128,7 +128,7 @@ export default function Admin() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: collapsed.form ? '0' : '20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
                         <h2>{editingId ? 'Edit Event' : 'Create Event'}</h2>
-                        {editingId && <button onClick={() => { setEditingId(null); setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Sports' }); }} style={{ fontSize: '12px', color: 'red' }}>Cancel Edit</button>}
+                        {editingId && <button onClick={() => { setEditingId(null); setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Uncategorized' }); }} style={{ fontSize: '12px', color: 'red' }}>Cancel Edit</button>}
                         <Minimizer section="form" />
                     </div>
                 </div>
@@ -141,10 +141,11 @@ export default function Admin() {
                             <label className="text-sm" style={{ marginBottom: '4px', display: 'block' }}>Category</label>
                             <select
                                 className="input"
-                                value={newEvent.category || 'Sports'}
+                                value={newEvent.category || 'Uncategorized'}
                                 onChange={e => setNewEvent({ ...newEvent, category: e.target.value })}
                                 style={{ background: 'var(--bg-card)', color: '#fff' }}
                             >
+                                <option value="Uncategorized">Uncategorized</option>
                                 <option value="Super Bowl">Super Bowl 🏆</option>
                                 <option value="Sports">Sports</option>
                                 <option value="Video Games">Video Games</option>
