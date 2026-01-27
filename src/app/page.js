@@ -34,6 +34,17 @@ export default function Home() {
         return () => clearInterval(timer);
     }, []);
 
+    const [todayBetCount, setTodayBetCount] = useState(0);
+
+    useEffect(() => {
+        if (!db) return;
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const q = query(collection(db, 'bets'), where('placedAt', '>=', startOfDay.toISOString()));
+        const unsub = onSnapshot(q, (snap) => setTodayBetCount(snap.size));
+        return () => unsub();
+    }, [db]);
+
     useEffect(() => {
         if (typeof window !== 'undefined' && localStorage.getItem('justSignedUp')) {
             setShowWelcome(true);
@@ -323,23 +334,36 @@ export default function Home() {
 
     return (
         <div className="container animate-fade">
-
             <header style={{ marginBottom: '32px', paddingTop: '10px' }}>
 
 
                 <div style={{ textAlign: 'center' }}>
-                    <p style={{
-                        fontSize: '16px',
-                        color: '#fff',
-                        marginBottom: '12px',
-                        fontWeight: '600',
-                        background: 'linear-gradient(90deg, #fff, #a1a1aa)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                        display: 'inline-block'
-                    }}>
-                        Prediction markets for real life — make predictions, earn coins, climb the leaderboard.
-                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '48px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                        <p style={{
+                            fontSize: '16px',
+                            color: '#fff',
+                            fontWeight: '600',
+                            background: 'linear-gradient(90deg, #fff, #a1a1aa)',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                            margin: 0
+                        }}>
+                            Prediction markets for real life — make predictions, earn coins, climb the leaderboard.
+                        </p>
+                        <div style={{
+                            background: 'rgba(34, 197, 94, 0.1)',
+                            border: '1px solid var(--primary)',
+                            borderRadius: '12px',
+                            padding: '8px 16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            boxShadow: '0 0 15px rgba(34, 197, 94, 0.2)'
+                        }}>
+                            <span style={{ fontSize: '11px', color: '#fff', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.5px' }}>Bets Today</span>
+                            <span style={{ fontSize: '20px', fontWeight: '900', color: '#fff', textShadow: '0 0 10px var(--primary)' }}>{todayBetCount}</span>
+                        </div>
+                    </div>
                     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
                         <p className="text-sm" style={{ background: 'var(--bg-card)', padding: '4px 12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
                             Balance: <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
