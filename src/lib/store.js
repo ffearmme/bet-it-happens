@@ -104,11 +104,22 @@ export function AppProvider({ children }) {
   }, []);
 
   const [users, setUsers] = useState([]); // List of all users for leaderboard
+  const [systemAnnouncement, setSystemAnnouncement] = useState(null);
 
   // ... (existing timeout code) ...
 
-  // --- 2. Data Listeners (Events, Ideas, Users) ---
+  // --- 2. Data Listeners (Events, Ideas, Users, Announcement) ---
   useEffect(() => {
+    // Listen to System Announcement
+    const announcementRef = doc(db, 'system', 'announcement');
+    const unsubAnnouncement = onSnapshot(announcementRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setSystemAnnouncement(docSnap.data());
+      } else {
+        setSystemAnnouncement(null);
+      }
+    });
+
     // Listen to Events (Limit 50 active)
     const eventsQuery = query(collection(db, 'events'), limit(50));
     const unsubEvents = onSnapshot(eventsQuery, (snapshot) => {
@@ -1194,10 +1205,24 @@ export function AppProvider({ children }) {
     }
   };
 
+  const updateSystemAnnouncement = async (data) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      const docRef = doc(db, 'system', 'announcement');
+      // Merge true to allow partial updates if needed, though usually we replace content
+      await setDoc(docRef, data, { merge: true });
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      alert("Error posting announcement: " + e.message); // Debug
+      return { success: false, error: e.message };
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-      events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, markNotificationRead, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups,
+      events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, markNotificationRead, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db
     }}>
       {children}

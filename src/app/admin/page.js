@@ -7,7 +7,7 @@ import { db } from '../../lib/firebase';
 import { collection, query, limit, onSnapshot } from 'firebase/firestore';
 
 export default function Admin() {
-    const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, toggleFeatured, ideas, deleteIdea, users, deleteUser, updateUserGroups, syncEventStats, recalculateLeaderboard, backfillLastBetPercent, isLoaded } = useApp();
+    const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, toggleFeatured, ideas, deleteIdea, users, deleteUser, updateUserGroups, syncEventStats, recalculateLeaderboard, backfillLastBetPercent, isLoaded, updateSystemAnnouncement, systemAnnouncement } = useApp();
     const router = useRouter();
     const [newEvent, setNewEvent] = useState({
         title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Uncategorized'
@@ -598,6 +598,59 @@ export default function Admin() {
                 >
                     📊 Backfill Last Bet %
                 </button>
+            </div>
+
+            {/* --- SYSTEM ANNOUNCEMENT SECTION --- */}
+            <div className="card" style={{ marginTop: '20px', border: '1px solid #eab308' }}>
+                <h3 onClick={() => toggle('announce')} style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}>
+                    📣 System Announcement <Minimizer isOpen={!collapsed.announce} />
+                </h3>
+                {!collapsed.announce && (
+                    <div style={{ marginTop: '16px' }}>
+                        <p className="text-sm" style={{ marginBottom: '12px', color: '#a1a1aa' }}>
+                            Post a global message to all users (Bug fixes, downtime, updates).
+                        </p>
+
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                            <input
+                                id="announce-input"
+                                type="text"
+                                className="input"
+                                placeholder="Message... (e.g. 'We are fixing the payout bug!')"
+                                defaultValue={systemAnnouncement?.message || ''}
+                            />
+                            <select id="announce-type" className="input" style={{ width: '100px' }} defaultValue={systemAnnouncement?.type || 'info'}>
+                                <option value="info">Info ℹ️</option>
+                                <option value="success">Good ✅</option>
+                                <option value="warning">Warn ⚠️</option>
+                            </select>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                                className="btn btn-primary"
+                                onClick={async () => {
+                                    const msg = document.getElementById('announce-input').value;
+                                    const type = document.getElementById('announce-type').value;
+                                    if (!msg) return alert("Enter a message");
+                                    const res = await updateSystemAnnouncement({ message: msg, type, active: true, postedAt: new Date().toISOString() });
+                                    if (res.success) alert("Announcement Posted!");
+                                }}
+                            >
+                                Post Announcement
+                            </button>
+                            <button
+                                className="btn"
+                                style={{ background: '#333' }}
+                                onClick={async () => {
+                                    const res = await updateSystemAnnouncement({ active: false });
+                                    if (res.success) alert("Announcement Cleared!");
+                                }}
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div style={{ textAlign: 'center', marginTop: '40px', marginBottom: '20px' }}>
