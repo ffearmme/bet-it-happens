@@ -27,6 +27,7 @@ export default function Home() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [now, setNow] = useState(new Date()); // Live clock
     const [expandedCategories, setExpandedCategories] = useState({});
+    const [showProfileNudge, setShowProfileNudge] = useState(false);
 
     useEffect(() => {
         // Update 'now' every second to keep time-sensitive UI (like betting deadlines) accurate
@@ -318,6 +319,12 @@ export default function Home() {
             if (res.success) {
                 setSuccess('Bet Placed Successfully! Good Luck Soldier🫡');
                 setWager('');
+
+                // Occasional Nudge for Profile Completion (33% chance)
+                if ((!user.bio || !user.profilePic) && Math.random() < 0.33) {
+                    setTimeout(() => setShowProfileNudge(true), 1200);
+                }
+
                 setTimeout(() => {
                     setSelectedOutcome(null);
                     setSuccess('');
@@ -1431,6 +1438,35 @@ export default function Home() {
                     </div>
                 )
             }
+
+            {/* --- Profile Nudge Modal --- */}
+            {showProfileNudge && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                    background: 'rgba(0,0,0,0.85)', zIndex: 2001,
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px'
+                }}>
+                    <div className="card animate-fade" style={{ maxWidth: '350px', textAlign: 'center', border: '1px solid var(--primary)', background: '#09090b' }}>
+                        <div style={{ fontSize: '48px', marginBottom: '16px' }}>📸</div>
+                        <h2 style={{ fontSize: '20px', color: '#fff', marginBottom: '8px' }}>One small thing...</h2>
+                        <p style={{ marginBottom: '20px', lineHeight: '1.5', color: '#a1a1aa', fontSize: '14px' }}>
+                            Did you know you can customize your profile? Adding a <b>Bio</b> and <b>Picture</b> helps you stand out on the Leaderboard!
+                        </p>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <button
+                                className="btn"
+                                onClick={() => setShowProfileNudge(false)}
+                                style={{ flex: 1, background: 'transparent', border: '1px solid #333', color: '#888' }}
+                            >
+                                Maybe Later
+                            </button>
+                            <Link href="/profile" className="btn btn-primary" style={{ flex: 1, textDecoration: 'none' }}>
+                                Let's Do It!
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* --- Welcome Modal --- */}
             {
