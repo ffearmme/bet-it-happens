@@ -342,24 +342,45 @@ export default function Home() {
     return (
         <div className="container animate-fade">
             {/* --- SYSTEM ANNOUNCEMENT --- */}
+            {/* --- SYSTEM ANNOUNCEMENT --- */}
             {systemAnnouncement && systemAnnouncement.active && (
                 <div style={{
-                    background: systemAnnouncement.type === 'warning' ? 'rgba(234, 179, 8, 0.2)' : systemAnnouncement.type === 'success' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(59, 130, 246, 0.2)',
-                    border: `1px solid ${systemAnnouncement.type === 'warning' ? '#eab308' : systemAnnouncement.type === 'success' ? '#22c55e' : '#3b82f6'}`,
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    marginBottom: '20px',
+                    background: systemAnnouncement.type === 'warning'
+                        ? 'linear-gradient(135deg, #b45309 0%, #78350f 100%)' // Bold Orange/Red
+                        : systemAnnouncement.type === 'success'
+                            ? 'linear-gradient(135deg, #15803d 0%, #14532d 100%)' // Bold Green
+                            : 'linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%)', // Bold Blue
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+                    padding: '16px 20px',
+                    borderRadius: '12px',
+                    marginBottom: '24px',
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
-                    gap: '12px',
+                    justifyContent: 'center',
+                    gap: '4px',
                     color: '#fff',
-                    animation: 'slideIn 0.3s ease-out'
+                    textAlign: 'center',
+                    animation: 'slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
                 }}>
-                    <span style={{ fontSize: '20px' }}>
-                        {systemAnnouncement.type === 'warning' ? '⚠️' : systemAnnouncement.type === 'success' ? '✅' : '📢'}
-                    </span>
-                    <p style={{ margin: 0, fontSize: '14px', fontWeight: '500' }}>
-                        <span style={{ fontWeight: 'bold', textTransform: 'uppercase', marginRight: '6px', fontSize: '11px', opacity: 0.8 }}>Admin Message:</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                        <span style={{ fontSize: '20px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }}>
+                            {systemAnnouncement.type === 'warning' ? '⚠️' : systemAnnouncement.type === 'success' ? '🔥' : '📢'}
+                        </span>
+                        <span style={{
+                            fontSize: '12px',
+                            fontWeight: '900',
+                            textTransform: 'uppercase',
+                            letterSpacing: '2px',
+                            opacity: 0.95,
+                            color: '#fff'
+                        }}>
+                            {systemAnnouncement.type === 'warning' ? 'ATTENTION' : systemAnnouncement.type === 'success' ? 'GOOD NEWS' : 'ANNOUNCEMENT'}
+                        </span>
+                    </div>
+
+                    <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', lineHeight: '1.4', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
                         {systemAnnouncement.message}
                     </p>
                 </div>
