@@ -28,6 +28,7 @@ export default function Home() {
     const [now, setNow] = useState(new Date()); // Live clock
     const [expandedCategories, setExpandedCategories] = useState({});
     const [showProfileNudge, setShowProfileNudge] = useState(false);
+    const [streakNotification, setStreakNotification] = useState(null);
 
     useEffect(() => {
         // Update 'now' every second to keep time-sensitive UI (like betting deadlines) accurate
@@ -318,6 +319,16 @@ export default function Home() {
             const res = await placeBet(selectedOutcome.eventId, selectedOutcome.outcomeId, parseFloat(wager));
             if (res.success) {
                 setSuccess('Bet Placed Successfully! Good Luck Soldier🫡');
+
+                // Show Streak Notification
+                if (res.streakType === 'started') {
+                    setStreakNotification({ type: 'start', count: res.newStreak });
+                    setTimeout(() => setStreakNotification(null), 4000);
+                } else if (res.streakType === 'increased') {
+                    setStreakNotification({ type: 'increase', count: res.newStreak });
+                    setTimeout(() => setStreakNotification(null), 4000);
+                }
+
                 setWager('');
 
                 // Occasional Nudge for Profile Completion (33% chance)
@@ -341,6 +352,37 @@ export default function Home() {
 
     return (
         <div className="container animate-fade">
+            {/* --- STREAK NOTIFICATION --- */}
+            {streakNotification && (
+                <div style={{
+                    position: 'fixed', top: '20%', left: '50%', transform: 'translate(-50%, -50%)',
+                    zIndex: 9999, pointerEvents: 'none',
+                    animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                }}>
+                    <div className="card" style={{
+                        background: 'linear-gradient(135deg, #111 0%, #000 100%)',
+                        border: '2px solid #f59e0b',
+                        boxShadow: '0 0 40px rgba(245, 158, 11, 0.5)',
+                        padding: '32px 48px',
+                        textAlign: 'center',
+                        borderRadius: '20px'
+                    }}>
+                        <div style={{ fontSize: '64px', marginBottom: '16px', animation: 'bounce 1s infinite' }}>🔥</div>
+                        <h2 style={{
+                            fontSize: '28px', fontWeight: '900', color: '#fff',
+                            textTransform: 'uppercase', margin: '0 0 8px 0',
+                            textShadow: '0 0 10px rgba(245, 158, 11, 0.5)'
+                        }}>
+                            {streakNotification.type === 'start' ? 'Streak Started!' : 'Streak Increased!'}
+                        </h2>
+                        <p style={{ fontSize: '18px', color: '#f59e0b', fontWeight: 'bold' }}>
+                            {streakNotification.count} {streakNotification.count === 1 ? 'Day' : 'Days'} in a Row!
+                        </p>
+                        <p style={{ fontSize: '14px', color: '#aaa', marginTop: '8px' }}>Keep the fire burning.</p>
+                    </div>
+                </div>
+            )}
+
             {/* --- SYSTEM ANNOUNCEMENT --- */}
             {/* --- SYSTEM ANNOUNCEMENT --- */}
             {systemAnnouncement && systemAnnouncement.active && (

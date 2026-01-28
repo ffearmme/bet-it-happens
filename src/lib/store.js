@@ -350,16 +350,22 @@ export function AppProvider({ children }) {
       let newStreak = user.currentStreak || 0;
       const lastDate = user.lastBetDate || ""; // Assuming stored as toDateString()
 
+      let streakType = 'none';
       // Only update logic if we haven't already processed a streak for today
       // (Or if the user had 0 streak and just started today)
       if (lastDate !== todayStr) {
         if (lastDate === yesterdayStr) {
           newStreak += 1;
+          streakType = 'increased';
         } else {
           newStreak = 1; // Broken streak or first bet
+          streakType = 'started';
         }
       } else {
-        if (newStreak === 0) newStreak = 1;
+        if (newStreak === 0) {
+          newStreak = 1;
+          streakType = 'started';
+        }
       }
 
       const newLongest = Math.max(newStreak, user.longestStreak || 0);
@@ -402,7 +408,7 @@ export function AppProvider({ children }) {
         console.warn("Could not update event stats (likely permission issue):", statsErr);
       }
 
-      return { success: true };
+      return { success: true, streakType, newStreak };
     } catch (e) {
       return { success: false, error: e.message };
     }
