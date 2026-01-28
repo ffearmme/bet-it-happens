@@ -29,6 +29,7 @@ export default function Home() {
     const [expandedCategories, setExpandedCategories] = useState({});
     const [showProfileNudge, setShowProfileNudge] = useState(false);
     const [streakNotification, setStreakNotification] = useState(null);
+    const [showChangelog, setShowChangelog] = useState(false);
 
     useEffect(() => {
         // Update 'now' every second to keep time-sensitive UI (like betting deadlines) accurate
@@ -1585,8 +1586,53 @@ export default function Home() {
             }
             {/* Version Tag */}
             <div style={{ textAlign: 'center', padding: '20px 0 80px 0', color: '#333', fontSize: '10px' }}>
-                System V0.80
+                <button
+                    onClick={() => setShowChangelog(true)}
+                    style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', textDecoration: 'underline', fontSize: '11px' }}
+                >
+                    System V0.85
+                </button>
             </div>
+
+            {/* --- CHANGELOG MODAL --- */}
+            {showChangelog && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                    background: 'rgba(0,0,0,0.85)', zIndex: 2002,
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px'
+                }} onClick={() => setShowChangelog(false)}>
+                    <div className="card animate-fade" style={{ maxWidth: '500px', width: '100%', maxHeight: '80vh', overflowY: 'auto', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border)', paddingBottom: '16px' }}>
+                            <h2 style={{ fontSize: '20px', fontWeight: 'bold' }}>System Updates</h2>
+                            <button onClick={() => setShowChangelog(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px' }}>&times;</button>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                            <div>
+                                <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '8px' }}>Version 0.85 <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>(Current)</span></h3>
+                                <ul style={{ paddingLeft: '20px', color: '#d4d4d8', fontSize: '14px', lineHeight: '1.6' }}>
+                                    <li><b>Betting Streaks:</b> Added daily streak tracking. Build your streak by betting on consecutive days! 🔥</li>
+                                    <li><b>Advanced Stats:</b> "My Bets" now features a detailed dashboard with Win Rate, Profit, and Biggest Win analysis.</li>
+                                    <li><b>Leaderboard Upgrades:</b> Visual indicators for active streaks.</li>
+                                    <li><b>Performance:</b> Improved real-time chat sync and stats updates.</li>
+                                </ul>
+                            </div>
+
+                            <div>
+                                <h3 style={{ fontSize: '16px', color: '#a1a1aa', marginBottom: '8px' }}>Version 0.80</h3>
+                                <ul style={{ paddingLeft: '20px', color: '#a1a1aa', fontSize: '14px', lineHeight: '1.6' }}>
+                                    <li><b>Private Groups:</b> Added support for group-restricted events (e.g., "The Boys").</li>
+                                    <li><b>Security:</b> Enhanced admin tools and event management.</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div style={{ marginTop: '24px', textAlign: 'center' }}>
+                            <button className="btn" onClick={() => setShowChangelog(false)} style={{ background: '#333' }}>Close</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 }
