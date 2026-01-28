@@ -5,7 +5,11 @@ service cloud.firestore {
     // Allow public read of events, admin write
     match /events/{eventId} {
       allow read: if true;
-      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow create, delete: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow update: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastComment', 'stats'])
+      );
     }
     
     // Allow users to read/write their own profile, Admins can edit anyone (e.g. for Groups)

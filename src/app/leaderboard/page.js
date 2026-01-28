@@ -140,6 +140,12 @@ export default function Leaderboard() {
                                         {tab === 'all' ? 'Net Worth' : 'Weekly Profit'}
                                     </p>
                                 </div>
+                                {player.currentStreak > 1 && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '12px' }} title="Current Betting Streak">
+                                        <span style={{ fontSize: '16px' }}>🔥</span>
+                                        <span style={{ fontWeight: 'bold', color: '#f59e0b', fontSize: '14px' }}>{player.currentStreak}</span>
+                                    </div>
+                                )}
                             </div>
                             <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                                 <p style={{ fontWeight: 'bold', color: tab === 'all' ? '#4ade80' : (player.profit >= 0 ? '#4ade80' : '#ef4444'), fontSize: '1.1em', margin: 0 }}>

@@ -340,9 +340,38 @@ export function AppProvider({ children }) {
     try {
       // 1. Deduct Balance & Add to Invested
       const userRef = doc(db, 'users', user.id);
+      // Streak Logic
+      const today = new Date();
+      const todayStr = today.toDateString();
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);
+      const yesterdayStr = yesterday.toDateString();
+
+      let newStreak = user.currentStreak || 0;
+      const lastDate = user.lastBetDate || ""; // Assuming stored as toDateString()
+
+      // Only update logic if we haven't already processed a streak for today
+      // (Or if the user had 0 streak and just started today)
+      if (lastDate !== todayStr) {
+        if (lastDate === yesterdayStr) {
+          newStreak += 1;
+        } else {
+          newStreak = 1; // Broken streak or first bet
+        }
+      } else {
+        if (newStreak === 0) newStreak = 1;
+      }
+
+      const newLongest = Math.max(newStreak, user.longestStreak || 0);
+
+      // 1. Deduct Balance, Add to Invested, Update Streak
+
       await updateDoc(userRef, {
         balance: increment(-amount),
-        invested: increment(amount) // Track active wagers for leaderboard
+        invested: increment(amount), // Track active wagers for leaderboard
+        currentStreak: newStreak,
+        longestStreak: newLongest,
+        lastBetDate: todayStr
       });
 
       // 2. Create Bet
