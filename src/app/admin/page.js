@@ -658,8 +658,7 @@ service cloud.firestore {
     // EVENTS: Admins full control, Users can update (for betting stats)
     match /events/{eventId} {
       allow read: if true;
-      allow create, delete: if isAdmin();
-      allow update: if request.auth != null; 
+      allow write: if request.auth != null; 
     }
   }
 }`}
@@ -693,8 +692,7 @@ service cloud.firestore {
 
     match /events/{eventId} {
       allow read: if true;
-      allow create, delete: if isAdmin();
-      allow update: if request.auth != null; 
+      allow write: if request.auth != null; 
     }
   }
 }`);

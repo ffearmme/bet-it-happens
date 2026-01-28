@@ -499,7 +499,7 @@ export function AppProvider({ children }) {
       await batch.commit();
       return { success: true };
     } catch (e) {
-      console.error(e);
+      console.error("Resolve Event Error:", e);
       return { success: false, error: e.message };
     }
   };
