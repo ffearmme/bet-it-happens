@@ -113,12 +113,13 @@ export default function Leaderboard() {
                                 cursor: 'pointer',
                                 transition: 'transform 0.1s'
                             }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
                                 <span style={{
-                                    fontSize: '1.2em',
+                                    fontSize: '1em',
                                     fontWeight: 'bold',
                                     color: index < 3 ? 'var(--primary)' : 'var(--text-secondary)',
-                                    width: '30px'
+                                    width: '24px',
+                                    flexShrink: 0
                                 }}>
                                     #{index + 1}
                                 </span>
@@ -126,16 +127,16 @@ export default function Leaderboard() {
                                     <img
                                         src={player.profilePic}
                                         alt={player.username}
-                                        style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }}
+                                        style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)', flexShrink: 0 }}
                                     />
                                 ) : (
-                                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--bg-card)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontSize: '12px' }}>
+                                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--bg-input)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontSize: '10px', flexShrink: 0 }}>
                                         {player.username.charAt(0).toUpperCase()}
                                     </div>
                                 )}
-                                <div>
-                                    <p style={{ fontWeight: '600', fontSize: '1.1em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>{player.username}</p>
-                                    <p style={{ fontSize: '0.8em', color: 'var(--text-secondary)' }}>
+                                <div style={{ minWidth: 0 }}>
+                                    <p style={{ fontWeight: '600', fontSize: '1em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{player.username}</p>
+                                    <p style={{ fontSize: '0.7em', color: 'var(--text-secondary)' }}>
                                         {tab === 'all' ? 'Net Worth' : 'Weekly Profit'}
                                     </p>
                                 </div>
