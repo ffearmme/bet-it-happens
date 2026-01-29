@@ -131,16 +131,11 @@ export default function InstallPrompt() {
         iconBox: {
             width: '80px',
             height: '80px',
-            background: 'linear-gradient(135deg, #2563eb, #4338ca)',
             borderRadius: '16px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'white',
-            fontWeight: 'bold',
-            fontSize: '32px',
             marginBottom: '16px',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)'
         },
         title: {
             fontSize: '20px',
@@ -214,7 +209,7 @@ export default function InstallPrompt() {
 
                 <div style={styles.content}>
                     <div style={styles.iconBox}>
-                        B
+                        <img src="/logo.png" alt="Bet It Happens Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '16px' }} />
                     </div>
 
                     <h3 style={styles.title}>Get the App Experience</h3>

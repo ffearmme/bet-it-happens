@@ -13,6 +13,10 @@ export const metadata = {
     viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0',
     icons: {
         icon: '/logo.png',
+        apple: [
+            { url: '/logo.png' },
+            { url: '/logo.png', sizes: '180x180', type: 'image/png' },
+        ],
     },
     manifest: '/manifest.json',
 };
