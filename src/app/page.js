@@ -1594,7 +1594,7 @@ export default function Home() {
                     onClick={() => setShowChangelog(true)}
                     style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', textDecoration: 'underline', fontSize: '11px' }}
                 >
-                    System V0.85
+                    System V0.87
                 </button>
             </div>
 
@@ -1613,8 +1613,18 @@ export default function Home() {
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                             <div>
-                                <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '8px' }}>Version 0.85 <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>(Current)</span></h3>
+                                <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '8px' }}>Version 0.87 <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>(Current)</span></h3>
                                 <ul style={{ paddingLeft: '20px', color: '#d4d4d8', fontSize: '14px', lineHeight: '1.6' }}>
+                                    <li><b>Mobile Experience:</b> Added "Add to Home Screen" support for a native app-like experience on iOS and Android.</li>
+                                    <li><b>New Logo:</b> Updated app icon for sharper look on home screens.</li>
+                                    <li><b>UI Polish:</b> Fixed banner overflow issues on mobile devices and improved layout responsiveness.</li>
+                                    <li><b>System:</b> Restored version tracking footer.</li>
+                                </ul>
+                            </div>
+
+                            <div>
+                                <h3 style={{ fontSize: '16px', color: '#a1a1aa', marginBottom: '8px' }}>Version 0.85</h3>
+                                <ul style={{ paddingLeft: '20px', color: '#a1a1aa', fontSize: '14px', lineHeight: '1.6' }}>
                                     <li><b>Betting Streaks:</b> Added daily streak tracking. Build your streak by betting on consecutive days! 🔥</li>
                                     <li><b>Advanced Stats:</b> "My Bets" now features a detailed dashboard with Win Rate, Profit, and Biggest Win analysis.</li>
                                     <li><b>Leaderboard Upgrades:</b> Visual indicators for active streaks.</li>
