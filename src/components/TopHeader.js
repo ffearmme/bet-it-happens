@@ -19,7 +19,7 @@ export default function TopHeader() {
         }}>
             <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <img src="/logo.png" alt="Logo" style={{ height: '50px', width: 'auto' }} />
-                <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '800', letterSpacing: '-0.5px', color: '#fff' }}>Bet It Happens</h1>
+                <h1 className="header-title" style={{ margin: 0, fontSize: '22px', fontWeight: '800', letterSpacing: '-0.5px', color: '#fff' }}>Bet It Happens</h1>
             </Link>
 
             {user && (

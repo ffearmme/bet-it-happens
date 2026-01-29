@@ -51,6 +51,17 @@ body {
   }
 }
 
+/* Header Utilities */
+.header-title {
+  display: block;
+}
+
+@media (max-width: 480px) {
+  .header-title {
+    display: none;
+  }
+}
+
 .card {
   background-color: var(--bg-card);
   border: 1px solid var(--border);

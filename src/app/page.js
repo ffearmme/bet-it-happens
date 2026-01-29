@@ -406,6 +406,7 @@ export default function Home() {
                     color: '#fff',
                     textAlign: 'center',
                     maxWidth: '100%', // Ensure it doesn't exceed parent
+                    width: '100%', // Explicitly set width
                     boxSizing: 'border-box' // Ensure padding is included in width
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px', flexWrap: 'wrap', justifyContent: 'center' }}>
