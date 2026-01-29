@@ -95,7 +95,7 @@ export default function InstallPrompt() {
     if (!showPrompt) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-300">
             <div className="bg-[#1a1b1e] w-full max-w-sm rounded-2xl border border-gray-800 shadow-2xl overflow-hidden relative animate-in zoom-in-95 duration-300">
                 <button
                     onClick={handleDismiss}
