@@ -11,10 +11,9 @@ export const metadata = {
     title: 'Bet It Happens',
     description: 'Fake Money Betting App',
     icons: {
-        icon: '/logo.png',
+        icon: '/text_logo.svg',
         apple: [
-            { url: '/logo.png' },
-            { url: '/logo.png', sizes: '180x180', type: 'image/png' },
+            { url: '/text_logo.svg' },
         ],
     },
     manifest: '/manifest.json',

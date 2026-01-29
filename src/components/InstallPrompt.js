@@ -209,7 +209,7 @@ export default function InstallPrompt() {
 
                 <div style={styles.content}>
                     <div style={styles.iconBox}>
-                        <img src="/logo.png" alt="Bet It Happens Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '16px' }} />
+                        <img src="/text_logo.svg" alt="Bet It Happens Logo" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '16px' }} />
                     </div>
 
                     <h3 style={styles.title}>Get the App Experience</h3>
