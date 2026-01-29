@@ -1,0 +1,16 @@
+{
+    "name": "Bet It Happens",
+    "short_name": "Bet It Happens",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#1a1b1e",
+    "theme_color": "#1a1b1e",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "/logo.png",
+            "sizes": "any",
+            "type": "image/png"
+        }
+    ]
+}

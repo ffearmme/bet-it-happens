@@ -2,6 +2,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import Navbar from '../components/Navbar';
 import TopHeader from '../components/TopHeader';
+import InstallPrompt from '../components/InstallPrompt';
 import { AppProvider } from '../lib/store';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -13,6 +14,7 @@ export const metadata = {
     icons: {
         icon: '/logo.png',
     },
+    manifest: '/manifest.json',
 };
 
 function BetaBanner() {
@@ -35,6 +37,7 @@ export default function RootLayout({ children }) {
                     <TopHeader />
                     {children}
                     <Navbar />
+                    <InstallPrompt />
                 </AppProvider>
             </body>
         </html>

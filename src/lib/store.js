@@ -13,6 +13,10 @@ import { db, auth } from './firebase';
 
 const AppContext = createContext();
 
+export function useAppContext() {
+  return useContext(AppContext);
+}
+
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [events, setEvents] = useState([]);
