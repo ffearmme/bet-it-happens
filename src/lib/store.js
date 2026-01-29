@@ -24,6 +24,21 @@ export function AppProvider({ children }) {
   const [ideas, setIdeas] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
+
+  // Create state, init false. We load from storage in a useEffect to allow hydration.
+  const [isGuestMode, setIsGuestMode] = useState(false);
+
+  // Load Guest Mode from LocalStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('isGuestMode');
+    if (stored === 'true') setIsGuestMode(true);
+  }, []);
+
+  // Save Guest Mode to LocalStorage
+  useEffect(() => {
+    localStorage.setItem('isGuestMode', isGuestMode);
+  }, [isGuestMode]);
+
   // Safety timeout: If Firebase auth hangs for >1s, just load the app (as signed out) to prevent being stuck.
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1258,11 +1273,14 @@ export function AppProvider({ children }) {
     }
   };
 
+
+
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
       events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, markNotificationRead, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement,
-      bets, placeBet, isLoaded, isFirebase: true, users, ideas, db
+      bets, placeBet, isLoaded, isFirebase: true, users, ideas, db,
+      isGuestMode, setIsGuestMode // Exposed isGuestMode and its setter
     }}>
       {children}
     </AppContext.Provider>

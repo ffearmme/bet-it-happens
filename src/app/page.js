@@ -14,14 +14,18 @@ const FUNNY_QUOTES = [
 ];
 
 export default function Home() {
-    const { user, events, placeBet, signup, signin, isLoaded, addComment, deleteComment, db, getUserStats, deleteEvent, systemAnnouncement } = useApp();
+    const {
+        user, events, bets, placeBet, isLoaded, users, systemAnnouncement,
+        addComment, deleteComment, getUserStats, deleteEvent,
+        signin, signup, activeEventsCount, serverTime, isGuestMode, setIsGuestMode, db
+    } = useApp(); // Used destructuring to get EVERYTHING needed from storeRef(null);
     const chatContainerRef = useRef(null);
     const [selectedOutcome, setSelectedOutcome] = useState(null);
     const [wager, setWager] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [expandedEvent, setExpandedEvent] = useState(null);
-    const [comments, setComments] = useState([]);
+    const [eventComments, setEventComments] = useState([]);
     const [commentText, setCommentText] = useState('');
     const [showWelcome, setShowWelcome] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -30,6 +34,21 @@ export default function Home() {
     const [showProfileNudge, setShowProfileNudge] = useState(false);
     const [streakNotification, setStreakNotification] = useState(null);
     const [showChangelog, setShowChangelog] = useState(false);
+
+    // Guest Mode State
+    // const [isGuestMode, setIsGuestMode] = useState(false); // Removed local state
+    const [showAuthModal, setShowAuthModal] = useState(false);
+    const [pendingOutcome, setPendingOutcome] = useState(null); // For seamless return
+
+    // Restore pending action after login
+    useEffect(() => {
+        if (user && pendingOutcome) {
+            setSelectedOutcome(pendingOutcome);
+            setPendingOutcome(null);
+            setIsGuestMode(false);
+            setShowAuthModal(false);
+        }
+    }, [user, pendingOutcome]);
 
     useEffect(() => {
         // Update 'now' every second to keep time-sensitive UI (like betting deadlines) accurate
@@ -74,7 +93,8 @@ export default function Home() {
         const unsub = onSnapshot(q, (snap) => {
             const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-            setComments(list);
+            list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+            setEventComments(list);
         });
         return () => unsub();
     }, [expandedEvent, db]);
@@ -85,7 +105,7 @@ export default function Home() {
         if (chatContainerRef.current) {
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
         }
-    }, [comments, expandedEvent]);
+    }, [eventComments, expandedEvent]);
 
     // Login State
     const [isLoginMode, setIsLoginMode] = useState(true); // Toggle Login/Signup
@@ -98,6 +118,14 @@ export default function Home() {
     useEffect(() => {
         setQuote(FUNNY_QUOTES[Math.floor(Math.random() * FUNNY_QUOTES.length)]);
     }, []);
+
+    const handleRestrictedAction = (action) => {
+        if (!user) {
+            setShowAuthModal(true);
+            return;
+        }
+        action();
+    };
 
     if (!isLoaded) {
         return (
@@ -112,7 +140,7 @@ export default function Home() {
     }
 
     // --- LOGIN SCREEN ---
-    if (!user) {
+    if (!user && !isGuestMode) {
         const handleAuth = async (e) => {
             e.preventDefault();
             setAuthError('');
@@ -138,7 +166,7 @@ export default function Home() {
                 // Sign In
                 const res = await signin(email, password);
                 if (res.success) {
-                    window.location.reload();
+                    // window.location.reload(); // Removed to allow state preservation
                 } else if (res.suggestedEmail) {
                     setEmail(res.suggestedEmail);
                     setAuthError(`We found your account! We switched the field to your email (${res.suggestedEmail}). Please try the password again.`);
@@ -153,7 +181,7 @@ export default function Home() {
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('justSignedUp', 'true');
                     }
-                    window.location.reload();
+                    // window.location.reload();
                 } else {
                     setAuthError(getFriendlyError(res.error));
                 }
@@ -233,12 +261,27 @@ export default function Home() {
                             {isLoginMode ? 'Sign In' : 'Create Account'}
                         </button>
                     </form>
+
+                    <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '16px 0', color: '#52525b' }}>
+                            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
+                            <span style={{ fontSize: '12px' }}>OR</span>
+                            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
+                        </div>
+                        <button
+                            className="btn btn-outline"
+                            onClick={() => setIsGuestMode(true)}
+                            style={{ color: '#a1a1aa' }}
+                        >
+                            Browse as Guest
+                        </button>
+                    </div>
                 </div>
             </div>
         );
     }
 
-    // --- MAIN APP (LOGGED IN) ---
+    // --- MAIN APP (LOGGED IN OR GUEST) ---
     const rawActiveEvents = events.filter(e => {
         // 1. Status Check
         if (e.status !== 'open' && e.status !== 'locked') return false;
@@ -247,7 +290,7 @@ export default function Home() {
         // Ensure restrictedToGroup is a valid string and not empty
         if (e.restrictedToGroup && typeof e.restrictedToGroup === 'string' && e.restrictedToGroup.trim() !== '') {
 
-            // If user is not logged in, they can't belong to a group -> HIDE
+            // If user is not logged in (Guest), they can't belong to a group -> HIDE
             if (!user) return false;
 
             // Admin sees everything (with a visual indicator later maybe)
@@ -304,6 +347,12 @@ export default function Home() {
 
 
     const handleBet = async () => {
+        // GUEST CHECK
+        if (!user) {
+            setShowAuthModal(true);
+            return;
+        }
+
         if (isSubmitting) return; // Prevent double click
 
         setError('');
@@ -353,6 +402,37 @@ export default function Home() {
 
     return (
         <div className="container animate-fade">
+            {/* --- GUEST AUTH MODAL --- */}
+            {showAuthModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                    background: 'rgba(0,0,0,0.85)', zIndex: 9999,
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px'
+                }} onClick={() => setShowAuthModal(false)}>
+                    <div className="card animate-fade" style={{ width: '100%', maxWidth: '350px', border: '1px solid var(--primary)', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
+                        <h2 style={{ fontSize: '20px', color: '#fff', marginBottom: '8px' }}>Login Required</h2>
+                        <p style={{ color: '#a1a1aa', marginBottom: '24px', lineHeight: '1.5' }}>
+                            You need to be logged in to place bets, comment, and track your stats!
+                        </p>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <button
+                                className="btn btn-outline"
+                                onClick={() => setShowAuthModal(false)}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="btn btn-primary"
+                                onClick={() => { setShowAuthModal(false); setIsGuestMode(false); }}
+                            >
+                                Login / Signup
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* --- STREAK NOTIFICATION --- */}
             {streakNotification && (
                 <div style={{
@@ -386,7 +466,9 @@ export default function Home() {
 
             {/* --- SYSTEM ANNOUNCEMENT --- */}
             {/* --- SYSTEM ANNOUNCEMENT --- */}
-            {systemAnnouncement && systemAnnouncement.active && (
+            {/* --- SYSTEM ANNOUNCEMENT --- */}
+            {/* --- SYSTEM ANNOUNCEMENT --- */}
+            {user && systemAnnouncement && systemAnnouncement.active && (
                 <div style={{
                     background: systemAnnouncement.type === 'warning'
                         ? 'linear-gradient(135deg, #b45309 0%, #78350f 100%)' // Bold Orange/Red
@@ -463,7 +545,7 @@ export default function Home() {
                     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
                         <p className="text-sm" style={{ background: 'var(--bg-card)', padding: '4px 12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
                             Balance: <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
-                                {user.balance !== undefined ? `$${user.balance.toFixed(2)}` : '...'}
+                                {user ? `$${user.balance !== undefined ? user.balance.toFixed(2) : '...'}` : '$0.00'}
                             </span></p>
                         <Link href="/rules" style={{ fontSize: '11px', color: 'var(--text-muted)', textDecoration: 'underline' }}>
                             Resolutions & Rules ℹ️
@@ -582,8 +664,12 @@ export default function Home() {
                                                         key={outcome.id}
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            if (user) setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
-                                                            else alert("Login to bet!");
+                                                            if (user) {
+                                                                setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
+                                                            } else {
+                                                                setPendingOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
+                                                                setShowAuthModal(true);
+                                                            }
                                                         }}
                                                         className="btn"
                                                         style={{
@@ -614,8 +700,12 @@ export default function Home() {
                                                                 key={outcome.id}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    if (user) setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
-                                                                    else alert("Login to bet!");
+                                                                    if (user) {
+                                                                        setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
+                                                                    } else {
+                                                                        setPendingOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
+                                                                        setShowAuthModal(true);
+                                                                    }
                                                                 }}
                                                                 className="btn"
                                                                 style={{
@@ -753,8 +843,12 @@ export default function Home() {
                                                                 key={outcome.id}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    if (user) setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
-                                                                    else alert("Login to bet!");
+                                                                    if (user) {
+                                                                        setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
+                                                                    } else {
+                                                                        setPendingOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
+                                                                        setShowAuthModal(true);
+                                                                    }
                                                                 }}
                                                                 className="btn"
                                                                 style={{
@@ -844,97 +938,105 @@ export default function Home() {
                 </div>
             )}
 
-            {/* Earn CTA */}
-            <Link href="/wallet" style={{ textDecoration: 'none' }}>
-                <div
-                    className="card"
-                    style={{ marginBottom: '24px', background: 'linear-gradient(90deg, rgba(39, 39, 42, 1) 0%, rgba(34,197,94,0.1) 100%)', border: '1px solid var(--primary)', cursor: 'pointer' }}
-                >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                            <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                💡 Have a Bet Idea?
-                            </h3>
-                            <p className="text-sm" style={{ margin: 0, color: '#e4e4e7' }}>Submit it and earn <span style={{ color: '#fff', fontWeight: 'bold' }}>$15.00</span> instantly!</p>
+
+
+            {/* Earn CTA - Hidden for Guests */}
+            {
+                user && (
+                    <Link href="/wallet" style={{ textDecoration: 'none' }}>
+                        <div
+                            className="card"
+                            style={{ marginBottom: '24px', background: 'linear-gradient(90deg, rgba(39, 39, 42, 1) 0%, rgba(34,197,94,0.1) 100%)', border: '1px solid var(--primary)', cursor: 'pointer' }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div>
+                                    <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        💡 Have a Bet Idea?
+                                    </h3>
+                                    <p className="text-sm" style={{ margin: 0, color: '#e4e4e7' }}>Submit it and earn <span style={{ color: '#fff', fontWeight: 'bold' }}>$15.00</span> instantly!</p>
+                                </div>
+                                <div style={{ fontSize: '24px', color: 'var(--primary)' }}>→</div>
+                            </div>
                         </div>
-                        <div style={{ fontSize: '24px', color: 'var(--primary)' }}>→</div>
-                    </div>
-                </div>
-            </Link>
+                    </Link>
+                )
+            }
 
             {/* --- Featured Events --- */}
-            {activeEvents.filter(e => e.featured).length > 0 && (
-                <div style={{ marginBottom: '40px' }}>
-                    <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: '#fbbf24' }}>
-                        <span style={{ fontSize: '24px' }}>🔥</span>
-                        Featured Bets
-                    </h2>
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                        gap: '20px',
-                        marginBottom: '40px'
-                    }}>
-                        {activeEvents.filter(e => e.featured).slice(0, 3).map(event => (
-                            <div
-                                key={event.id}
-                                className="card"
-                                onClick={() => setExpandedEvent(event)}
-                                style={{
-                                    border: '1px solid #fbbf24',
-                                    background: 'linear-gradient(145deg, var(--bg-card), rgba(251, 191, 36, 0.05))',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    cursor: 'pointer',
-                                    transition: 'transform 0.2s'
-                                }}
-                            >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                                    <span className="badge" style={{ background: '#fbbf24', color: '#000', fontWeight: 'bold' }}>FEATURED</span>
-                                    <span className="text-sm" style={{ color: '#fbbf24' }}>{new Date(event.startAt).toLocaleDateString()}</span>
-                                </div>
-                                <h3 style={{ fontSize: '18px', marginBottom: '8px', color: '#fbbf24', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</h3>
-                                <p className="text-sm" style={{ marginBottom: '16px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{event.description}</p>
+            {
+                activeEvents.filter(e => e.featured).length > 0 && (
+                    <div style={{ marginBottom: '40px' }}>
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: '#fbbf24' }}>
+                            <span style={{ fontSize: '24px' }}>🔥</span>
+                            Featured Bets
+                        </h2>
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                            gap: '20px',
+                            marginBottom: '40px'
+                        }}>
+                            {activeEvents.filter(e => e.featured).slice(0, 3).map(event => (
+                                <div
+                                    key={event.id}
+                                    className="card"
+                                    onClick={() => setExpandedEvent(event)}
+                                    style={{
+                                        border: '1px solid #fbbf24',
+                                        background: 'linear-gradient(145deg, var(--bg-card), rgba(251, 191, 36, 0.05))',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        cursor: 'pointer',
+                                        transition: 'transform 0.2s'
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                                        <span className="badge" style={{ background: '#fbbf24', color: '#000', fontWeight: 'bold' }}>FEATURED</span>
+                                        <span className="text-sm" style={{ color: '#fbbf24' }}>{new Date(event.startAt).toLocaleDateString()}</span>
+                                    </div>
+                                    <h3 style={{ fontSize: '18px', marginBottom: '8px', color: '#fbbf24', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</h3>
+                                    <p className="text-sm" style={{ marginBottom: '16px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{event.description}</p>
 
-                                <div style={{ marginTop: 'auto', textAlign: 'center', color: '#fbbf24', fontSize: '12px' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '6px' }}>
-                                        {event.outcomes.map(o => (
-                                            <span key={o.id} style={{ background: 'rgba(251, 191, 36, 0.2)', padding: '2px 8px', borderRadius: '4px' }}>
-                                                {o.label}: x{o.odds.toFixed(2)}
+                                    <div style={{ marginTop: 'auto', textAlign: 'center', color: '#fbbf24', fontSize: '12px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '6px' }}>
+                                            {event.outcomes.map(o => (
+                                                <span key={o.id} style={{ background: 'rgba(251, 191, 36, 0.2)', padding: '2px 8px', borderRadius: '4px' }}>
+                                                    {o.label}: x{o.odds.toFixed(2)}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {event.lastComment && (
+                                        <div style={{ marginTop: '8px', padding: '6px', background: 'rgba(251, 191, 36, 0.1)', borderRadius: '4px', textAlign: 'left', fontSize: '11px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                            <span style={{ fontWeight: 'bold' }}>{event.lastComment.username}:</span>
+                                            <span style={{ color: '#fbbf24', fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px' }}>
+                                                "{event.lastComment.text}"
                                             </span>
-                                        ))}
+                                        </div>
+                                    )}
+
+                                    <div style={{
+                                        marginTop: '12px',
+                                        paddingTop: '8px',
+                                        borderTop: '1px dashed rgba(251, 191, 36, 0.3)',
+                                        textAlign: 'center',
+                                        color: '#fbbf24',
+                                        fontSize: '11px',
+                                        fontWeight: 'bold',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px'
+                                    }}>
+                                        <span>👉 Click to Bet & View Trash Talk</span>
                                     </div>
                                 </div>
-
-                                {event.lastComment && (
-                                    <div style={{ marginTop: '8px', padding: '6px', background: 'rgba(251, 191, 36, 0.1)', borderRadius: '4px', textAlign: 'left', fontSize: '11px', display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                        <span style={{ fontWeight: 'bold' }}>{event.lastComment.username}:</span>
-                                        <span style={{ color: '#fbbf24', fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px' }}>
-                                            "{event.lastComment.text}"
-                                        </span>
-                                    </div>
-                                )}
-
-                                <div style={{
-                                    marginTop: '12px',
-                                    paddingTop: '8px',
-                                    borderTop: '1px dashed rgba(251, 191, 36, 0.3)',
-                                    textAlign: 'center',
-                                    color: '#fbbf24',
-                                    fontSize: '11px',
-                                    fontWeight: 'bold',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '6px'
-                                }}>
-                                    <span>👉 Click to Bet & View Trash Talk</span>
-                                </div>
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
 
             {/* --- Pending Resolution Events (Game Over) --- */}
@@ -1012,163 +1114,166 @@ export default function Home() {
             }
 
             {/* --- Active Events By Category --- */}
-            {(() => {
-                const grouped = {};
-                const categories = ['The Boys', 'The Fam', 'Sports', 'Video Games', 'Local/Community', 'Weather', 'Tech', 'Pop Culture', 'Other'];
-                categories.forEach(c => grouped[c] = []);
+            {
+                (() => {
+                    const grouped = {};
+                    const categories = ['The Boys', 'The Fam', 'Sports', 'Video Games', 'Local/Community', 'Weather', 'Tech', 'Pop Culture', 'Other'];
+                    categories.forEach(c => grouped[c] = []);
 
-                activeEvents.filter(e => !e.featured && e.category !== 'Super Bowl').forEach(e => {
-                    const cat = e.category || 'Sports';
-                    // If event has a category we don't track explicitly, dump it in 'Other' or create it?
-                    // For now, if it matches one of our private groups, it will be caught.
-                    if (grouped[cat]) {
-                        grouped[cat].push(e);
-                    } else {
-                        // Fallback handling if you add new categories later without updating this list
-                        if (!grouped['Other']) grouped['Other'] = [];
-                        grouped['Other'].push(e);
-                    }
-                });
+                    activeEvents.filter(e => !e.featured && e.category !== 'Super Bowl').forEach(e => {
+                        const cat = e.category || 'Sports';
+                        // If event has a category we don't track explicitly, dump it in 'Other' or create it?
+                        // For now, if it matches one of our private groups, it will be caught.
+                        if (grouped[cat]) {
+                            grouped[cat].push(e);
+                        } else {
+                            // Fallback handling if you add new categories later without updating this list
+                            if (!grouped['Other']) grouped['Other'] = [];
+                            grouped['Other'].push(e);
+                        }
+                    });
 
-                return Object.entries(grouped).map(([category, catEvents]) => {
-                    if (catEvents.length === 0) return null;
+                    return Object.entries(grouped).map(([category, catEvents]) => {
+                        if (catEvents.length === 0) return null;
 
-                    const isExpanded = expandedCategories[category];
-                    const isPrivate = ['The Boys', 'The Fam'].includes(category);
+                        const isExpanded = expandedCategories[category];
+                        const isPrivate = ['The Boys', 'The Fam'].includes(category);
 
-                    return (
-                        <div key={category} style={{ marginBottom: '40px' }}>
-                            <div
-                                style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', cursor: 'pointer' }}
-                                onClick={() => setExpandedCategories(prev => ({ ...prev, [category]: !prev[category] }))}
-                            >
-                                <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                                    <span style={{ width: '4px', height: '20px', background: isPrivate ? '#ef4444' : 'var(--primary)', borderRadius: '2px' }}></span>
-                                    {isPrivate && <span>🔒</span>}
-                                    {category}
-                                </h2>
-                                <button
-                                    className="btn btn-outline"
-                                    style={{
-                                        padding: '2px 8px',
-                                        fontSize: '12px',
-                                        height: '24px',
-                                        color: '#a1a1aa',
-                                        borderColor: '#3f3f46',
-                                        minWidth: '24px'
-                                    }}
+                        return (
+                            <div key={category} style={{ marginBottom: '40px' }}>
+                                <div
+                                    style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', cursor: 'pointer' }}
+                                    onClick={() => setExpandedCategories(prev => ({ ...prev, [category]: !prev[category] }))}
                                 >
-                                    {isExpanded ? '−' : '+'}
-                                </button>
-                                {!isExpanded && <span className="text-sm" style={{ color: '#52525b' }}>({catEvents.length} events hidden)</span>}
-                            </div>
-
-                            {isExpanded && (
-
-                                <div style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                                    gap: '20px'
-                                }}>
-                                    {catEvents.map((event) => (
-                                        <div
-                                            key={event.id}
-                                            className="card"
-                                            onClick={() => setExpandedEvent(event)}
-                                            style={{
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                cursor: 'pointer',
-                                                transition: 'transform 0.2s',
-                                                border: '1px solid var(--border)'
-                                            }}
-                                        >
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                                                <span className="badge" style={{ background: event.status === 'open' ? '#22c55e20' : '#eab30820', color: event.status === 'open' ? '#22c55e' : '#eab308' }}>
-                                                    {event.status === 'open' ? 'OPEN' : 'LOCKED'}
-                                                </span>
-                                                <span className="text-sm">{new Date(event.startAt).toLocaleDateString()}</span>
-                                            </div>
-
-                                            <h3 style={{ fontSize: '18px', marginBottom: '4px' }}>{event.title}</h3>
-                                            <p className="text-sm" style={{ marginBottom: '12px' }}>{event.description}</p>
-
-                                            <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', fontSize: '12px', background: 'var(--bg-input)', padding: '8px', borderRadius: '6px' }}>
-                                                <div style={{ flex: 1 }}>
-                                                    <div style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>🛑 Betting Closes:</div>
-                                                    <div style={{ color: 'var(--accent-loss)', fontWeight: 'bold' }}>
-                                                        {event.deadline ? new Date(event.deadline).toLocaleString() : 'No deadline'}
-                                                    </div>
-                                                </div>
-                                                <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: '16px' }}>
-                                                    <div style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>🏁 Resolution/Cashout:</div>
-                                                    <div style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
-                                                        {new Date(event.startAt).toLocaleString()}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                                {event.outcomes.map(outcome => {
-                                                    const stats = event.stats || {};
-                                                    const total = stats.totalBets || 0;
-                                                    const count = stats.counts?.[outcome.id] || 0;
-                                                    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-
-                                                    return (
-                                                        <button
-                                                            key={outcome.id}
-                                                            disabled={event.status !== 'open'}
-                                                            className="btn btn-outline"
-                                                            style={{
-                                                                display: 'flex', flexDirection: 'column', padding: '10px',
-                                                                borderColor: (selectedOutcome?.outcomeId === outcome.id && selectedOutcome?.eventId === event.id) ? 'var(--primary)' : 'var(--border)',
-                                                                background: (selectedOutcome?.outcomeId === outcome.id && selectedOutcome?.eventId === event.id) ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
-                                                                opacity: event.status !== 'open' ? 0.5 : 1,
-                                                                position: 'relative',
-                                                                overflow: 'hidden'
-                                                            }}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (user) {
-                                                                    setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
-                                                                } else {
-                                                                    alert("Login to bet!");
-                                                                }
-                                                            }}
-                                                        >
-                                                            <span style={{ fontSize: '14px', zIndex: 2 }}>{outcome.label}</span>
-                                                            <span style={{ color: 'var(--primary)', fontWeight: 'bold', zIndex: 2 }}>x{outcome.odds.toFixed(2)}</span>
-                                                            <span style={{ fontSize: '11px', color: '#a1a1aa', marginTop: '4px', zIndex: 2 }}>
-                                                                {pct}% picked
-                                                            </span>
-                                                            {/* Subtle progress bar background */}
-                                                            <div style={{
-                                                                position: 'absolute', bottom: 0, left: 0, height: '4px', width: `${pct}%`,
-                                                                background: 'var(--primary)', opacity: 0.5, transition: 'width 0.5s ease'
-                                                            }}></div>
-                                                        </button>
-                                                    )
-                                                })}
-                                            </div>
-                                            <div style={{ marginTop: '12px', textAlign: 'center', fontSize: '11px', color: '#52525b' }}>
-                                                {event.lastComment ? (
-                                                    <div style={{ padding: '6px', background: 'var(--bg-input)', borderRadius: '4px', textAlign: 'left', display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                                        <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{event.lastComment.username}:</span>
-                                                        <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
-                                                            "{event.lastComment.text}"
-                                                        </span>
-                                                    </div>
-                                                ) : "(Click card for Chat & Analysis)"}
-                                            </div>
-                                        </div>
-                                    ))}
+                                    <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                                        <span style={{ width: '4px', height: '20px', background: isPrivate ? '#ef4444' : 'var(--primary)', borderRadius: '2px' }}></span>
+                                        {isPrivate && <span>🔒</span>}
+                                        {category}
+                                    </h2>
+                                    <button
+                                        className="btn btn-outline"
+                                        style={{
+                                            padding: '2px 8px',
+                                            fontSize: '12px',
+                                            height: '24px',
+                                            color: '#a1a1aa',
+                                            borderColor: '#3f3f46',
+                                            minWidth: '24px'
+                                        }}
+                                    >
+                                        {isExpanded ? '−' : '+'}
+                                    </button>
+                                    {!isExpanded && <span className="text-sm" style={{ color: '#52525b' }}>({catEvents.length} events hidden)</span>}
                                 </div>
-                            )}
-                        </div>
-                    );
-                });
-            })()}
+
+                                {isExpanded && (
+
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                                        gap: '20px'
+                                    }}>
+                                        {catEvents.map((event) => (
+                                            <div
+                                                key={event.id}
+                                                className="card"
+                                                onClick={() => setExpandedEvent(event)}
+                                                style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    cursor: 'pointer',
+                                                    transition: 'transform 0.2s',
+                                                    border: '1px solid var(--border)'
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                                                    <span className="badge" style={{ background: event.status === 'open' ? '#22c55e20' : '#eab30820', color: event.status === 'open' ? '#22c55e' : '#eab308' }}>
+                                                        {event.status === 'open' ? 'OPEN' : 'LOCKED'}
+                                                    </span>
+                                                    <span className="text-sm">{new Date(event.startAt).toLocaleDateString()}</span>
+                                                </div>
+
+                                                <h3 style={{ fontSize: '18px', marginBottom: '4px' }}>{event.title}</h3>
+                                                <p className="text-sm" style={{ marginBottom: '12px' }}>{event.description}</p>
+
+                                                <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', fontSize: '12px', background: 'var(--bg-input)', padding: '8px', borderRadius: '6px' }}>
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>🛑 Betting Closes:</div>
+                                                        <div style={{ color: 'var(--accent-loss)', fontWeight: 'bold' }}>
+                                                            {event.deadline ? new Date(event.deadline).toLocaleString() : 'No deadline'}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: '16px' }}>
+                                                        <div style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>🏁 Resolution/Cashout:</div>
+                                                        <div style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
+                                                            {new Date(event.startAt).toLocaleString()}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                                    {event.outcomes.map(outcome => {
+                                                        const stats = event.stats || {};
+                                                        const total = stats.totalBets || 0;
+                                                        const count = stats.counts?.[outcome.id] || 0;
+                                                        const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+
+                                                        return (
+                                                            <button
+                                                                key={outcome.id}
+                                                                disabled={event.status !== 'open'}
+                                                                className="btn btn-outline"
+                                                                style={{
+                                                                    display: 'flex', flexDirection: 'column', padding: '10px',
+                                                                    borderColor: (selectedOutcome?.outcomeId === outcome.id && selectedOutcome?.eventId === event.id) ? 'var(--primary)' : 'var(--border)',
+                                                                    background: (selectedOutcome?.outcomeId === outcome.id && selectedOutcome?.eventId === event.id) ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
+                                                                    opacity: event.status !== 'open' ? 0.5 : 1,
+                                                                    position: 'relative',
+                                                                    overflow: 'hidden'
+                                                                }}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (user) {
+                                                                        setSelectedOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
+                                                                    } else {
+                                                                        setPendingOutcome({ eventId: event.id, outcomeId: outcome.id, odds: outcome.odds, label: outcome.label, eventTitle: event.title });
+                                                                        setShowAuthModal(true);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <span style={{ fontSize: '14px', zIndex: 2 }}>{outcome.label}</span>
+                                                                <span style={{ color: 'var(--primary)', fontWeight: 'bold', zIndex: 2 }}>x{outcome.odds.toFixed(2)}</span>
+                                                                <span style={{ fontSize: '11px', color: '#a1a1aa', marginTop: '4px', zIndex: 2 }}>
+                                                                    {pct}% picked
+                                                                </span>
+                                                                {/* Subtle progress bar background */}
+                                                                <div style={{
+                                                                    position: 'absolute', bottom: 0, left: 0, height: '4px', width: `${pct}%`,
+                                                                    background: 'var(--primary)', opacity: 0.5, transition: 'width 0.5s ease'
+                                                                }}></div>
+                                                            </button>
+                                                        )
+                                                    })}
+                                                </div>
+                                                <div style={{ marginTop: '12px', textAlign: 'center', fontSize: '11px', color: '#52525b' }}>
+                                                    {event.lastComment ? (
+                                                        <div style={{ padding: '6px', background: 'var(--bg-input)', borderRadius: '4px', textAlign: 'left', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                                            <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{event.lastComment.username}:</span>
+                                                            <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
+                                                                "{event.lastComment.text}"
+                                                            </span>
+                                                        </div>
+                                                    ) : "(Click card for Chat & Analysis)"}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    });
+                })()
+            }
 
             {/* --- Finished Events --- */}
             {
@@ -1363,10 +1468,17 @@ export default function Home() {
                                                     setSelectedOutcome({ eventId: expandedEvent.id, outcomeId: outcome.id, label: outcome.label, odds: outcome.odds, title: expandedEvent.title });
                                                     setExpandedEvent(null);
                                                 } else {
-                                                    alert("Login to bet!");
+                                                    // Close expanded event mostly? Or keep it?
+                                                    // Better to keep intent.
+                                                    setPendingOutcome({ eventId: expandedEvent.id, outcomeId: outcome.id, label: outcome.label, odds: outcome.odds, title: expandedEvent.title });
+                                                    setExpandedEvent(null); // Close the detail view to show auth? Or does modal appear on top?
+                                                    // Auth Modal has zIndex 9999, so it appears on top.
+                                                    // But if we go to Login Screen, ExpandedEvent is lost?
+                                                    // ExpandedEvent is state. It persists.
+                                                    // So we can just show auth modal.
+                                                    setShowAuthModal(true);
                                                 }
-                                            }}
-                                            className="btn btn-outline"
+                                            }} className="btn btn-outline"
                                             style={{
                                                 borderColor: '#fbbf24',
                                                 color: '#fbbf24',
@@ -1391,8 +1503,8 @@ export default function Home() {
                             <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #333' }}>
                                 <h3 style={{ fontSize: '16px', marginBottom: '12px', color: '#a1a1aa' }}>Trash Talk 🗣️</h3>
                                 <div ref={chatContainerRef} style={{ maxHeight: '150px', overflowY: 'auto', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    {comments.length === 0 && <p className="text-sm">No chatter yet. Start the beef!</p>}
-                                    {comments.map(c => (
+                                    {eventComments.length === 0 && <p className="text-sm">No chatter yet. Start the beef!</p>}
+                                    {eventComments.map(c => (
                                         <div key={c.id} style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px', position: 'relative' }}>
                                             {user && user.role === 'admin' && (
                                                 <button
@@ -1529,33 +1641,35 @@ export default function Home() {
             }
 
             {/* --- Profile Nudge Modal --- */}
-            {showProfileNudge && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-                    background: 'rgba(0,0,0,0.85)', zIndex: 2001,
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px'
-                }}>
-                    <div className="card animate-fade" style={{ maxWidth: '350px', textAlign: 'center', border: '1px solid var(--primary)', background: '#09090b' }}>
-                        <div style={{ fontSize: '48px', marginBottom: '16px' }}>📸</div>
-                        <h2 style={{ fontSize: '20px', color: '#fff', marginBottom: '8px' }}>One small thing...</h2>
-                        <p style={{ marginBottom: '20px', lineHeight: '1.5', color: '#a1a1aa', fontSize: '14px' }}>
-                            Did you know you can customize your profile? Adding a <b>Bio</b> and <b>Picture</b> helps you stand out on the Leaderboard!
-                        </p>
-                        <div style={{ display: 'flex', gap: '12px' }}>
-                            <button
-                                className="btn"
-                                onClick={() => setShowProfileNudge(false)}
-                                style={{ flex: 1, background: 'transparent', border: '1px solid #333', color: '#888' }}
-                            >
-                                Maybe Later
-                            </button>
-                            <Link href="/profile" className="btn btn-primary" style={{ flex: 1, textDecoration: 'none' }}>
-                                Let's Do It!
-                            </Link>
+            {
+                showProfileNudge && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                        background: 'rgba(0,0,0,0.85)', zIndex: 2001,
+                        display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px'
+                    }}>
+                        <div className="card animate-fade" style={{ maxWidth: '350px', textAlign: 'center', border: '1px solid var(--primary)', background: '#09090b' }}>
+                            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📸</div>
+                            <h2 style={{ fontSize: '20px', color: '#fff', marginBottom: '8px' }}>One small thing...</h2>
+                            <p style={{ marginBottom: '20px', lineHeight: '1.5', color: '#a1a1aa', fontSize: '14px' }}>
+                                Did you know you can customize your profile? Adding a <b>Bio</b> and <b>Picture</b> helps you stand out on the Leaderboard!
+                            </p>
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <button
+                                    className="btn"
+                                    onClick={() => setShowProfileNudge(false)}
+                                    style={{ flex: 1, background: 'transparent', border: '1px solid #333', color: '#888' }}
+                                >
+                                    Maybe Later
+                                </button>
+                                <Link href="/profile" className="btn btn-primary" style={{ flex: 1, textDecoration: 'none' }}>
+                                    Let's Do It!
+                                </Link>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* --- Welcome Modal --- */}
             {
@@ -1594,59 +1708,70 @@ export default function Home() {
                     onClick={() => setShowChangelog(true)}
                     style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', textDecoration: 'underline', fontSize: '11px' }}
                 >
-                    System V0.87
+                    System V0.88
                 </button>
             </div>
 
             {/* --- CHANGELOG MODAL --- */}
-            {showChangelog && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-                    background: 'rgba(0,0,0,0.85)', zIndex: 2002,
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px'
-                }} onClick={() => setShowChangelog(false)}>
-                    <div className="card animate-fade" style={{ maxWidth: '500px', width: '100%', maxHeight: '80vh', overflowY: 'auto', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border)', paddingBottom: '16px' }}>
-                            <h2 style={{ fontSize: '20px', fontWeight: 'bold' }}>System Updates</h2>
-                            <button onClick={() => setShowChangelog(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px' }}>&times;</button>
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                            <div>
-                                <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '8px' }}>Version 0.87 <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>(Current)</span></h3>
-                                <ul style={{ paddingLeft: '20px', color: '#d4d4d8', fontSize: '14px', lineHeight: '1.6' }}>
-                                    <li><b>Mobile Experience:</b> Added "Add to Home Screen" support for a native app-like experience on iOS and Android.</li>
-                                    <li><b>New Logo:</b> Updated app icon for sharper look on home screens.</li>
-                                    <li><b>UI Polish:</b> Fixed banner overflow issues on mobile devices and improved layout responsiveness.</li>
-                                    <li><b>System:</b> Restored version tracking footer.</li>
-                                </ul>
+            {
+                showChangelog && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                        background: 'rgba(0,0,0,0.85)', zIndex: 2002,
+                        display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px'
+                    }} onClick={() => setShowChangelog(false)}>
+                        <div className="card animate-fade" style={{ maxWidth: '500px', width: '100%', maxHeight: '80vh', overflowY: 'auto', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border)', paddingBottom: '16px' }}>
+                                <h2 style={{ fontSize: '20px', fontWeight: 'bold' }}>System Updates</h2>
+                                <button onClick={() => setShowChangelog(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px' }}>&times;</button>
                             </div>
 
-                            <div>
-                                <h3 style={{ fontSize: '16px', color: '#a1a1aa', marginBottom: '8px' }}>Version 0.85</h3>
-                                <ul style={{ paddingLeft: '20px', color: '#a1a1aa', fontSize: '14px', lineHeight: '1.6' }}>
-                                    <li><b>Betting Streaks:</b> Added daily streak tracking. Build your streak by betting on consecutive days! 🔥</li>
-                                    <li><b>Advanced Stats:</b> "My Bets" now features a detailed dashboard with Win Rate, Profit, and Biggest Win analysis.</li>
-                                    <li><b>Leaderboard Upgrades:</b> Visual indicators for active streaks.</li>
-                                    <li><b>Performance:</b> Improved real-time chat sync and stats updates.</li>
-                                </ul>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                <div>
+                                    <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '8px' }}>Version 0.88 <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>(Current)</span></h3>
+                                    <ul style={{ paddingLeft: '20px', color: '#d4d4d8', fontSize: '14px', lineHeight: '1.6' }}>
+                                        <li><b>Guest Mode:</b> Browse events, check the leaderboard, and explore the app without needing an account.</li>
+                                        <li><b>Seamless Login:</b> Try to bet as a guest? We'll prompt you to login and place that bet for you instantly.</li>
+                                        <li><b>Refined UI:</b> Cleaner home screen for guests avoiding clutter until you sign in.</li>
+                                    </ul>
+                                </div>
+
+                                <div>
+                                    <h3 style={{ fontSize: '16px', color: '#a1a1aa', marginBottom: '8px' }}>Version 0.87</h3>
+                                    <ul style={{ paddingLeft: '20px', color: '#a1a1aa', fontSize: '14px', lineHeight: '1.6' }}>
+                                        <li><b>Mobile Experience:</b> Added "Add to Home Screen" support for a native app-like experience on iOS and Android.</li>
+                                        <li><b>New Logo:</b> Updated app icon for sharper look on home screens.</li>
+                                        <li><b>UI Polish:</b> Fixed banner overflow issues on mobile devices and improved layout responsiveness.</li>
+                                        <li><b>System:</b> Restored version tracking footer.</li>
+                                    </ul>
+                                </div>
+
+                                <div>
+                                    <h3 style={{ fontSize: '16px', color: '#a1a1aa', marginBottom: '8px' }}>Version 0.85</h3>
+                                    <ul style={{ paddingLeft: '20px', color: '#a1a1aa', fontSize: '14px', lineHeight: '1.6' }}>
+                                        <li><b>Betting Streaks:</b> Added daily streak tracking. Build your streak by betting on consecutive days! 🔥</li>
+                                        <li><b>Advanced Stats:</b> "My Bets" now features a detailed dashboard with Win Rate, Profit, and Biggest Win analysis.</li>
+                                        <li><b>Leaderboard Upgrades:</b> Visual indicators for active streaks.</li>
+                                        <li><b>Performance:</b> Improved real-time chat sync and stats updates.</li>
+                                    </ul>
+                                </div>
+
+                                <div>
+                                    <h3 style={{ fontSize: '16px', color: '#a1a1aa', marginBottom: '8px' }}>Version 0.80</h3>
+                                    <ul style={{ paddingLeft: '20px', color: '#a1a1aa', fontSize: '14px', lineHeight: '1.6' }}>
+                                        <li><b>Private Groups:</b> Added support for group-restricted events (e.g., "The Boys").</li>
+                                        <li><b>Security:</b> Enhanced admin tools and event management.</li>
+                                    </ul>
+                                </div>
                             </div>
 
-                            <div>
-                                <h3 style={{ fontSize: '16px', color: '#a1a1aa', marginBottom: '8px' }}>Version 0.80</h3>
-                                <ul style={{ paddingLeft: '20px', color: '#a1a1aa', fontSize: '14px', lineHeight: '1.6' }}>
-                                    <li><b>Private Groups:</b> Added support for group-restricted events (e.g., "The Boys").</li>
-                                    <li><b>Security:</b> Enhanced admin tools and event management.</li>
-                                </ul>
+                            <div style={{ marginTop: '24px', textAlign: 'center' }}>
+                                <button className="btn" onClick={() => setShowChangelog(false)} style={{ background: '#333' }}>Close</button>
                             </div>
-                        </div>
-
-                        <div style={{ marginTop: '24px', textAlign: 'center' }}>
-                            <button className="btn" onClick={() => setShowChangelog(false)} style={{ background: '#333' }}>Close</button>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
         </div >
     );
 }

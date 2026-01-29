@@ -13,7 +13,7 @@ export default function Leaderboard() {
     const [weeklyData, setWeeklyData] = useState([]);
 
     useEffect(() => {
-        if (isLoaded && !user) router.push('/');
+        // if (isLoaded && !user) router.push('/'); // Allow guest view
     }, [user, isLoaded, router]);
 
     useEffect(() => {
@@ -103,7 +103,10 @@ export default function Leaderboard() {
                         <div
                             key={player.id}
                             className="card"
-                            onClick={() => setViewingUser(player)}
+                            onClick={() => {
+                                if (user) setViewingUser(player);
+                                else alert("Login to view player stats!"); // Simple prompt as requested
+                            }}
                             style={{
                                 display: 'flex',
                                 justifyContent: 'space-between',
