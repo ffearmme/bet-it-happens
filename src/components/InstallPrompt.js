@@ -1,16 +1,15 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { X, Share, PlusSquare } from 'lucide-react';
-import { useAppContext } from '../lib/store'; // Import context to check login
+import { useAppContext } from '../lib/store';
 
 export default function InstallPrompt() {
-    const { user } = useAppContext(); // Get user state
+    const { user } = useAppContext();
     const [showPrompt, setShowPrompt] = useState(false);
     const [platform, setPlatform] = useState(null); // 'ios' | 'android'
     const [deferredPrompt, setDeferredPrompt] = useState(null);
 
     useEffect(() => {
-        // Only run logic if user is logged in
         if (!user) return;
 
         // 1. Check if already installed (Standalone mode)
@@ -33,35 +32,24 @@ export default function InstallPrompt() {
             setPlatform('ios');
             setShowPrompt(true);
         } else if (isAndroid) {
-            // Check if we already have a deferred prompt from earlier
-            // Note: deferredPrompt might be captured *before* login if we listen globally, 
-            // but for simplicity, we listen here. If the event fired before this component mounted/login,
-            // we might miss it unless we capture it globally. 
-            // However, browsers usually fire it on page load. 
-            // Since this component is ALWAYS in Layout, it just wasn't showing.
-            // We need to move the event listener OUTSIDE the user check or persist it.
-
-            // Actually, let's keep the listener active but only SHOW if logged in.
+            // Android detection logic remains the same (waiting for event or forcing if already captured)
+            // If we already have the event from the global listener, show it.
         }
-    }, [user]); // Re-run when user logs in
+    }, [user]);
 
-    // Capture event globally (independent of login status) so we don't miss it
+    // Capture event globally
     useEffect(() => {
         const handleBeforeInstallPrompt = (e) => {
             e.preventDefault();
             setDeferredPrompt(e);
-
-            // If user is ALREADY logged in when this fires (rare, usually fires on load), trigger logic
-            // But main logic is in the other effect.
         };
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
         return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     }, []);
 
-    // Sync deferredPrompt with showPrompt when user logs in
+    // Sync deferredPrompt with showPrompt
     useEffect(() => {
         if (user && deferredPrompt) {
-            // Check dismissal again here to be safe
             const lastDismissed = localStorage.getItem('installPromptDismissed');
             let onCooldown = false;
             if (lastDismissed) {
@@ -94,39 +82,158 @@ export default function InstallPrompt() {
 
     if (!showPrompt) return null;
 
+    // Inline Styles Replacements for Tailwind classes
+    const styles = {
+        overlay: {
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            animation: 'fadeIn 0.3s ease-out'
+        },
+        card: {
+            backgroundColor: '#1a1b1e',
+            width: '100%',
+            maxWidth: '380px',
+            borderRadius: '16px',
+            border: '1px solid #27272a',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            position: 'relative',
+            overflow: 'hidden',
+            animation: 'zoomIn 0.3s ease-out'
+        },
+        closeBtn: {
+            position: 'absolute',
+            top: '12px',
+            right: '12px',
+            background: 'transparent',
+            border: 'none',
+            color: '#9ca3af',
+            cursor: 'pointer',
+            padding: '4px',
+            zIndex: 10
+        },
+        content: {
+            padding: '24px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center'
+        },
+        iconBox: {
+            width: '80px',
+            height: '80px',
+            background: 'linear-gradient(135deg, #2563eb, #4338ca)',
+            borderRadius: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontWeight: 'bold',
+            fontSize: '32px',
+            marginBottom: '16px',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)'
+        },
+        title: {
+            fontSize: '20px',
+            fontWeight: 'bold',
+            color: 'white',
+            marginBottom: '8px'
+        },
+        description: {
+            color: '#9ca3af',
+            fontSize: '14px',
+            marginBottom: '24px',
+            lineHeight: '1.5'
+        },
+        iosSteps: {
+            width: '100%',
+            backgroundColor: 'rgba(31, 41, 55, 0.5)',
+            padding: '16px',
+            borderRadius: '12px',
+            border: '1px solid rgba(55, 65, 81, 0.5)',
+            textAlign: 'left',
+            marginBottom: '8px'
+        },
+        stepRow: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            fontSize: '14px',
+            color: '#e5e7eb',
+            marginBottom: '12px'
+        },
+        stepNum: {
+            width: '24px',
+            height: '24px',
+            backgroundColor: '#374151',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            flexShrink: 0
+        },
+        actionBtn: {
+            width: '100%',
+            padding: '14px',
+            backgroundColor: '#2563eb',
+            color: 'white',
+            fontWeight: 'bold',
+            borderRadius: '12px',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '16px',
+            boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)',
+            transition: 'background 0.2s'
+        }
+    };
+
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-300">
-            <div className="bg-[#1a1b1e] w-full max-w-sm rounded-2xl border border-gray-800 shadow-2xl overflow-hidden relative animate-in zoom-in-95 duration-300">
+        <div style={styles.overlay}>
+            <style>{`
+                @keyframes zoomIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+            `}</style>
+            <div style={styles.card}>
                 <button
                     onClick={handleDismiss}
-                    className="absolute top-2 right-2 p-2 text-gray-400 hover:text-white transition-colors z-10"
+                    style={styles.closeBtn}
                     aria-label="Dismiss"
                 >
                     <X size={20} />
                 </button>
 
-                <div className="p-6 flex flex-col items-center text-center">
-                    <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex items-center justify-center text-white font-bold text-4xl shadow-lg mb-4">
+                <div style={styles.content}>
+                    <div style={styles.iconBox}>
                         B
                     </div>
 
-                    <h3 className="text-xl font-bold text-white mb-2">Get the App Experience</h3>
-                    <p className="text-gray-400 text-sm mb-6 leading-relaxed">
+                    <h3 style={styles.title}>Get the App Experience</h3>
+                    <p style={styles.description}>
                         Install Bet It Happens to your home screen for full-screen betting, faster access, and a smoother experience—just like a native app.
                     </p>
 
                     {platform === 'ios' && (
-                        <div className="w-full bg-gray-800/50 p-4 rounded-xl border border-gray-700/50 space-y-3 text-left">
-                            <div className="flex items-center gap-3 text-sm text-gray-200">
-                                <span className="flex-shrink-0 w-6 h-6 bg-gray-700 rounded-full flex items-center justify-center text-xs font-bold">1</span>
-                                <span className="flex items-center gap-1.5 flex-wrap">
-                                    Tap <Share size={16} className="text-blue-400" /> <span className="font-semibold">Share</span>
+                        <div style={styles.iosSteps}>
+                            <div style={styles.stepRow}>
+                                <span style={styles.stepNum}>1</span>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                    Tap <Share size={16} color="#60a5fa" /> <span style={{ fontWeight: 600 }}>Share</span>
                                 </span>
                             </div>
-                            <div className="flex items-center gap-3 text-sm text-gray-200">
-                                <span className="flex-shrink-0 w-6 h-6 bg-gray-700 rounded-full flex items-center justify-center text-xs font-bold">2</span>
-                                <span className="flex items-center gap-1.5 flex-wrap">
-                                    Select <PlusSquare size={16} className="text-gray-300" /> <span className="font-semibold">Add to Home Screen</span>
+                            <div style={{ ...styles.stepRow, marginBottom: 0 }}>
+                                <span style={styles.stepNum}>2</span>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                    Select <PlusSquare size={16} color="#d1d5db" /> <span style={{ fontWeight: 600 }}>Add to Home Screen</span>
                                 </span>
                             </div>
                         </div>
@@ -135,7 +242,9 @@ export default function InstallPrompt() {
                     {platform === 'android' && (
                         <button
                             onClick={handleInstallClick}
-                            className="w-full py-3 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold rounded-xl transition-colors shadow-lg shadow-blue-900/20"
+                            style={styles.actionBtn}
+                            onMouseOver={e => e.target.style.backgroundColor = '#1d4ed8'}
+                            onMouseOut={e => e.target.style.backgroundColor = '#2563eb'}
                         >
                             Add to Home Screen
                         </button>
