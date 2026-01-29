@@ -205,6 +205,7 @@ h2 {
   align-items: center;
   gap: 8px;
   box-shadow: 0 2px 10px rgba(234, 179, 8, 0.2);
+  flex-wrap: wrap;
 }
 
 .beta-tag {

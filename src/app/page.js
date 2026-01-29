@@ -405,9 +405,10 @@ export default function Home() {
                     gap: '4px',
                     color: '#fff',
                     textAlign: 'center',
-                    animation: 'slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                    maxWidth: '100%', // Ensure it doesn't exceed parent
+                    boxSizing: 'border-box' // Ensure padding is included in width
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px', flexWrap: 'wrap', justifyContent: 'center' }}>
                         <span style={{ fontSize: '20px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }}>
                             {systemAnnouncement.type === 'warning' ? '⚠️' : systemAnnouncement.type === 'success' ? '🔥' : '📢'}
                         </span>
@@ -423,7 +424,7 @@ export default function Home() {
                         </span>
                     </div>
 
-                    <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', lineHeight: '1.4', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                    <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', lineHeight: '1.4', textShadow: '0 1px 2px rgba(0,0,0,0.5)', wordBreak: 'break-word', maxWidth: '100%' }}>
                         {systemAnnouncement.message}
                     </p>
                 </div>
