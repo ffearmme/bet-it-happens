@@ -1,7 +1,12 @@
 "use client";
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useApp } from '../../lib/store';
 
 export default function Rules() {
+    const { user, setIsGuestMode } = useApp();
+    const router = useRouter();
+
     return (
         <div className="container animate-fade" style={{ paddingTop: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
@@ -10,6 +15,32 @@ export default function Rules() {
                     &larr; Back Home
                 </Link>
             </div>
+
+            {/* --- GUEST MODE BANNER --- */}
+            {!user && (
+                <div
+                    onClick={() => {
+                        setIsGuestMode(false);
+                        router.push('/');
+                    }}
+                    style={{
+                        background: 'linear-gradient(90deg, #f59e0b, #d97706)',
+                        cursor: 'pointer',
+                        padding: '12px',
+                        borderRadius: '12px',
+                        marginBottom: '24px',
+                        textAlign: 'center',
+                        boxShadow: '0 4px 15px rgba(245, 158, 11, 0.3)',
+                        border: '1px solid #fbbf24',
+                        animation: 'pulse 2s infinite'
+                    }}
+                >
+                    <p style={{ margin: 0, color: '#000', fontWeight: 'bold', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                        <span>👀 Viewing as Guest.</span>
+                        <span style={{ background: '#fff', padding: '2px 8px', borderRadius: '4px', color: '#d97706' }}>Sign Up = $1000 Free! 💰</span>
+                    </p>
+                </div>
+            )}
 
             <div className="card">
                 <h2>🎲 What is this site?</h2>
@@ -29,6 +60,16 @@ export default function Rules() {
                     <br />
                     Once you place a bet on an outcome (e.g., "Yes"), you cannot hedge your bets by betting on the other side.
                     You can add more money to your original position, but switching sides is forbidden.
+                </p>
+            </div>
+
+            <div className="card">
+                <h2>🔒 Fixed Odds Guarantee</h2>
+                <p style={{ lineHeight: '1.6', color: '#d1d5db' }}>
+                    <strong>What you see is what you get.</strong>
+                    <br />
+                    Once the first bet has been placed on an event, the odds are <strong>LOCKED</strong>.
+                    They will never change, ensuring fairness for early and late bettors alike.
                 </p>
             </div>
 

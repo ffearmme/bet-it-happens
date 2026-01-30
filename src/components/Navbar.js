@@ -1,11 +1,12 @@
 "use client";
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useApp } from '../lib/store';
 
 export default function Navbar() {
-    const { user, isGuestMode } = useApp();
+    const { user, isGuestMode, setIsGuestMode } = useApp();
     const pathname = usePathname();
+    const router = useRouter();
 
     // Hide tabs ONLY if not logged in AND not in guest browsing mode
     if (!user && !isGuestMode) return null; // Logic requested by user
@@ -20,6 +21,22 @@ export default function Navbar() {
                 </svg>
                 <span>Home</span>
             </Link>
+
+            {!user && (
+                <button
+                    onClick={() => {
+                        setIsGuestMode(false);
+                        if (pathname !== '/') router.push('/');
+                    }}
+                    className="nav-item"
+                    style={{ color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                    <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="nav-icon">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                    </svg>
+                    <span style={{ fontWeight: 'bold' }}>Sign Up</span>
+                </button>
+            )}
 
             {user && (
                 <Link href="/bets" className={`nav-item ${isActive('/bets') ? 'active' : ''}`}>

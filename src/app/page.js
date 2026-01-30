@@ -34,6 +34,11 @@ export default function Home() {
     const [showProfileNudge, setShowProfileNudge] = useState(false);
     const [streakNotification, setStreakNotification] = useState(null);
     const [showChangelog, setShowChangelog] = useState(false);
+    const [showResolution, setShowResolution] = useState(false);
+
+    useEffect(() => {
+        if (expandedEvent) setShowResolution(false);
+    }, [expandedEvent]);
 
     // Guest Mode State
     // const [isGuestMode, setIsGuestMode] = useState(false); // Removed local state
@@ -512,6 +517,30 @@ export default function Home() {
                     </p>
                 </div>
             )}
+            {/* --- GUEST MODE BANNER --- */}
+            {!user && (
+                <div
+                    onClick={() => setIsGuestMode(false)}
+                    style={{
+                        background: 'linear-gradient(90deg, #f59e0b, #d97706)',
+                        cursor: 'pointer',
+                        padding: '12px',
+                        borderRadius: '12px',
+                        marginBottom: '24px',
+                        marginTop: '10px',
+                        textAlign: 'center',
+                        boxShadow: '0 4px 15px rgba(245, 158, 11, 0.3)',
+                        border: '1px solid #fbbf24',
+                        animation: 'pulse 2s infinite'
+                    }}
+                >
+                    <p style={{ margin: 0, color: '#000', fontWeight: 'bold', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                        <span>👀 Viewing as Guest.</span>
+                        <span style={{ background: '#fff', padding: '2px 8px', borderRadius: '4px', color: '#d97706' }}>Sign Up = $1000 Free! 💰</span>
+                    </p>
+                </div>
+            )}
+
             <header style={{ marginBottom: '32px', paddingTop: '10px' }}>
 
 
@@ -642,6 +671,11 @@ export default function Home() {
                                                 <div style={{ textAlign: 'left' }}>
                                                     <h3 style={{ fontSize: '22px', color: '#fff', marginBottom: '6px', fontWeight: 'bold' }}>{event.title}</h3>
                                                     <p style={{ fontSize: '13px', color: '#a1a1aa' }}>{event.description}</p>
+                                                    {event.createdBy && (
+                                                        <p style={{ fontSize: '10px', color: 'var(--primary)', fontStyle: 'italic', marginTop: '4px' }}>
+                                                            Created by {event.createdBy}
+                                                        </p>
+                                                    )}
                                                 </div>
                                                 <div style={{ textAlign: 'right', minWidth: '80px' }}>
                                                     <div style={{ fontSize: '11px', color: '#ef4444', fontWeight: 'bold', textTransform: 'uppercase' }}>ENDS IN</div>
@@ -833,6 +867,11 @@ export default function Home() {
                                                         <div style={{ textAlign: 'left', overflow: 'hidden' }}>
                                                             <h3 style={{ fontSize: '18px', color: '#fff', marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{event.title}</h3>
                                                             <p style={{ fontSize: '13px', color: '#a1a1aa' }}>{event.description}</p>
+                                                            {event.createdBy && (
+                                                                <p style={{ fontSize: '10px', color: 'var(--primary)', fontStyle: 'italic', marginTop: '2px' }}>
+                                                                    By {event.createdBy}
+                                                                </p>
+                                                            )}
                                                         </div>
                                                     </div>
 
@@ -992,10 +1031,24 @@ export default function Home() {
                                 >
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                                         <span className="badge" style={{ background: '#fbbf24', color: '#000', fontWeight: 'bold' }}>FEATURED</span>
-                                        <span className="text-sm" style={{ color: '#fbbf24' }}>{new Date(event.startAt).toLocaleDateString()}</span>
+                                        <div style={{ textAlign: 'right' }}>
+                                            {event.deadline && (
+                                                <div className="text-sm" style={{ color: '#fbbf24', fontSize: '11px', fontWeight: 'bold' }}>
+                                                    Closes: {new Date(event.deadline).toLocaleDateString()}
+                                                </div>
+                                            )}
+                                            <div className="text-sm" style={{ color: '#fbbf24', opacity: 0.8, fontSize: '10px' }}>
+                                                Resolves: {new Date(event.startAt).toLocaleDateString()}
+                                            </div>
+                                        </div>
                                     </div>
                                     <h3 style={{ fontSize: '18px', marginBottom: '8px', color: '#fbbf24', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</h3>
                                     <p className="text-sm" style={{ marginBottom: '16px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{event.description}</p>
+                                    {event.createdBy && (
+                                        <p style={{ fontSize: '10px', color: '#fbbf24', fontStyle: 'italic', marginBottom: '8px' }}>
+                                            Created by {event.createdBy}
+                                        </p>
+                                    )}
 
                                     <div style={{ marginTop: 'auto', textAlign: 'center', color: '#fbbf24', fontSize: '12px' }}>
                                         <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '6px' }}>
@@ -1195,6 +1248,11 @@ export default function Home() {
 
                                                 <h3 style={{ fontSize: '18px', marginBottom: '4px' }}>{event.title}</h3>
                                                 <p className="text-sm" style={{ marginBottom: '12px' }}>{event.description}</p>
+                                                {event.createdBy && (
+                                                    <p style={{ fontSize: '10px', color: 'var(--primary)', fontStyle: 'italic', marginBottom: '8px' }}>
+                                                        Created by {event.createdBy}
+                                                    </p>
+                                                )}
 
                                                 <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', fontSize: '12px', background: 'var(--bg-input)', padding: '8px', borderRadius: '6px' }}>
                                                     <div style={{ flex: 1 }}>
@@ -1428,7 +1486,43 @@ export default function Home() {
                                 <h2 style={{ color: '#fbbf24', margin: 0, fontSize: '20px' }}>{expandedEvent.title}</h2>
                                 <button onClick={() => setExpandedEvent(null)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer' }}>&times;</button>
                             </div>
-                            <p style={{ marginBottom: '24px', lineHeight: '1.5' }}>{expandedEvent.description}</p>
+                            <p style={{ marginBottom: '12px', lineHeight: '1.5' }}>{expandedEvent.description}</p>
+
+                            {/* Resolution Criteria Toggle */}
+                            {expandedEvent.resolutionCriteria && (
+                                <div style={{ marginBottom: '24px' }}>
+                                    <button
+                                        onClick={() => setShowResolution(!showResolution)}
+                                        style={{
+                                            background: 'transparent',
+                                            border: 'none',
+                                            color: 'var(--primary)',
+                                            fontSize: '12px',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            padding: 0,
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        {showResolution ? 'Hide Resolution Rules' : 'How This Resolves ℹ️'}
+                                    </button>
+                                    {showResolution && (
+                                        <div className="animate-fade" style={{
+                                            marginTop: '8px',
+                                            padding: '12px',
+                                            background: 'rgba(34, 197, 94, 0.1)',
+                                            borderLeft: '2px solid var(--primary)',
+                                            fontSize: '13px',
+                                            color: '#d1d5db',
+                                            lineHeight: '1.4'
+                                        }}>
+                                            {expandedEvent.resolutionCriteria}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             {/* Expiration Check */}
                             {(now >= (expandedEvent.deadline ? getDate(expandedEvent.deadline) : getDate(expandedEvent.startAt))) && (
@@ -1708,7 +1802,7 @@ export default function Home() {
                     onClick={() => setShowChangelog(true)}
                     style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', textDecoration: 'underline', fontSize: '11px' }}
                 >
-                    System V0.88
+                    System V0.89
                 </button>
             </div>
 
@@ -1728,8 +1822,17 @@ export default function Home() {
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                 <div>
-                                    <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '8px' }}>Version 0.88 <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>(Current)</span></h3>
+                                    <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '8px' }}>Version 0.89 <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>(Current)</span></h3>
                                     <ul style={{ paddingLeft: '20px', color: '#d4d4d8', fontSize: '14px', lineHeight: '1.6' }}>
+                                        <li><b>Resolution Transparency:</b> Added "How This Resolves" info to bets so you know exactly what determines the winner. ℹ️</li>
+                                        <li><b>Guest Mode Enhanced:</b> Better banners and simpler navigation for visiting users.</li>
+                                        <li><b>Admin Stability:</b> Fixed issues with event editing overwriting new drafts.</li>
+                                    </ul>
+                                </div>
+
+                                <div>
+                                    <h3 style={{ fontSize: '16px', color: '#a1a1aa', marginBottom: '8px' }}>Version 0.88</h3>
+                                    <ul style={{ paddingLeft: '20px', color: '#a1a1aa', fontSize: '14px', lineHeight: '1.6' }}>
                                         <li><b>Guest Mode:</b> Browse events, check the leaderboard, and explore the app without needing an account.</li>
                                         <li><b>Seamless Login:</b> Try to bet as a guest? We'll prompt you to login and place that bet for you instantly.</li>
                                         <li><b>Refined UI:</b> Cleaner home screen for guests avoiding clutter until you sign in.</li>

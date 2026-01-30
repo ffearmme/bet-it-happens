@@ -9,9 +9,15 @@ import { collection, query, limit, onSnapshot } from 'firebase/firestore';
 export default function Admin() {
     const { user, events, createEvent, resolveEvent, deleteEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, toggleFeatured, ideas, deleteIdea, users, deleteUser, updateUserGroups, syncEventStats, recalculateLeaderboard, backfillLastBetPercent, isLoaded, updateSystemAnnouncement, systemAnnouncement } = useApp();
     const router = useRouter();
+
+    // State for Creating Events
     const [newEvent, setNewEvent] = useState({
-        title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Uncategorized'
+        title: '', description: '', resolutionCriteria: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Uncategorized', createdBy: ''
     });
+
+    // State for Editing Events (Separated to avoid conflicts)
+    const [editingEvent, setEditingEvent] = useState(null);
+
     const [editingId, setEditingId] = useState(null);
     const [showRules, setShowRules] = useState(false);
     const [allBets, setAllBets] = useState([]);
@@ -73,8 +79,6 @@ export default function Admin() {
     if (!isLoaded) return null;
     if (!user || user.role !== 'admin') return null;
 
-
-
     const handleCreate = async (e) => {
         e.preventDefault();
         // Create Logic Only
@@ -87,38 +91,41 @@ export default function Admin() {
         createEvent({
             title: newEvent.title,
             description: newEvent.description,
+            resolutionCriteria: newEvent.resolutionCriteria || '',
             category: newEvent.category,
             restrictedToGroup: ['The Boys', 'The Fam'].includes(newEvent.category) ? newEvent.category : null,
             startAt: newEvent.startAt || new Date(Date.now() + 86400000).toISOString(),
             deadline: newEvent.deadline || null,
+            createdBy: newEvent.createdBy || null,
             outcomes: outcomes
         });
-        setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Uncategorized' });
+        setNewEvent({ title: '', description: '', resolutionCriteria: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Uncategorized', createdBy: '' });
         alert("Event Created!");
     };
 
     const handleUpdate = async (e) => {
         e.preventDefault();
-        if (!editingId) return;
+        if (!editingId || !editingEvent) return;
         await updateEvent(editingId, {
-            title: newEvent.title,
-            description: newEvent.description,
-            startAt: newEvent.startAt,
-            deadline: newEvent.deadline,
-            category: newEvent.category
+            title: editingEvent.title,
+            description: editingEvent.description,
+            resolutionCriteria: editingEvent.resolutionCriteria || '',
+            startAt: editingEvent.startAt,
+            deadline: editingEvent.deadline,
+            category: editingEvent.category
         });
         alert('Event updated!');
         setShowEditModal(false);
         setEditingId(null);
-        setNewEvent({ title: '', description: '', outcome1: '', odds1: '', outcome2: '', odds2: '', deadline: '', startAt: '', category: 'Uncategorized' });
+        setEditingEvent(null);
     };
 
     const startEdit = (event) => {
         setEditingId(event.id);
-        setNewEvent({
+        setEditingEvent({
             title: event.title,
             description: event.description,
-            outcome1: '', odds1: '', outcome2: '', odds2: '', // Ops don't edit outcomes yet
+            resolutionCriteria: event.resolutionCriteria || '',
             deadline: event.deadline || '',
             startAt: event.startAt || '',
             category: event.category || 'Uncategorized'
@@ -159,6 +166,25 @@ export default function Admin() {
                         <div className="input-group">
                             <input className="input" placeholder="Description" value={newEvent.description} onChange={e => setNewEvent({ ...newEvent, description: e.target.value })} required />
                         </div>
+                        <div className="input-group">
+                            <label className="text-sm">How This Resolves (Optional)</label>
+                            <textarea
+                                className="input"
+                                placeholder="Details on exactly what determines the winner..."
+                                style={{ height: '60px', fontFamily: 'inherit' }}
+                                value={newEvent.resolutionCriteria || ''}
+                                onChange={e => setNewEvent({ ...newEvent, resolutionCriteria: e.target.value })}
+                            />
+                        </div>
+                        <div className="input-group">
+                            <label className="text-sm">Created By (Optional)</label>
+                            <input
+                                className="input"
+                                placeholder="Username (e.g. 'CoolUser123')"
+                                value={newEvent.createdBy || ''}
+                                onChange={e => setNewEvent({ ...newEvent, createdBy: e.target.value })}
+                            />
+                        </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                             <div className="input-group">
                                 <label className="text-sm">Deadline</label>
@@ -193,7 +219,6 @@ export default function Admin() {
                     const activeEvents = events.filter(e => e.status === 'open' || e.status === 'locked');
                     if (activeEvents.length === 0) return <p className="text-sm">No active events to resolve.</p>;
 
-                    // Sort by deadline (soonest first)
                     activeEvents.sort((a, b) => new Date(a.deadline || a.startAt) - new Date(b.deadline || b.startAt));
 
                     return activeEvents.map(event => (
@@ -213,7 +238,6 @@ export default function Admin() {
                                 </div>
                             </div>
 
-                            {/* Resolving Outcomes Only */}
                             {(() => {
                                 let pairs = [];
                                 for (let i = 0; i < event.outcomes.length; i += 2) pairs.push(event.outcomes.slice(i, i + 2));
@@ -263,7 +287,6 @@ export default function Admin() {
                     const activeEvents = events.filter(e => e.status === 'open' || e.status === 'locked');
                     if (activeEvents.length === 0) return <p className="text-sm">No active events.</p>;
 
-                    // Group by category
                     const grouped = activeEvents.reduce((acc, event) => {
                         const cat = event.category || 'Uncategorized';
                         if (!acc[cat]) acc[cat] = [];
@@ -311,7 +334,6 @@ export default function Admin() {
                                             </button>
                                         </div>
                                     </div>
-
                                     <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                                         <button
                                             onClick={() => toggleFeatured(event.id, event.featured)}
@@ -334,75 +356,12 @@ export default function Admin() {
                                             <button onClick={() => updateEventOrder(event.id, (event.order ?? 9999) + 1)} style={{ cursor: 'pointer', background: 'none', border: 'none', color: '#fff', fontSize: '12px' }}>⬇</button>
                                         </div>
                                     </div>
-
-                                    {/* Outcomes Management (Toggle Main/Sub) - REVERTED TO OLD STYLE */}
-                                    <div style={{ marginTop: '12px', borderTop: '1px solid #333', paddingTop: '8px' }}>
-                                        <p style={{ fontSize: '10px', color: '#666', marginBottom: '4px', textTransform: 'uppercase' }}>Structure Management</p>
-                                        {(() => {
-                                            let pairs = [];
-                                            for (let i = 0; i < event.outcomes.length; i += 2) pairs.push(event.outcomes.slice(i, i + 2));
-
-                                            // Revert to visual logic 
-                                            const renderPair = (pair, idx) => {
-                                                const isMain = pair.some(o => o.type === 'main');
-                                                return (
-                                                    <div key={idx} style={{
-                                                        background: isMain ? 'rgba(34, 197, 94, 0.1)' : 'rgba(0,0,0,0.2)',
-                                                        padding: '8px',
-                                                        borderRadius: '8px',
-                                                        marginBottom: '8px',
-                                                        border: isMain ? '1px solid var(--primary)' : '1px solid #333',
-                                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                                    }}>
-                                                        <div>
-                                                            <div style={{
-                                                                fontSize: '10px',
-                                                                textTransform: 'uppercase',
-                                                                color: isMain ? 'var(--primary)' : '#666',
-                                                                fontWeight: 'bold',
-                                                                marginBottom: '2px'
-                                                            }}>
-                                                                {isMain ? '★ MAIN HEADER EVENT' : 'Side Bet Pair'}
-                                                            </div>
-                                                            <div style={{ fontSize: '11px', color: '#aaa' }}>{pair.map(o => o.label).join(' vs ')}</div>
-                                                        </div>
-
-                                                        <button
-                                                            onClick={async () => {
-                                                                const newType = isMain ? 'sub' : 'main';
-                                                                const validIds = pair.map(x => x.id);
-                                                                let newOutcomes = event.outcomes.map(oc => validIds.includes(oc.id) ? { ...oc, type: newType } : oc);
-
-                                                                // Re-sort: Main first
-                                                                newOutcomes = [...newOutcomes.filter(o => o.type === 'main'), ...newOutcomes.filter(o => o.type !== 'main')];
-                                                                await updateEvent(event.id, { outcomes: newOutcomes });
-                                                            }}
-                                                            style={{
-                                                                fontSize: '10px',
-                                                                padding: '4px 8px',
-                                                                background: isMain ? 'var(--primary)' : '#27272a',
-                                                                color: isMain ? '#000' : '#888',
-                                                                border: isMain ? 'none' : '1px solid #444',
-                                                                borderRadius: '4px',
-                                                                fontWeight: 'bold',
-                                                                cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            {isMain ? '★ MAIN BET' : 'Make Main'}
-                                                        </button>
-                                                    </div>
-                                                );
-                                            };
-                                            return pairs.map((p, i) => renderPair(p, i));
-                                        })()}
-                                    </div>
                                 </div>
                             ))}
                         </div>
                     ));
                 })()}
             </div>
-
 
             <div className="card">
                 <div onClick={() => toggle('ideas')} style={sectionHeaderStyle(!collapsed.ideas)}>
@@ -419,12 +378,30 @@ export default function Admin() {
                                     <span className="text-sm" style={{ fontSize: '12px', color: 'var(--primary)', marginRight: '8px' }}>By: {idea.username}</span>
                                     <span className="text-sm" style={{ fontSize: '10px' }}>{new Date(idea.submittedAt).toLocaleDateString()}</span>
                                 </div>
-                                <button
-                                    onClick={() => { if (confirm('Delete idea?')) deleteIdea(idea.id) }}
-                                    style={{ background: 'var(--accent-loss)', border: 'none', cursor: 'pointer', color: '#fff', fontSize: '10px', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold' }}
-                                >
-                                    DELETE IDEA
-                                </button>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                        onClick={() => {
+                                            setNewEvent({
+                                                ...newEvent,
+                                                title: idea.text,
+                                                description: `Suggested by ${idea.username}`,
+                                                createdBy: idea.username,
+                                                category: 'Community' // Default to a community category? or keep Uncategorized
+                                            });
+                                            setCollapsed(prev => ({ ...prev, form: false }));
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }}
+                                        style={{ background: 'var(--primary)', border: 'none', cursor: 'pointer', color: '#000', fontSize: '10px', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold' }}
+                                    >
+                                        CONVERT TO BET
+                                    </button>
+                                    <button
+                                        onClick={() => { if (confirm('Delete idea?')) deleteIdea(idea.id) }}
+                                        style={{ background: 'var(--accent-loss)', border: 'none', cursor: 'pointer', color: '#fff', fontSize: '10px', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold' }}
+                                    >
+                                        DELETE IDEA
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     ))
@@ -596,7 +573,7 @@ export default function Admin() {
 
             {/* --- EDIT MODAL --- */}
             {
-                showEditModal && (
+                showEditModal && editingEvent && (
                     <div style={{
                         position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
                         background: 'rgba(0,0,0,0.85)', zIndex: 9999,
@@ -610,11 +587,11 @@ export default function Admin() {
                             <form onSubmit={handleUpdate}>
                                 <div className="input-group">
                                     <label className="text-sm">Title</label>
-                                    <input className="input" value={newEvent.title} onChange={e => setNewEvent({ ...newEvent, title: e.target.value })} required />
+                                    <input className="input" value={editingEvent.title} onChange={e => setEditingEvent({ ...editingEvent, title: e.target.value })} required />
                                 </div>
                                 <div className="input-group">
                                     <label className="text-sm">Category</label>
-                                    <select className="input" value={newEvent.category || 'Uncategorized'} onChange={e => setNewEvent({ ...newEvent, category: e.target.value })} style={{ background: 'var(--bg-card)', color: '#fff' }}>
+                                    <select className="input" value={editingEvent.category || 'Uncategorized'} onChange={e => setEditingEvent({ ...editingEvent, category: e.target.value })} style={{ background: 'var(--bg-card)', color: '#fff' }}>
                                         <option value="Uncategorized">Uncategorized</option>
                                         <option value="Super Bowl">Super Bowl 🏆</option>
                                         <option value="Sports">Sports</option>
@@ -630,16 +607,26 @@ export default function Admin() {
                                 </div>
                                 <div className="input-group">
                                     <label className="text-sm">Description</label>
-                                    <textarea className="input" style={{ height: '80px', fontFamily: 'inherit' }} value={newEvent.description} onChange={e => setNewEvent({ ...newEvent, description: e.target.value })} required />
+                                    <textarea className="input" style={{ height: '80px', fontFamily: 'inherit' }} value={editingEvent.description} onChange={e => setEditingEvent({ ...editingEvent, description: e.target.value })} required />
+                                </div>
+                                <div className="input-group">
+                                    <label className="text-sm">How This Resolves</label>
+                                    <textarea
+                                        className="input"
+                                        style={{ height: '60px', fontFamily: 'inherit' }}
+                                        value={editingEvent.resolutionCriteria || ''}
+                                        onChange={e => setEditingEvent({ ...editingEvent, resolutionCriteria: e.target.value })}
+                                        placeholder="Specific rules for resolution..."
+                                    />
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px', marginBottom: '16px' }}>
                                     <div className="input-group">
                                         <label className="text-sm">Deadline</label>
-                                        <input className="input" type="datetime-local" value={newEvent.deadline} onChange={e => setNewEvent({ ...newEvent, deadline: e.target.value })} />
+                                        <input className="input" type="datetime-local" value={editingEvent.deadline} onChange={e => setEditingEvent({ ...editingEvent, deadline: e.target.value })} />
                                     </div>
                                     <div className="input-group">
                                         <label className="text-sm">Start At</label>
-                                        <input className="input" type="datetime-local" required value={newEvent.startAt} onChange={e => setNewEvent({ ...newEvent, startAt: e.target.value })} />
+                                        <input className="input" type="datetime-local" required value={editingEvent.startAt} onChange={e => setEditingEvent({ ...editingEvent, startAt: e.target.value })} />
                                     </div>
                                 </div>
                                 <p className="text-sm" style={{ color: 'orange', marginBottom: '16px' }}>⚠️ Editing Outcomes/Odds is disabled to prevent corruption of existing bets.</p>
@@ -649,10 +636,6 @@ export default function Admin() {
                     </div>
                 )
             }
-
-            <p className="text-sm" style={{ textAlign: 'center', marginTop: '20px', opacity: 0.5 }}>
-                System Version V0.85
-            </p>
         </div >
     );
 }
