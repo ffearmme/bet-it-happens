@@ -37,6 +37,7 @@ export default function Home() {
     const [streakNotification, setStreakNotification] = useState(null);
     const [showChangelog, setShowChangelog] = useState(false);
     const [showResolution, setShowResolution] = useState(false);
+    const [expandedCompleted, setExpandedCompleted] = useState(false);
 
     useEffect(() => {
         if (expandedEvent) setShowResolution(false);
@@ -390,7 +391,8 @@ export default function Home() {
         return now >= resolution;
     });
 
-    const finishedEvents = events.filter(e => e.status === 'settled');
+    const finishedEvents = events.filter(e => e.status === 'settled')
+        .sort((a, b) => getDate(b.startAt) - getDate(a.startAt));
 
     console.log("Time:", now.toLocaleTimeString(), "Live:", activeEvents.length, "Closed:", closedEvents.length, "Pending:", pendingResolutionEvents.length);
 
@@ -1496,36 +1498,76 @@ export default function Home() {
             {
                 finishedEvents.length > 0 && (
                     <div style={{ paddingTop: '16px', borderTop: '1px dashed var(--border)' }}>
-                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: 'var(--text-muted)' }}>
-                            Completed
-                        </h2>
-                        {finishedEvents.map(event => (
-                            <div key={event.id} className="card" style={{ opacity: 0.7, background: 'transparent', border: '1px solid #27272a', position: 'relative' }}>
-                                {user && user.role === 'admin' && (
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (confirm('Delete this completed event?')) deleteEvent(event.id);
-                                        }}
+                        <div
+                            style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', cursor: 'pointer' }}
+                            onClick={() => setExpandedCompleted(!expandedCompleted)}
+                        >
+                            <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, color: 'var(--text-muted)' }}>
+                                Completed
+                            </h2>
+                            <button
+                                className="btn btn-outline"
+                                style={{
+                                    padding: '2px 8px',
+                                    fontSize: '12px',
+                                    height: '24px',
+                                    color: '#a1a1aa',
+                                    borderColor: '#3f3f46',
+                                    minWidth: '24px'
+                                }}
+                            >
+                                {expandedCompleted ? '−' : '+'}
+                            </button>
+                            {!expandedCompleted && <span className="text-sm" style={{ color: '#52525b' }}>({finishedEvents.length} events hidden)</span>}
+                        </div>
+
+                        {expandedCompleted && (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+                                {finishedEvents.map(event => (
+                                    <div
+                                        key={event.id}
+                                        className="card"
+                                        onClick={() => setExpandedEvent(event)}
                                         style={{
-                                            position: 'absolute', top: '10px', right: '10px',
-                                            background: 'rgba(239, 68, 68, 0.2)', color: 'var(--accent-loss)',
-                                            border: 'none', borderRadius: '4px', padding: '4px 8px',
-                                            fontSize: '11px', cursor: 'pointer', fontWeight: 'bold'
+                                            opacity: 0.8,
+                                            background: 'transparent',
+                                            border: '1px solid #27272a',
+                                            position: 'relative',
+                                            cursor: 'pointer',
+                                            transition: 'opacity 0.2s'
                                         }}
+                                        onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                                        onMouseLeave={(e) => e.currentTarget.style.opacity = '0.8'}
                                     >
-                                        DELETE EVENT
-                                    </button>
-                                )}
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <h3 style={{ fontSize: '16px', color: 'var(--text-muted)' }}>{event.title}</h3>
-                                    <span className="badge" style={{ background: '#27272a', color: '#fff' }}>ENDED</span>
-                                </div>
-                                <div style={{ fontSize: '12px', marginTop: '8px', color: '#a1a1aa' }}>
-                                    Winner: <span style={{ color: 'var(--primary)' }}>{event.outcomes.find(o => o.id === event.winnerOutcomeId)?.label}</span>
-                                </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                                            <h3 style={{ fontSize: '16px', color: 'var(--text-muted)', flex: 1 }}>{event.title}</h3>
+                                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                {user && user.role === 'admin' && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (confirm('Delete this completed event?')) deleteEvent(event.id);
+                                                        }}
+                                                        style={{
+                                                            background: 'rgba(239, 68, 68, 0.2)', color: 'var(--accent-loss)',
+                                                            border: 'none', borderRadius: '4px', padding: '4px 8px',
+                                                            fontSize: '10px', cursor: 'pointer', fontWeight: 'bold',
+                                                            whiteSpace: 'nowrap'
+                                                        }}
+                                                    >
+                                                        DELETE
+                                                    </button>
+                                                )}
+                                                <span className="badge" style={{ background: '#27272a', color: '#fff', whiteSpace: 'nowrap' }}>ENDED</span>
+                                            </div>
+                                        </div>
+                                        <div style={{ fontSize: '12px', marginTop: '8px', color: '#a1a1aa' }}>
+                                            Winner: <span style={{ color: 'var(--primary)' }}>{event.outcomes.find(o => o.id === event.winnerOutcomeId)?.label}</span>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
+                        )}
                     </div>
                 )
             }
