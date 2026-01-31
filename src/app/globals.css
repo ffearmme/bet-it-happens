@@ -292,3 +292,69 @@ h2 {
     opacity: 1;
   }
 }
+
+/* Bet Card Styles */
+.bet-card {
+  background: linear-gradient(145deg, #18181b 0%, #09090b 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+}
+
+.bet-card:hover {
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.bet-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(to right, transparent 0%, rgba(255, 255, 255, 0.05) 50%, transparent 100%);
+  transform: skewX(-25deg);
+  transition: none;
+  pointer-events: none;
+}
+
+.bet-card:hover::after {
+  animation: shine 0.75s;
+}
+
+@keyframes shine {
+  0% {
+    left: -100%;
+  }
+
+  100% {
+    left: 200%;
+  }
+}
+
+.outcome-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+  position: relative;
+  overflow: hidden;
+}
+
+.outcome-btn:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+}
+
+.outcome-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
