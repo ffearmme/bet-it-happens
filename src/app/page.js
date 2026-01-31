@@ -488,12 +488,7 @@ export default function Home() {
                 (() => {
                     const notif = notifications.filter(n => !n.read)[0]; // Show first unread
                     return (
-                        <div style={{
-                            position: 'fixed', top: '110px', right: '20px',
-                            zIndex: 99999,
-                            maxWidth: '350px',
-                            animation: 'slideInRight 0.5s ease-out'
-                        }}>
+                        <div className="toast-notification">
                             <div className="card" style={{
                                 background: 'rgba(24, 24, 27, 0.95)',
                                 backdropFilter: 'blur(10px)',
@@ -524,12 +519,7 @@ export default function Home() {
                                     </button>
                                 </div>
                             </div>
-                            <style jsx>{`
-                                @keyframes slideInRight {
-                                    from { transform: translateX(100%); opacity: 0; }
-                                    to { transform: translateX(0); opacity: 1; }
-                                }
-                            `}</style>
+
                         </div>
                     );
                 })()

@@ -163,12 +163,14 @@ export default function Leaderboard() {
                                         {player.username.charAt(0).toUpperCase()}
                                     </div>
                                 )}
-                                <div style={{ minWidth: 0 }}>
-                                    <p style={{ fontWeight: '600', fontSize: '1em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                        {player.username}
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <span style={{ fontWeight: '600', fontSize: '1em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {player.username}
+                                        </span>
                                         {player.groups?.includes('Moderator') && (
                                             <span title="Official Moderator" style={{
-                                                marginLeft: '6px',
+                                                flexShrink: 0,
                                                 fontSize: '8px',
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
@@ -184,13 +186,13 @@ export default function Leaderboard() {
                                                 lineHeight: '1'
                                             }}>MOD ✓</span>
                                         )}
-                                    </p>
+                                    </div>
                                     <p style={{ fontSize: '0.7em', color: 'var(--text-secondary)' }}>
                                         {tab === 'all' ? 'Net Worth' : 'Weekly Profit'}
                                     </p>
                                 </div>
                                 {player.currentStreak > 1 && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '12px' }} title="Current Betting Streak">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '12px', flexShrink: 0 }} title="Current Betting Streak">
                                         <span style={{ fontSize: '16px' }}>🔥</span>
                                         <span style={{ fontWeight: 'bold', color: '#f59e0b', fontSize: '14px' }}>{player.currentStreak}</span>
                                     </div>
