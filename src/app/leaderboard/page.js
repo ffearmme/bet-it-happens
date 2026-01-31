@@ -164,7 +164,27 @@ export default function Leaderboard() {
                                     </div>
                                 )}
                                 <div style={{ minWidth: 0 }}>
-                                    <p style={{ fontWeight: '600', fontSize: '1em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{player.username}</p>
+                                    <p style={{ fontWeight: '600', fontSize: '1em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        {player.username}
+                                        {player.groups?.includes('Moderator') && (
+                                            <span title="Official Moderator" style={{
+                                                marginLeft: '6px',
+                                                fontSize: '8px',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                                                color: '#fff',
+                                                padding: '1px 5px',
+                                                borderRadius: '8px',
+                                                fontWeight: '900',
+                                                letterSpacing: '0.5px',
+                                                border: '1px solid rgba(59, 130, 246, 0.5)',
+                                                boxShadow: '0 0 8px rgba(59, 130, 246, 0.3)',
+                                                verticalAlign: 'middle',
+                                                lineHeight: '1'
+                                            }}>MOD ✓</span>
+                                        )}
+                                    </p>
                                     <p style={{ fontSize: '0.7em', color: 'var(--text-secondary)' }}>
                                         {tab === 'all' ? 'Net Worth' : 'Weekly Profit'}
                                     </p>
@@ -231,7 +251,26 @@ export default function Leaderboard() {
                                     </div>
                                 )}
                             </div>
-                            <h2 style={{ fontSize: '20px', marginBottom: '4px' }}>{viewingProfile?.profile?.username || viewingUser.username}</h2>
+                            <h2 style={{ fontSize: '20px', marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                {viewingProfile?.profile?.username || viewingUser.username}
+                                {viewingProfile?.profile?.groups?.includes('Moderator') && (
+                                    <span title="Official Moderator" style={{
+                                        fontSize: '10px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        background: 'linear-gradient(135deg, #3b82f6, #1e40af)',
+                                        color: '#fff',
+                                        padding: '1px 5px',
+                                        borderRadius: '8px',
+                                        fontWeight: '900',
+                                        letterSpacing: '0.5px',
+                                        border: '1px solid rgba(59, 130, 246, 0.5)',
+                                        boxShadow: '0 0 8px rgba(59, 130, 246, 0.3)',
+                                        verticalAlign: 'middle',
+                                        lineHeight: '1'
+                                    }}>MOD ✓</span>
+                                )}
+                            </h2>
                             {viewingProfile?.profile?.bio && (
                                 <p style={{ fontSize: '13px', color: '#a1a1aa', fontStyle: 'italic', margin: '0 0 16px 0' }}>
                                     "{viewingProfile.profile.bio}"

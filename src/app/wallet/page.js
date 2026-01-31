@@ -81,6 +81,37 @@ export default function Wallet() {
 
             {/* Earn Section */}
             <h2 style={{ marginTop: '24px' }}>Earn Credits</h2>
+
+            {/* Referral Code Card */}
+            <div className="card" style={{ marginBottom: '16px', border: '1px solid var(--primary)', background: 'linear-gradient(135deg, rgba(34,197,94,0.1) 0%, rgba(0,0,0,0) 100%)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                        <h4 style={{ fontSize: '18px', color: '#fff', margin: '0 0 4px 0' }}>Invite Friends</h4>
+                        <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
+                            Get <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>$500</span> for every friend who joins!
+                        </p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{
+                            fontSize: '24px',
+                            fontWeight: '900',
+                            color: '#fff',
+                            fontFamily: 'monospace',
+                            letterSpacing: '2px',
+                            background: 'rgba(0,0,0,0.3)',
+                            padding: '4px 12px',
+                            borderRadius: '8px',
+                            border: '1px dashed var(--primary)'
+                        }}>
+                            {user.referralCode || '...'}
+                        </div>
+                    </div>
+                </div>
+                <p style={{ fontSize: '12px', color: '#71717a', marginTop: '12px', fontStyle: 'italic' }}>
+                    Share your unique code. When they sign up using it, you instantly get paid.
+                </p>
+            </div>
+
             <div className="card">
                 <h3 style={{ fontSize: '18px' }}>Submit Bet Idea</h3>
                 {(() => {
@@ -103,6 +134,8 @@ export default function Wallet() {
                         </p>
                     );
                 })()}
+
+
 
                 <form onSubmit={handleSubmitIdea}>
                     <textarea

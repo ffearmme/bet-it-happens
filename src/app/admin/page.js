@@ -370,8 +370,27 @@ export default function Admin() {
                 </div>
 
                 {!collapsed.ideas && (ideas && ideas.length > 0 ? (
-                    ideas.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)).map(idea => (
-                        <div key={idea.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '12px', marginBottom: '12px' }}>
+                    ideas.sort((a, b) => {
+                        // Priority 1: Mod Recommended
+                        if (a.modRecommended && !b.modRecommended) return -1;
+                        if (!a.modRecommended && b.modRecommended) return 1;
+                        // Priority 2: Date
+                        return new Date(b.submittedAt) - new Date(a.submittedAt);
+                    }).map(idea => (
+                        <div key={idea.id} style={{
+                            borderBottom: '1px solid var(--border)',
+                            paddingBottom: '12px',
+                            marginBottom: '12px',
+                            background: idea.modRecommended ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                            border: idea.modRecommended ? '1px solid #3b82f6' : 'none',
+                            padding: idea.modRecommended ? '12px' : '0 0 12px 0',
+                            borderRadius: idea.modRecommended ? '8px' : '0'
+                        }}>
+                            {idea.modRecommended && (
+                                <div style={{ fontSize: '10px', color: '#3b82f6', fontWeight: 'bold', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    🛡️ RECOMMENDED BY {idea.recommendedBy?.toUpperCase() || 'MOD'}
+                                </div>
+                            )}
                             <p style={{ fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>"{idea.text}"</p>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
@@ -426,8 +445,9 @@ export default function Admin() {
                                 {u.id !== user.id && (
                                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                         <div style={{ display: 'flex', gap: '4px' }}>
-                                            {['The Boys', 'The Fam'].map(g => {
+                                            {['The Boys', 'The Fam', 'Moderator'].map(g => {
                                                 const hasGroup = (u.groups || []).includes(g);
+                                                const isMod = g === 'Moderator';
                                                 return (
                                                     <button
                                                         key={g}
@@ -438,12 +458,13 @@ export default function Admin() {
                                                         }}
                                                         style={{
                                                             padding: '2px 6px', fontSize: '10px',
-                                                            background: hasGroup ? 'var(--primary)' : '#333',
+                                                            background: hasGroup ? (isMod ? '#3b82f6' : 'var(--primary)') : '#333',
                                                             color: hasGroup ? '#000' : '#888',
-                                                            border: 'none', borderRadius: '4px', cursor: 'pointer'
+                                                            border: 'none', borderRadius: '4px', cursor: 'pointer',
+                                                            fontWeight: isMod ? 'bold' : 'normal'
                                                         }}
                                                     >
-                                                        {g}
+                                                        {g === 'Moderator' ? '🛡️ Mod' : g}
                                                     </button>
                                                 );
                                             })}

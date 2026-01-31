@@ -156,6 +156,16 @@ export default function Profile() {
                     </div>
                     <p className="text-sm">User ID: {user.id.slice(0, 8)}...</p>
 
+                    <div style={{ marginTop: '12px', background: 'rgba(34, 197, 94, 0.1)', padding: '12px', borderRadius: '8px', border: '1px solid var(--primary)' }}>
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: 'bold' }}>Your Referral Code</p>
+                        <p style={{ fontSize: '24px', fontWeight: '900', color: '#fff', letterSpacing: '4px', fontFamily: 'monospace', margin: '4px 0' }}>
+                            {user.referralCode || '---'}
+                        </p>
+                        <p style={{ fontSize: '11px', color: 'var(--primary)', fontWeight: 'bold' }}>
+                            Give this to friends! You get $500 when they sign up. 💰
+                        </p>
+                    </div>
+
                     {stats && (
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
                             <div style={{ background: 'var(--bg-input)', padding: '8px', borderRadius: '8px' }}>

@@ -17,7 +17,8 @@ export default function Home() {
     const {
         user, events, bets, placeBet, isLoaded, users, systemAnnouncement,
         addComment, deleteComment, getUserStats, deleteEvent,
-        signin, signup, activeEventsCount, serverTime, isGuestMode, setIsGuestMode, db
+        signin, signup, activeEventsCount, serverTime, isGuestMode, setIsGuestMode, db,
+        notifications, markNotificationAsRead, toggleLikeComment
     } = useApp(); // Used destructuring to get EVERYTHING needed from storeRef(null);
     const chatContainerRef = useRef(null);
     const [selectedOutcome, setSelectedOutcome] = useState(null);
@@ -31,6 +32,7 @@ export default function Home() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [now, setNow] = useState(new Date()); // Live clock
     const [expandedCategories, setExpandedCategories] = useState({});
+    const [expandedResolutions, setExpandedResolutions] = useState({});
     const [showProfileNudge, setShowProfileNudge] = useState(false);
     const [streakNotification, setStreakNotification] = useState(null);
     const [showChangelog, setShowChangelog] = useState(false);
@@ -93,11 +95,18 @@ export default function Home() {
     }, [viewingUser]);
 
     useEffect(() => {
-        if (!expandedEvent || !db) return;
+        if (!expandedEvent || !db) {
+            setEventComments([]);
+            return;
+        }
+
+        // Reset state for new event so scroll logic works correctly
+        setEventComments([]);
+        prevCommentsLength.current = 0;
+
         const q = query(collection(db, 'comments'), where('eventId', '==', expandedEvent.id));
         const unsub = onSnapshot(q, (snap) => {
             const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
             list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
             setEventComments(list);
         });
@@ -106,17 +115,26 @@ export default function Home() {
 
 
 
+    // Track previous comment count to intelligently scroll
+    const prevCommentsLength = useRef(0);
+
     useEffect(() => {
         if (chatContainerRef.current) {
-            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+            // Scroll to bottom only if content length INCREASED (e.g. initial load or new message)
+            // This prevents scrolling when liking a comment (which updates state but not length)
+            if (eventComments.length > prevCommentsLength.current) {
+                chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+            }
         }
-    }, [eventComments, expandedEvent]);
+        prevCommentsLength.current = eventComments.length;
+    }, [eventComments]);
 
     // Login State
     const [isLoginMode, setIsLoginMode] = useState(true); // Toggle Login/Signup
     const [email, setEmail] = useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [referralCode, setReferralCode] = useState('');
     const [authError, setAuthError] = useState('');
     const [quote, setQuote] = useState(FUNNY_QUOTES[0]);
 
@@ -145,6 +163,21 @@ export default function Home() {
     }
 
     // --- LOGIN SCREEN ---
+
+    // Helper for countdown
+    const getTimeRemaining = (deadline) => {
+        if (!deadline) return null;
+        const total = Date.parse(deadline) - now.getTime();
+        if (total <= 0) return "Closed";
+        const seconds = Math.floor((total / 1000) % 60);
+        const minutes = Math.floor((total / 1000 / 60) % 60);
+        const hours = Math.floor((total / (1000 * 60 * 60)) % 24);
+        const days = Math.floor(total / (1000 * 60 * 60 * 24));
+
+        if (days > 0) return `${days}d ${hours}h`;
+        if (hours > 0) return `${hours}h ${minutes}m`;
+        return `${minutes}m ${seconds}s`;
+    };
     if (!user && !isGuestMode) {
         const handleAuth = async (e) => {
             e.preventDefault();
@@ -181,7 +214,7 @@ export default function Home() {
             } else {
                 // Sign Up
                 if (!username) { setAuthError('Username required'); return; }
-                const res = await signup(email, username, password);
+                const res = await signup(email, username, password, referralCode);
                 if (res.success) {
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('justSignedUp', 'true');
@@ -220,17 +253,29 @@ export default function Home() {
 
                     <form onSubmit={handleAuth} noValidate>
                         {!isLoginMode && (
-                            <div className="input-group">
-                                <label className="text-sm" style={{ marginBottom: '8px', display: 'block' }}>Username</label>
-                                <input
-                                    type="text"
-                                    required
-                                    className="input"
-                                    placeholder="CoolUser123"
-                                    value={username}
-                                    onChange={e => setUsername(e.target.value)}
-                                />
-                            </div>
+                            <>
+                                <div className="input-group">
+                                    <label className="text-sm" style={{ marginBottom: '8px', display: 'block' }}>Username</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        className="input"
+                                        placeholder="CoolUser123"
+                                        value={username}
+                                        onChange={e => setUsername(e.target.value)}
+                                    />
+                                </div>
+                                <div className="input-group">
+                                    <label className="text-sm" style={{ marginBottom: '8px', display: 'block' }}>Referral Code (Optional)</label>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        placeholder="Enter code to get $500 bonus for friend"
+                                        value={referralCode}
+                                        onChange={e => setReferralCode(e.target.value)}
+                                    />
+                                </div>
+                            </>
                         )}
                         <div className="input-group">
                             <label className="text-sm" style={{ marginBottom: '8px', display: 'block' }}>Email or Username</label>
@@ -281,8 +326,8 @@ export default function Home() {
                             Browse as Guest
                         </button>
                     </div>
-                </div>
-            </div>
+                </div >
+            </div >
         );
     }
 
@@ -436,6 +481,58 @@ export default function Home() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* --- GENERAL NOTIFICATION POPUP (Referrals, etc.) --- */}
+            {user && notifications && notifications.filter(n => !n.read).length > 0 && (
+                (() => {
+                    const notif = notifications.filter(n => !n.read)[0]; // Show first unread
+                    return (
+                        <div style={{
+                            position: 'fixed', top: '110px', right: '20px',
+                            zIndex: 99999,
+                            maxWidth: '350px',
+                            animation: 'slideInRight 0.5s ease-out'
+                        }}>
+                            <div className="card" style={{
+                                background: 'rgba(24, 24, 27, 0.95)',
+                                backdropFilter: 'blur(10px)',
+                                border: '1px solid var(--primary)',
+                                boxShadow: '0 0 20px rgba(34, 197, 94, 0.3)',
+                                padding: '16px',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '12px',
+                                position: 'relative'
+                            }}>
+                                <div style={{ fontSize: '24px' }}>
+                                    {notif.type === 'referral' ? '💰' : '🔔'}
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <h4 style={{ fontSize: '16px', fontWeight: 'bold', color: '#fff', marginBottom: '4px' }}>
+                                        {notif.title}
+                                    </h4>
+                                    <p style={{ fontSize: '13px', color: '#d4d4d8', marginBottom: '12px', lineHeight: '1.4' }}>
+                                        {notif.message}
+                                    </p>
+                                    <button
+                                        className="btn btn-sm btn-primary"
+                                        onClick={() => markNotificationAsRead(notif.id)}
+                                        style={{ fontSize: '11px', padding: '4px 12px', height: 'auto' }}
+                                    >
+                                        Awesome (Dismiss)
+                                    </button>
+                                </div>
+                            </div>
+                            <style jsx>{`
+                                @keyframes slideInRight {
+                                    from { transform: translateX(100%); opacity: 0; }
+                                    to { transform: translateX(0); opacity: 1; }
+                                }
+                            `}</style>
+                        </div>
+                    );
+                })()
             )}
 
             {/* --- STREAK NOTIFICATION --- */}
@@ -1034,7 +1131,7 @@ export default function Home() {
                                         <div style={{ textAlign: 'right' }}>
                                             {event.deadline && (
                                                 <div className="text-sm" style={{ color: '#fbbf24', fontSize: '11px', fontWeight: 'bold' }}>
-                                                    Closes: {new Date(event.deadline).toLocaleDateString()}
+                                                    {getTimeRemaining(event.deadline) !== "Closed" ? `⏰ Closes in: ${getTimeRemaining(event.deadline)}` : 'Closed'}
                                                 </div>
                                             )}
                                             <div className="text-sm" style={{ color: '#fbbf24', opacity: 0.8, fontSize: '10px' }}>
@@ -1150,6 +1247,11 @@ export default function Home() {
                                     </div>
                                     <h3 style={{ fontSize: '18px', color: '#f59e0b' }}>{event.title}</h3>
                                     <p className="text-sm" style={{ color: '#a1a1aa' }}>Game in progress. Good luck!</p>
+                                    {event.startAt && (
+                                        <p className="text-sm" style={{ color: '#f59e0b', fontSize: '11px', marginTop: '4px', fontWeight: 'bold' }}>
+                                            Resolves in: {getTimeRemaining(event.startAt)}
+                                        </p>
+                                    )}
 
                                     {event.lastComment && (
                                         <div style={{ marginTop: '8px', padding: '6px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '4px', textAlign: 'left', fontSize: '11px', display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -1248,6 +1350,45 @@ export default function Home() {
 
                                                 <h3 style={{ fontSize: '18px', marginBottom: '4px' }}>{event.title}</h3>
                                                 <p className="text-sm" style={{ marginBottom: '12px' }}>{event.description}</p>
+
+                                                {/* Resolution Criteria Toggle (Face Card) */}
+                                                {event.resolutionCriteria && (
+                                                    <div style={{ marginBottom: '12px' }}>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setExpandedResolutions(prev => ({ ...prev, [event.id]: !prev[event.id] }));
+                                                            }}
+                                                            style={{
+                                                                background: 'transparent',
+                                                                border: 'none',
+                                                                color: 'var(--primary)',
+                                                                fontSize: '11px',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                padding: 0,
+                                                                fontWeight: 'bold'
+                                                            }}
+                                                        >
+                                                            {expandedResolutions[event.id] ? 'Hide Resolution Rules' : 'How This Resolves ℹ️'}
+                                                        </button>
+                                                        {expandedResolutions[event.id] && (
+                                                            <div className="animate-fade" style={{
+                                                                marginTop: '8px',
+                                                                padding: '8px',
+                                                                background: 'rgba(34, 197, 94, 0.1)',
+                                                                borderLeft: '2px solid var(--primary)',
+                                                                fontSize: '12px',
+                                                                color: '#d1d5db',
+                                                                lineHeight: '1.4'
+                                                            }}>
+                                                                {event.resolutionCriteria}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                                 {event.createdBy && (
                                                     <p style={{ fontSize: '10px', color: 'var(--primary)', fontStyle: 'italic', marginBottom: '8px' }}>
                                                         Created by {event.createdBy}
@@ -1258,7 +1399,9 @@ export default function Home() {
                                                     <div style={{ flex: 1 }}>
                                                         <div style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>🛑 Betting Closes:</div>
                                                         <div style={{ color: 'var(--accent-loss)', fontWeight: 'bold' }}>
-                                                            {event.deadline ? new Date(event.deadline).toLocaleString() : 'No deadline'}
+                                                            {event.deadline && getTimeRemaining(event.deadline) !== "Closed"
+                                                                ? `⏰ ${getTimeRemaining(event.deadline)}`
+                                                                : (event.deadline ? new Date(event.deadline).toLocaleString() : 'No deadline')}
                                                         </div>
                                                     </div>
                                                     <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: '16px' }}>
@@ -1627,8 +1770,62 @@ export default function Home() {
                                                 onMouseLeave={e => e.target.style.textDecoration = 'none'}
                                             >
                                                 {c.username || 'Anon'}
+                                                {users.find(u => u.id === c.userId)?.groups?.includes('Moderator') && (
+                                                    <span title="Official Moderator" style={{
+                                                        marginLeft: '6px',
+                                                        fontSize: '8px',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        background: 'linear-gradient(135deg, #3b82f6, #1e40af)',
+                                                        color: '#fff',
+                                                        padding: '1px 5px',
+                                                        borderRadius: '8px',
+                                                        fontWeight: '900',
+                                                        letterSpacing: '0.5px',
+                                                        border: '1px solid rgba(59, 130, 246, 0.5)',
+                                                        boxShadow: '0 0 8px rgba(59, 130, 246, 0.3)',
+                                                        verticalAlign: 'middle',
+                                                        lineHeight: '1'
+                                                    }}>MOD ✓</span>
+                                                )}
                                             </div>
                                             <div style={{ fontSize: '12px', paddingRight: '16px' }}>{c.text}</div>
+
+                                            {/* Like Button (Heat) */}
+                                            <div style={{ display: 'flex', alignItems: 'center', marginTop: '6px' }}>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        // Simple "pop" animation logic could go here, but CSS transition handles the heavy lifting
+                                                        toggleLikeComment(c.id, c.likes || []);
+                                                    }}
+                                                    style={{
+                                                        background: c.likes?.includes(user?.id) ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255,255,255,0.05)',
+                                                        border: c.likes?.includes(user?.id) ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid transparent',
+                                                        cursor: 'pointer',
+                                                        fontSize: '12px',
+                                                        padding: '4px 10px',
+                                                        borderRadius: '20px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                                                        transform: c.likes?.includes(user?.id) ? 'scale(1.05)' : 'scale(1)',
+                                                        color: c.likes?.includes(user?.id) ? '#f59e0b' : '#a1a1aa'
+                                                    }}
+                                                >
+                                                    <span style={{
+                                                        fontSize: '14px',
+                                                        filter: c.likes?.includes(user?.id) ? 'drop-shadow(0 0 5px orange)' : 'grayscale(100%) opacity(0.5)',
+                                                        transition: 'filter 0.3s ease'
+                                                    }}>
+                                                        🔥
+                                                    </span>
+                                                    <span style={{ fontWeight: 'bold', fontSize: '11px' }}>
+                                                        {c.likes?.length || 0}
+                                                    </span>
+                                                </button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -1707,7 +1904,26 @@ export default function Home() {
                                         </div>
                                     )}
                                 </div>
-                                <h2 style={{ fontSize: '20px', marginBottom: '4px' }}>{viewingProfile?.profile?.username || viewingUser.username}</h2>
+                                <h2 style={{ fontSize: '20px', marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                    {viewingProfile?.profile?.username || viewingUser.username}
+                                    {viewingProfile?.profile?.groups?.includes('Moderator') && (
+                                        <span title="Official Moderator" style={{
+                                            fontSize: '10px',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            background: 'linear-gradient(135deg, #3b82f6, #1e40af)',
+                                            color: '#fff',
+                                            padding: '1px 5px',
+                                            borderRadius: '8px',
+                                            fontWeight: '900',
+                                            letterSpacing: '0.5px',
+                                            border: '1px solid rgba(59, 130, 246, 0.5)',
+                                            boxShadow: '0 0 8px rgba(59, 130, 246, 0.3)',
+                                            verticalAlign: 'middle',
+                                            lineHeight: '1'
+                                        }}>MOD ✓</span>
+                                    )}
+                                </h2>
                                 {viewingProfile?.profile?.bio && (
                                     <p style={{ fontSize: '13px', color: '#a1a1aa', fontStyle: 'italic', margin: '0 0 16px 0' }}>
                                         "{viewingProfile.profile.bio}"
@@ -1802,7 +2018,7 @@ export default function Home() {
                     onClick={() => setShowChangelog(true)}
                     style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', textDecoration: 'underline', fontSize: '11px' }}
                 >
-                    System V0.89
+                    System V0.90
                 </button>
             </div>
 
@@ -1822,8 +2038,18 @@ export default function Home() {
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                 <div>
-                                    <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '8px' }}>Version 0.89 <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>(Current)</span></h3>
+                                    <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '8px' }}>Version 0.90 <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>(Current)</span></h3>
                                     <ul style={{ paddingLeft: '20px', color: '#d4d4d8', fontSize: '14px', lineHeight: '1.6' }}>
+                                        <li><b>Moderator Role:</b> Introduced new Moderator role with "MOD" badges in chat, leaderboard, and profiles. 🛡️</li>
+                                        <li><b>Mod Dashboard:</b> Moderators can now review user ideas and recommend the best ones directly to Admins. 📤</li>
+                                        <li><b>Live Timers:</b> Added real-time "Closes in" and "Resolves in" countdowns to all bet cards. ⏰</li>
+                                        <li><b>Admin Tools:</b> Mod-recommended ideas now float to the top for faster approval.</li>
+                                    </ul>
+                                </div>
+
+                                <div>
+                                    <h3 style={{ fontSize: '16px', color: '#a1a1aa', marginBottom: '8px' }}>Version 0.89</h3>
+                                    <ul style={{ paddingLeft: '20px', color: '#a1a1aa', fontSize: '14px', lineHeight: '1.6' }}>
                                         <li><b>Resolution Transparency:</b> Added "How This Resolves" info to bets so you know exactly what determines the winner. ℹ️</li>
                                         <li><b>Guest Mode Enhanced:</b> Better banners and simpler navigation for visiting users.</li>
                                         <li><b>Admin Stability:</b> Fixed issues with event editing overwriting new drafts.</li>

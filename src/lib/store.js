@@ -1,10 +1,12 @@
 
 "use client";
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import {
   collection, addDoc, onSnapshot, query, orderBy,
-  doc, setDoc, updateDoc, getDoc, where, increment, deleteDoc, getDocs, limit, writeBatch, deleteField
+  doc, setDoc, updateDoc, getDoc, where, increment, deleteDoc, getDocs, limit, writeBatch, deleteField,
+  arrayUnion, arrayRemove
 } from 'firebase/firestore';
+
 import {
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
   signOut, onAuthStateChanged, updateEmail, updatePassword, verifyBeforeUpdateEmail
@@ -22,7 +24,11 @@ export function AppProvider({ children }) {
   const [events, setEvents] = useState([]);
   const [bets, setBets] = useState([]);
   const [ideas, setIdeas] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
+
+  // Ref to track if we are currently deleting the account to prevent auto-recreation
+  const isDeletingAccount = useRef(false);
 
 
   // Create state, init false. We load from storage in a useEffect to allow hydration.
@@ -76,17 +82,38 @@ export function AppProvider({ children }) {
         const userRef = doc(db, 'users', firebaseUser.uid);
         unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
-            setUser({ id: firebaseUser.uid, ...docSnap.data() });
+            const userData = docSnap.data();
+
+            // Check for missing referral code (Backfill for existing users)
+            if (!userData.referralCode) {
+              const newCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+              updateDoc(userRef, { referralCode: newCode })
+                .catch(err => console.error("Error backfilling referral code", err));
+              // We don't need to manually update state here, the snapshot will fire again instantly
+            }
+
+            setUser({ id: firebaseUser.uid, ...userData });
+            setUser({ id: firebaseUser.uid, ...userData });
           } else {
+            // Check if we are intentionally deleting the account
+            if (isDeletingAccount.current) {
+              console.log(">>> ACCOUNT BEING DELETED - Skipping Profile Recreation");
+              return;
+            }
+
             // Document does not exist (e.g. first login or previous error).
             console.log(">>> DETECTED NEW USER (No Profile Found) - Creating Profile...");
             // Auto-create the user profile in Firestore
+
+            const myReferralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+
             const newUser = {
               email: firebaseUser.email,
               username: firebaseUser.displayName || firebaseUser.email.split('@')[0],
               role: (firebaseUser.email.toLowerCase().includes('admin')) ? 'admin' : 'user',
               balance: 1000,
-              createdAt: new Date().toISOString()
+              createdAt: new Date().toISOString(),
+              referralCode: myReferralCode
             };
 
             // Write to DB
@@ -207,19 +234,77 @@ export function AppProvider({ children }) {
     return () => unsubBets();
   }, [user?.id]); // Only re-run if user ID changes is tricky, better safe dependency
 
+  // --- 4. Notifications Listener ---
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+    const q = query(collection(db, 'notifications'), where('userId', '==', user.id), limit(20));
+    const unsub = onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Sort by date desc (client side)
+      list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setNotifications(list);
+    });
+    return () => unsub();
+  }, [user?.id]);
+
   // --- Actions ---
 
-  const signup = async (email, username, password) => {
+  const signup = async (email, username, password, referralCode) => {
     try {
       const resp = await createUserWithEmailAndPassword(auth, email, password);
+
+      // Generate a simple unique referral code (8 chars)
+      // In a real app, you'd check for collisions, but this is sufficient for now.
+      const myReferralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+
+      let referredBy = null;
+
+      // Handle Referral Reward
+      if (referralCode && referralCode.trim() !== '') {
+        try {
+          // Find the user who owns this code
+          const q = query(collection(db, 'users'), where('referralCode', '==', referralCode.trim()));
+          const snapshot = await getDocs(q);
+
+          if (!snapshot.empty) {
+            const referrerDoc = snapshot.docs[0];
+            const referrerId = referrerDoc.id;
+
+            // Credit $500 to referrer
+            await updateDoc(doc(db, 'users', referrerId), {
+              balance: increment(500)
+            });
+            referredBy = referrerId;
+            referredBy = referrerId;
+            console.log(`Referral successful! Credited $500 to ${referrerDoc.data().username}`);
+
+            // Notify Referrer
+            addDoc(collection(db, 'notifications'), {
+              userId: referrerId,
+              type: 'referral',
+              title: 'New Referral!',
+              message: `Someone signed up using your code! You earned $500.`,
+              read: false,
+              createdAt: new Date().toISOString()
+            });
+          }
+        } catch (err) {
+          console.error("Error processing referral:", err);
+        }
+      }
 
       // Create User Document
       await setDoc(doc(db, 'users', resp.user.uid), {
         email,
         username: username || email.split('@')[0],
-        role: email.toLowerCase().includes('admin') ? 'admin' : 'user', // Basic role assignment
+        role: email.toLowerCase().includes('admin') ? 'admin' : 'user',
         balance: 1000,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        referralCode: myReferralCode,
+        referredBy: referredBy
       });
 
       return { success: true };
@@ -958,43 +1043,55 @@ export function AppProvider({ children }) {
 
   const deleteAccount = async () => {
     if (!user) return { success: false };
+    isDeletingAccount.current = true; // Set flag to prevent resurrection
     try {
       const userId = user.id;
-      const batch = writeBatch(db);
-      let opCount = 0;
 
-      // 1. Delete all user's bets
-      const betsQ = query(collection(db, 'bets'), where('userId', '==', userId));
-      const betsSnap = await getDocs(betsQ);
-      betsSnap.docs.forEach(doc => {
-        batch.delete(doc.ref);
-        opCount++;
-      });
+      // Helper to delete in batches
+      const commitBatchBuffer = async (docsToDelete) => {
+        const CHUNK_SIZE = 400;
+        for (let i = 0; i < docsToDelete.length; i += CHUNK_SIZE) {
+          const chunk = docsToDelete.slice(i, i + CHUNK_SIZE);
+          const batch = writeBatch(db);
+          chunk.forEach(ref => batch.delete(ref));
+          await batch.commit();
+        }
+      };
 
-      // 2. Delete all user's ideas
-      const ideasQ = query(collection(db, 'ideas'), where('userId', '==', userId));
-      const ideasSnap = await getDocs(ideasQ);
-      ideasSnap.docs.forEach(doc => {
-        batch.delete(doc.ref);
-        opCount++;
-      });
+      const allDocsToDelete = [];
 
-      // 3. Delete User Profile
-      const userRef = doc(db, 'users', userId);
-      batch.delete(userRef);
-      opCount++;
+      // 1. Bets
+      const betsSnap = await getDocs(query(collection(db, 'bets'), where('userId', '==', userId)));
+      betsSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
 
-      if (opCount > 0) {
-        await batch.commit();
-      }
+      // 2. Ideas
+      const ideasSnap = await getDocs(query(collection(db, 'ideas'), where('userId', '==', userId)));
+      ideasSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
 
-      // 4. Delete Auth Account
+      // 3. Comments (To ensure complete erasure)
+      const commentsSnap = await getDocs(query(collection(db, 'comments'), where('userId', '==', userId)));
+      commentsSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
+
+      // 4. Notifications
+      const notifSnap = await getDocs(query(collection(db, 'notifications'), where('userId', '==', userId)));
+      notifSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
+
+      // 5. User Profile
+      allDocsToDelete.push(doc(db, 'users', userId));
+
+      console.log(`Deleting account ${userId}: ${allDocsToDelete.length} documents total.`);
+
+      // Execute Firestore Deletions
+      await commitBatchBuffer(allDocsToDelete);
+
+      // 6. Delete Auth Account
       if (auth.currentUser) {
         await auth.currentUser.delete();
       }
 
       return { success: true };
     } catch (e) {
+      isDeletingAccount.current = false; // Reset flag on error
       console.error("Delete Error:", e);
       if (e.code === 'auth/requires-recent-login') {
         return { success: false, error: "Please log out and log in again to delete your account." };
@@ -1174,7 +1271,25 @@ export function AppProvider({ children }) {
     }
   };
 
-  const markNotificationRead = async (notifId) => {
+  const toggleLikeComment = async (commentId, currentLikes = []) => {
+    if (!user) return { success: false, error: 'Login to like' };
+    try {
+      const commentRef = doc(db, 'comments', commentId);
+      const isLiked = currentLikes.includes(user.id);
+
+      if (isLiked) {
+        await updateDoc(commentRef, { likes: arrayRemove(user.id) });
+      } else {
+        await updateDoc(commentRef, { likes: arrayUnion(user.id) });
+      }
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const markNotificationAsRead = async (notifId) => {
     try {
       await updateDoc(doc(db, 'notifications', notifId), { read: true });
     } catch (e) { console.error(e); }
@@ -1214,7 +1329,7 @@ export function AppProvider({ children }) {
       return {
         success: true,
         stats: { wins, losses, total, winRate, profit },
-        profile: { bio: userData.bio || '', profilePic: userData.profilePic, username: userData.username }
+        profile: { bio: userData.bio || '', profilePic: userData.profilePic, username: userData.username, groups: userData.groups || [] }
       };
     } catch (e) { console.error(e); return { success: false, error: e.message }; }
   };
@@ -1274,13 +1389,50 @@ export function AppProvider({ children }) {
   };
 
 
+  const sendIdeaToAdmin = async (ideaId, ideaText) => {
+    if (!user || (!user.groups?.includes('Moderator') && user.role !== 'admin')) return { success: false, error: 'Unauthorized' };
+    try {
+      // 1. Mark idea as recommended
+      const ideaRef = doc(db, 'ideas', ideaId);
+      await updateDoc(ideaRef, {
+        modRecommended: true,
+        recommendedBy: user.username,
+        recommendedAt: new Date().toISOString()
+      });
+
+      // 2. Notify Admins
+      const adminsQ = query(collection(db, 'users'), where('role', '==', 'admin'));
+      const adminsSnap = await getDocs(adminsQ);
+      const batch = writeBatch(db);
+
+      adminsSnap.forEach(adminDoc => {
+        const notifRef = doc(collection(db, 'notifications'));
+        batch.set(notifRef, {
+          userId: adminDoc.id,
+          type: 'admin_alert',
+          title: '🛡️ Mod Recommendation',
+          message: `Mod ${user.username} thinks this looks good: "${ideaText}"`,
+          read: false,
+          createdAt: new Date().toISOString()
+        });
+      });
+
+      await batch.commit();
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
 
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-      events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, markNotificationRead, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement,
+      events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, toggleLikeComment, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendIdeaToAdmin,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db,
-      isGuestMode, setIsGuestMode // Exposed isGuestMode and its setter
+      isGuestMode, setIsGuestMode, // Exposed isGuestMode and its setter
+      notifications, markNotificationAsRead
     }}>
       {children}
     </AppContext.Provider>
