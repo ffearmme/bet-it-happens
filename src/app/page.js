@@ -279,12 +279,14 @@ export default function Home() {
                             </>
                         )}
                         <div className="input-group">
-                            <label className="text-sm" style={{ marginBottom: '8px', display: 'block' }}>Email or Username</label>
+                            <label className="text-sm" style={{ marginBottom: '8px', display: 'block' }}>
+                                {isLoginMode ? 'Email or Username' : 'Email'}
+                            </label>
                             <input
                                 type="text"
                                 required
                                 className="input"
-                                placeholder="you@example.com or CoolUser123"
+                                placeholder={isLoginMode ? 'you@example.com or CoolUser123' : 'you@example.com'}
                                 value={email}
                                 onChange={e => setEmail(e.target.value)}
                             />
