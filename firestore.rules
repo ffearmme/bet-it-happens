@@ -46,5 +46,23 @@ service cloud.firestore {
       allow create: if request.auth != null;
       allow delete: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
+
+    // NEW: Allow Parlays
+    match /parlays/{parlayId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      // Allow update only for incrementing stats or if admin
+      allow update: if request.auth != null && (
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wagersCount', 'totalPool'])
+      );
+      allow delete: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // System Settings (Announcements)
+    match /system/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
   }
 }

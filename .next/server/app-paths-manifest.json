@@ -1,7 +1,6 @@
 {
   "/bets/page": "app/bets/page.js",
-  "/rules/page": "app/rules/page.js",
+  "/admin/page": "app/admin/page.js",
   "/page": "app/page.js",
-  "/mod/page": "app/mod/page.js",
-  "/admin/page": "app/admin/page.js"
+  "/parlay/page": "app/parlay/page.js"
 }

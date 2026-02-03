@@ -1425,6 +1425,128 @@ export function AppProvider({ children }) {
     }
   };
 
+  const createParlay = async (legs, baseMultiplier, finalMultiplier) => {
+    if (!user) return { success: false, error: 'Not logged in' };
+    try {
+      await addDoc(collection(db, 'parlays'), {
+        creatorId: user.id,
+        creatorName: user.username,
+        legs,
+        baseMultiplier,
+        finalMultiplier,
+        createdAt: new Date().toISOString(),
+        wagersCount: 0,
+        totalPool: 0
+      });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const placeParlayBet = async (parlayId, amount) => {
+    if (!user) return { success: false, error: 'Not logged in' };
+    if (user.balance < amount) return { success: false, error: 'Insufficient funds' };
+
+    try {
+      const parlayRef = doc(db, 'parlays', parlayId);
+      const parlaySnap = await getDoc(parlayRef);
+      if (!parlaySnap.exists()) return { success: false, error: "Parlay not found" };
+      const parlay = parlaySnap.data();
+
+      // Deduct Balance
+      const userRef = doc(db, 'users', user.id);
+
+      // Update streak (Reuse logic from placeBet if I had it extracted, but duplicating for safety now to avoid refactor risks)
+      const today = new Date();
+      const todayStr = today.toDateString();
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);
+      const yesterdayStr = yesterday.toDateString();
+
+      let newStreak = user.currentStreak || 0;
+      const lastDate = user.lastBetDate || "";
+
+      let streakType = 'none';
+      if (lastDate !== todayStr) {
+        if (lastDate === yesterdayStr) {
+          newStreak += 1;
+          streakType = 'increased';
+        } else {
+          newStreak = 1;
+          streakType = 'started';
+        }
+      } else {
+        if (newStreak === 0) {
+          newStreak = 1;
+          streakType = 'started';
+        }
+      }
+      const newLongest = Math.max(newStreak, user.longestStreak || 0);
+
+      await updateDoc(userRef, {
+        balance: increment(-amount),
+        invested: increment(amount),
+        currentStreak: newStreak,
+        longestStreak: newLongest,
+        lastBetDate: todayStr
+      });
+
+      // Create Parlay Bet
+      // Note: outcomeId is null, outcomeLabel is "Parlay", but we store legs.
+      await addDoc(collection(db, 'bets'), {
+        userId: user.id,
+        username: user.username,
+        type: 'parlay',
+        parlayId: parlayId,
+        legs: parlay.legs,
+        amount: parseFloat(amount),
+        odds: parlay.finalMultiplier, // Store as 'odds' for compatibility with display if needed
+        potentialPayout: amount * parlay.finalMultiplier,
+        status: 'pending',
+        placedAt: new Date().toISOString(),
+        eventTitle: 'Parlay Ticket', // For basic display compatibility
+        outcomeLabel: `${parlay.legs.length} Legs`
+      });
+
+      // Update Parlay Stats
+      await updateDoc(parlayRef, {
+        wagersCount: increment(1),
+        totalPool: increment(amount)
+      });
+
+      return { success: true, streakType, newStreak };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const addParlayComment = async (parlayId, text) => {
+    if (!user) return { success: false, error: 'Login to comment' };
+    try {
+      const commentData = {
+        parlayId,
+        userId: user.id,
+        username: user.username,
+        text,
+        createdAt: new Date().toISOString()
+      };
+      await addDoc(collection(db, 'comments'), commentData);
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const deleteParlay = async (parlayId) => {
+    if (user?.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      await deleteDoc(doc(db, 'parlays', parlayId));
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
 
   return (
     <AppContext.Provider value={{
@@ -1432,7 +1554,8 @@ export function AppProvider({ children }) {
       events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, toggleLikeComment, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendIdeaToAdmin,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db,
       isGuestMode, setIsGuestMode, // Exposed isGuestMode and its setter
-      notifications, markNotificationAsRead
+      notifications, markNotificationAsRead,
+      createParlay, placeParlayBet, addParlayComment, deleteParlay
     }}>
       {children}
     </AppContext.Provider>
