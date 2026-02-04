@@ -571,7 +571,7 @@ export function AppProvider({ children }) {
       const batch = writeBatch(db);
       const eventRef = doc(db, 'events', eventId);
 
-      // 1. Mark Event as Settled (In Batch)
+      // 1. Mark Event as Settled
       batch.update(eventRef, {
         status: 'settled',
         winnerOutcomeId
@@ -579,24 +579,128 @@ export function AppProvider({ children }) {
 
       // 2. Process Bets
       const betsQ = query(collection(db, 'bets'), where('eventId', '==', eventId));
-      const betsSnap = await getDocs(betsQ); // Need all bets to settle
+      const betsSnap = await getDocs(betsQ);
+
+      // Track user updates to aggregate them (prevent multiple writes to same doc in one batch)
+      const userUpdates = {}; // { userId: { balanceChange: 0, investedChange: 0, lastBetPercent: 0 } }
+      const usersToFetch = new Set();
 
       for (const betDoc of betsSnap.docs) {
         const bet = betDoc.data();
-        // Skip if already settled to avoid double-pay/deduct
         if (bet.status !== 'pending') continue;
 
         const isWinner = bet.outcomeId === winnerOutcomeId;
-        const userRef = doc(db, 'users', bet.userId);
 
-        // Fetch User to Calc Portfolio Impact
-        let userExists = false;
-        let percentChange = 0;
+        // Queue Bet Update
+        batch.update(betDoc.ref, {
+          status: isWinner ? 'won' : 'lost',
+          settledAt: new Date().toISOString()
+        });
+
+        // Queue User Id for aggregation
+        usersToFetch.add(bet.userId);
+
+        // Create Notification (One per bet is fine)
+        const notifRef = doc(collection(db, 'notifications'));
+        batch.set(notifRef, {
+          userId: bet.userId,
+          type: 'result',
+          eventId: eventId,
+          title: isWinner ? 'You Won!' : 'Bet Lost',
+          message: isWinner
+            ? `You won $${(bet.potentialPayout).toFixed(2)} on ${bet.eventTitle} (${bet.outcomeLabel})`
+            : `You lost $${bet.amount.toFixed(2)} on ${bet.eventTitle} (${bet.outcomeLabel})`,
+          read: false,
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      // 3. Process Aggregate User Updates
+      // We need to fetch current user data to calc net worth for percent change
+      // Note: If optimal, we could fetch only unique users.
+      for (const userId of usersToFetch) {
         try {
+          const userRef = doc(db, 'users', userId);
           const userSnap = await getDoc(userRef);
+
           if (userSnap.exists()) {
-            userExists = true;
             const userData = userSnap.data();
+            const currentNetWorth = (userData.balance || 0) + (userData.invested || 0);
+
+            // Calculate Total Impact from all bets for this user on this event
+            let totalPayout = 0;
+            let totalInvestedRelease = 0; // Amount to remove from 'invested'
+            let netProfit = 0; // For percentage calc
+
+            // Re-scan bets for this user
+            for (const betDoc of betsSnap.docs) {
+              const bet = betDoc.data();
+              if (bet.userId !== userId || bet.status !== 'pending') continue;
+
+              const isWinner = bet.outcomeId === winnerOutcomeId;
+
+              totalInvestedRelease += bet.amount;
+
+              if (isWinner) {
+                totalPayout += bet.potentialPayout;
+                netProfit += (bet.potentialPayout - bet.amount);
+              } else {
+                netProfit -= bet.amount;
+              }
+            }
+
+            const percentChange = currentNetWorth > 0
+              ? (netProfit / currentNetWorth) * 100
+              : 0;
+
+            batch.update(userRef, {
+              balance: increment(totalPayout),
+              invested: increment(-totalInvestedRelease),
+              lastBetPercent: percentChange
+            });
+          }
+        } catch (err) {
+          console.error(`Error aggregating user ${userId}`, err);
+        }
+      }
+
+      await batch.commit();
+      return { success: true };
+    } catch (e) {
+      console.error("Resolve Event Error:", e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const fixStuckBets = async () => {
+    try {
+      const eventsQ = query(collection(db, 'events'), where('status', '==', 'settled'));
+      const eventsSnap = await getDocs(eventsQ);
+
+      let totalFixed = 0;
+      const batch = writeBatch(db);
+
+      for (const eventDoc of eventsSnap.docs) {
+        const event = eventDoc.data();
+        const winnerOutcomeId = event.winnerOutcomeId;
+        if (!winnerOutcomeId) continue;
+
+        const betsQ = query(collection(db, 'bets'), where('eventId', '==', eventDoc.id), where('status', '==', 'pending'));
+        const betsSnap = await getDocs(betsQ);
+
+        for (const betDoc of betsSnap.docs) {
+          const bet = betDoc.data();
+          // Double check it's pending
+          if (bet.status !== 'pending') continue;
+
+          const isWinner = bet.outcomeId === winnerOutcomeId;
+          const userRef = doc(db, 'users', bet.userId);
+
+          let percentChange = 0;
+          try {
+            // Fetch User for Net Worth Calc
+            const userSnap = await getDoc(userRef);
+            const userData = userSnap.exists() ? userSnap.data() : { balance: 0, invested: 0 };
             const currentNetWorth = (userData.balance || 0) + (userData.invested || 0);
 
             // Profit (or Loss) from this specific bet
@@ -608,19 +712,13 @@ export function AppProvider({ children }) {
             percentChange = currentNetWorth > 0
               ? (profit / currentNetWorth) * 100
               : 0;
-          }
-        } catch (err) {
-          console.error("Error calc legacy stats", err);
-        }
+          } catch (err) { console.error(err); }
 
-        // Settle the bet document
-        batch.update(betDoc.ref, {
-          status: isWinner ? 'won' : 'lost',
-          settledAt: new Date().toISOString()
-        });
+          batch.update(betDoc.ref, {
+            status: isWinner ? 'won' : 'lost',
+            settledAt: new Date().toISOString()
+          });
 
-        // Update User Balance & Invested & Last Bet Stats (ONLY IF USER EXISTS)
-        if (userExists) {
           if (isWinner) {
             batch.update(userRef, {
               balance: increment(bet.potentialPayout),
@@ -633,937 +731,855 @@ export function AppProvider({ children }) {
               lastBetPercent: percentChange
             });
           }
-
-          // Create Notification (Only if user exists, otherwise no one to read it)
-          const notifRef = doc(collection(db, 'notifications'));
-          batch.set(notifRef, {
-            userId: bet.userId,
-            type: 'result',
-            eventId: eventId,
-            title: isWinner ? 'You Won!' : 'Bet Lost',
-            message: isWinner
-              ? `You won $${(bet.potentialPayout).toFixed(2)} on ${bet.eventTitle} (${bet.outcomeLabel})`
-              : `You lost $${bet.amount.toFixed(2)} on ${bet.eventTitle} (${bet.outcomeLabel})`,
-            read: false,
-            createdAt: new Date().toISOString()
-          });
+          totalFixed++;
         }
+      }
+
+      if (totalFixed > 0) {
         await batch.commit();
-        return { success: true };
-      } catch (e) {
-        console.error("Resolve Event Error:", e);
-        return { success: false, error: e.message };
       }
-    };
-
-    const fixStuckBets = async () => {
-      try {
-        const eventsQ = query(collection(db, 'events'), where('status', '==', 'settled'));
-        const eventsSnap = await getDocs(eventsQ);
-
-        let totalFixed = 0;
-        const batch = writeBatch(db);
-
-        for (const eventDoc of eventsSnap.docs) {
-          const event = eventDoc.data();
-          const winnerOutcomeId = event.winnerOutcomeId;
-          if (!winnerOutcomeId) continue;
-
-          const betsQ = query(collection(db, 'bets'), where('eventId', '==', eventDoc.id), where('status', '==', 'pending'));
-          const betsSnap = await getDocs(betsQ);
-
-          for (const betDoc of betsSnap.docs) {
-            const bet = betDoc.data();
-            // Double check it's pending
-            if (bet.status !== 'pending') continue;
-
-            const isWinner = bet.outcomeId === winnerOutcomeId;
-            const userRef = doc(db, 'users', bet.userId);
-
-            let percentChange = 0;
-            try {
-              // Fetch User for Net Worth Calc
-              const userSnap = await getDoc(userRef);
-              const userData = userSnap.exists() ? userSnap.data() : { balance: 0, invested: 0 };
-              const currentNetWorth = (userData.balance || 0) + (userData.invested || 0);
-
-              // Profit (or Loss) from this specific bet
-              const profit = isWinner
-                ? (bet.potentialPayout - bet.amount) // Net Profit
-                : -bet.amount;                       // Net Loss
-
-              // Portfolio Impact % = (Profit / currentNetWorth) * 100
-              percentChange = currentNetWorth > 0
-                ? (profit / currentNetWorth) * 100
-                : 0;
-            } catch (err) { console.error(err); }
-
-            batch.update(betDoc.ref, {
-              status: isWinner ? 'won' : 'lost',
-              settledAt: new Date().toISOString()
-            });
-
-            if (isWinner) {
-              batch.update(userRef, {
-                balance: increment(bet.potentialPayout),
-                invested: increment(-bet.amount),
-                lastBetPercent: percentChange
-              });
-            } else {
-              batch.update(userRef, {
-                invested: increment(-bet.amount),
-                lastBetPercent: percentChange
-              });
-            }
-            totalFixed++;
-          }
-        }
-
-        if (totalFixed > 0) {
-          await batch.commit();
-        }
-        return { success: true, message: `Fixed ${totalFixed} stuck bets.` };
-      } catch (e) {
-        return { success: false, error: e.message };
-      }
-    };
+      return { success: true, message: `Fixed ${totalFixed} stuck bets.` };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
 
 
 
-    const deleteBet = async (betId) => {
+  const deleteBet = async (betId) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      await deleteDoc(doc(db, 'bets', betId));
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const updateEvent = async (eventId, data) => {
+    try {
+      await updateDoc(doc(db, 'events', eventId), data);
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const setMainBet = async (eventId, mainOutcomeId) => {
+    try {
       if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
-      try {
-        await deleteDoc(doc(db, 'bets', betId));
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: e.message };
-      }
-    };
+      const eventRef = doc(db, 'events', eventId);
+      const snap = await getDoc(eventRef);
+      if (!snap.exists()) return { success: false, error: "Event not found" };
 
-    const updateEvent = async (eventId, data) => {
-      try {
-        await updateDoc(doc(db, 'events', eventId), data);
-        return { success: true };
-      } catch (e) {
-        console.error(e);
-        return { success: false, error: e.message };
-      }
-    };
+      const evt = snap.data();
+      // Remove 'main' type from all, then set it for the chosen one plus its sibling?
+      // Wait, "Main Bet" usually implies a PAIR of outcomes (e.g. Chiefs vs 49ers).
+      // If the user selects "Chiefs" as main, we likely want "49ers" (the other one in that pair) to also be main.
+      // But outcomes are just a flat list. 
+      // Simplification: The admin clicks "Highlight This Pair" on one outcome, and we assume the next one is its pair?
+      // Or we just flag THIS outcome's pair as main.
 
-    const setMainBet = async (eventId, mainOutcomeId) => {
-      try {
-        if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
-        const eventRef = doc(db, 'events', eventId);
-        const snap = await getDoc(eventRef);
-        if (!snap.exists()) return { success: false, error: "Event not found" };
+      // Let's iterate and just toggle the type 'main' for the targeted outcome(s).
+      // Actually, cleaner design: toggle "type: main" for specific outcomes.
 
-        const evt = snap.data();
-        // Remove 'main' type from all, then set it for the chosen one plus its sibling?
-        // Wait, "Main Bet" usually implies a PAIR of outcomes (e.g. Chiefs vs 49ers).
-        // If the user selects "Chiefs" as main, we likely want "49ers" (the other one in that pair) to also be main.
-        // But outcomes are just a flat list. 
-        // Simplification: The admin clicks "Highlight This Pair" on one outcome, and we assume the next one is its pair?
-        // Or we just flag THIS outcome's pair as main.
+      const newOutcomes = evt.outcomes.map(o => {
+        if (o.id === mainOutcomeId) return { ...o, type: 'main' };
+        // If we want to unset others? Maybe not, maybe multiple main bets allowed.
+        return o;
+      });
 
-        // Let's iterate and just toggle the type 'main' for the targeted outcome(s).
-        // Actually, cleaner design: toggle "type: main" for specific outcomes.
+      await updateDoc(eventRef, { outcomes: newOutcomes });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
 
-        const newOutcomes = evt.outcomes.map(o => {
-          if (o.id === mainOutcomeId) return { ...o, type: 'main' };
-          // If we want to unset others? Maybe not, maybe multiple main bets allowed.
-          return o;
-        });
+  const submitIdea = async (ideaText) => {
+    if (!user) return { success: false, error: 'Not logged in' };
 
-        await updateDoc(eventRef, { outcomes: newOutcomes });
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: e.message };
-      }
-    };
-
-    const submitIdea = async (ideaText) => {
-      if (!user) return { success: false, error: 'Not logged in' };
-
-      // Duplicate Check
-      const qDup = query(collection(db, 'ideas'), where('userId', '==', user.id), where('text', '==', ideaText));
-      const snapDup = await getDocs(qDup);
-      if (!snapDup.empty) {
-        return { success: false, error: "You already suggested this! Hey switch it up." };
-      }
-
-      // Check Daily Limit (Client-side check based on local user data, ideally backend does this)
-      const today = new Date().toDateString();
-      let currentCount = 0;
-
-      if (user.submissionData && user.submissionData.date === today) {
-        currentCount = user.submissionData.count;
-      }
-
-      if (currentCount >= 5) {
-        return { success: false, error: 'Daily limit reached (5/5). Come back tomorrow!' };
-      }
-
-      try {
-        // 1. Create Idea Doc
-        await addDoc(collection(db, 'ideas'), {
-          userId: user.id,
-          username: user.username,
-          text: ideaText,
-          submittedAt: new Date().toISOString()
-        });
-
-        // 2. Update User (Reward + Submission Count)
-        // If date different, simple set. If same, increment.
-        // Firestore update is tricky with nested objects, so we set the whole object.
-        // We calculate new count locally to ensure sync with the check.
-
-        const newCount = currentCount + 1;
-
-        await updateDoc(doc(db, 'users', user.id), {
-          balance: increment(15), // Reward
-          submissionData: {
-            date: today,
-            count: newCount
-          }
-        });
-
-        return { success: true, message: 'Idea submitted! +$15.00' };
-      } catch (e) {
-        return { success: false, error: e.message };
-      }
-    };
-
-    const updateUserGroups = async (targetUserId, groups) => {
-      try {
-        if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
-        const userRef = doc(db, 'users', targetUserId);
-        await updateDoc(userRef, { groups: groups || [] });
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: e.message };
-      }
-    };
-
-    const deleteIdea = async (ideaId) => {
-      if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
-      try {
-        await deleteDoc(doc(db, 'ideas', ideaId));
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: e.message };
-      }
-    };
-
-    const updateUser = async (updates) => {
-      if (!user) return { success: false, error: 'Not logged in' };
-
-      try {
-        // 1. Update Firestore FIRST (Profile Pic, Username, etc.)
-        // This ensures that non-sensitive updates always succeed even if Auth fails.
-        const firestoreUpdates = { ...updates };
-        delete firestoreUpdates.password; // Don't store raw password in DB
-
-        await updateDoc(doc(db, 'users', user.id), firestoreUpdates);
-
-        // Update local state immediately for the UI
-        setUser(prev => ({ ...prev, ...firestoreUpdates }));
-
-        // 2. Attempt Auth Updates (Sensitive: Email/Password)
-        let authUpdated = false;
-        let authErrorMsg = '';
-
-        try {
-          // Update Email
-          if (updates.email && auth.currentUser) {
-            const currentAuthEmail = auth.currentUser.email;
-            if (updates.email.toLowerCase() !== currentAuthEmail.toLowerCase()) {
-              console.log(`Debug: Attempting email update from ${currentAuthEmail} to ${updates.email}`);
-              try {
-                await updateEmail(auth.currentUser, updates.email);
-                authUpdated = true;
-              } catch (emailErr) {
-                if (emailErr.code === 'auth/operation-not-allowed' || emailErr.message.includes('verify')) {
-                  await verifyBeforeUpdateEmail(auth.currentUser, updates.email);
-                  return { success: true, message: `Profile saved & Verification sent to ${updates.email}.` };
-                }
-                throw emailErr;
-              }
-            }
-          }
-
-          // Update Password
-          if (updates.password && updates.password.length > 0) {
-            if (auth.currentUser) {
-              await updatePassword(auth.currentUser, updates.password);
-              authUpdated = true;
-            }
-          }
-
-          // Force refresh if Auth changed
-          if (authUpdated && auth.currentUser) {
-            await auth.currentUser.reload();
-          }
-
-        } catch (authErr) {
-          console.error("Auth Update Failed:", authErr);
-          if (authErr.code === 'auth/requires-recent-login') {
-            authErrorMsg = " (Note: Re-login required to update Email/Password)";
-          } else {
-            authErrorMsg = ` (Auth Error: ${authErr.message})`;
-          }
-        }
-
-        const successMsg = authUpdated
-          ? 'Account & Profile updated!'
-          : 'Profile updated!' + authErrorMsg;
-
-        return { success: true, message: authUpdated ? 'Account & Profile updated!' : 'Profile updated!' + authErrorMsg };
-
-      } catch (e) {
-        console.error("Firestore Update Error:", e);
-        return { success: false, error: e.message };
-      }
+    // Duplicate Check
+    const qDup = query(collection(db, 'ideas'), where('userId', '==', user.id), where('text', '==', ideaText));
+    const snapDup = await getDocs(qDup);
+    if (!snapDup.empty) {
+      return { success: false, error: "You already suggested this! Hey switch it up." };
     }
 
-    const recalculateLeaderboard = async () => {
-      if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
-      try {
-        // 1. Fetch all pending bets
-        const betsQ = query(collection(db, 'bets'), where('status', '==', 'pending'));
-        const betsSnap = await getDocs(betsQ);
-        // If index missing, this line throws.
+    // Check Daily Limit (Client-side check based on local user data, ideally backend does this)
+    const today = new Date().toDateString();
+    let currentCount = 0;
 
-        const investmentsByUser = {};
-        betsSnap.docs.forEach(doc => {
-          const bet = doc.data();
-          if (!investmentsByUser[bet.userId]) investmentsByUser[bet.userId] = 0;
-          investmentsByUser[bet.userId] += (bet.amount || 0);
-        });
+    if (user.submissionData && user.submissionData.date === today) {
+      currentCount = user.submissionData.count;
+    }
 
-        // 2. Fetch all users to update their stats
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const batch = writeBatch(db);
-        let updateCount = 0;
+    if (currentCount >= 5) {
+      return { success: false, error: 'Daily limit reached (5/5). Come back tomorrow!' };
+    }
 
-        usersSnap.docs.forEach(userDoc => {
-          const uid = userDoc.id;
-          const currentInvested = userDoc.data().invested || 0;
-          const correctInvested = investmentsByUser[uid] || 0;
+    try {
+      // 1. Create Idea Doc
+      await addDoc(collection(db, 'ideas'), {
+        userId: user.id,
+        username: user.username,
+        text: ideaText,
+        submittedAt: new Date().toISOString()
+      });
 
-          // Only update if different to save writes
-          if (Math.abs(currentInvested - correctInvested) > 0.01) {
-            batch.update(userDoc.ref, { invested: correctInvested });
-            updateCount++;
-          }
-        });
+      // 2. Update User (Reward + Submission Count)
+      // If date different, simple set. If same, increment.
+      // Firestore update is tricky with nested objects, so we set the whole object.
+      // We calculate new count locally to ensure sync with the check.
 
-        if (updateCount > 0) await batch.commit();
-        return { success: true, message: `Recalculated! Updated ${updateCount} users.` };
-      } catch (e) {
-        console.error("Recalc Detailed Error:", e);
-        let errMsg = e.message || String(e);
-        if (errMsg.includes("index")) errMsg = "Missing Index! Check Browser Console (F12) for the creation link.";
-        return { success: false, error: errMsg };
-      }
-    };
+      const newCount = currentCount + 1;
 
-    const backfillLastBetPercent = async () => {
-      if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
-      try {
-        console.log("Starting Backfill...");
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const batch = writeBatch(db);
-        let updateCount = 0;
-
-        // Process users in chunks to avoid blowing up memory/batch limits if many users
-        // But for <500 users, loop is fine. Batch limit is 500 ops.
-
-        for (const userDoc of usersSnap.docs) {
-          const uid = userDoc.id;
-
-          // Get all bets for user (we crave the most recent settled one)
-          const betsQ = query(collection(db, 'bets'), where('userId', '==', uid));
-          const betsSnap = await getDocs(betsQ);
-
-          let lastSettledBet = null;
-
-          // Find latest settled bet in memory
-          const settledBets = betsSnap.docs
-            .map(d => ({ ...d.data(), id: d.id }))
-            .filter(b => b.status === 'won' || b.status === 'lost')
-            .sort((a, b) => {
-              const dateA = new Date(a.settledAt || a.placedAt || 0);
-              const dateB = new Date(b.settledAt || b.placedAt || 0);
-              return dateB - dateA; // Descending
-            });
-
-          if (settledBets.length > 0) {
-            lastSettledBet = settledBets[0];
-
-            const isWinner = lastSettledBet.status === 'won';
-            const userData = userDoc.data();
-            const currentNetWorth = (userData.balance || 0) + (userData.invested || 0);
-
-            const profit = isWinner
-              ? (lastSettledBet.potentialPayout - lastSettledBet.amount)
-              : -lastSettledBet.amount;
-
-            // Approximate Pre-Bet Net Worth
-            // Current Net Worth DOES include this bet's result (since it's settled).
-            // So we subtract the profit to get the pre-bet value.
-            const preBetNetWorth = currentNetWorth - profit;
-
-            // Avoid division by zero
-            const percentChange = preBetNetWorth > 0
-              ? (profit / preBetNetWorth) * 100
-              : 0;
-
-            batch.update(userDoc.ref, { lastBetPercent: percentChange });
-            updateCount++;
-          }
+      await updateDoc(doc(db, 'users', user.id), {
+        balance: increment(15), // Reward
+        submissionData: {
+          date: today,
+          count: newCount
         }
+      });
 
-        if (updateCount > 0) await batch.commit();
-        return { success: true, message: `Updated ${updateCount} users with last bet stats.` };
+      return { success: true, message: 'Idea submitted! +$15.00' };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
 
-      } catch (e) {
-        console.error(e);
-        return { success: false, error: e.message };
-      }
-    };
-
-    const demoteSelf = async () => {
-      if (!user) return;
-      try {
-        await updateDoc(doc(db, 'users', user.id), { role: 'user' });
-        // setUser({...user, role: 'user'}); // Optimistic update
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: e.message };
-      }
-    };
-
-    const deleteAccount = async () => {
-      if (!user) return { success: false };
-      isDeletingAccount.current = true; // Set flag to prevent resurrection
-      try {
-        const userId = user.id;
-
-        // Helper to delete in batches
-        const commitBatchBuffer = async (docsToDelete) => {
-          const CHUNK_SIZE = 400;
-          for (let i = 0; i < docsToDelete.length; i += CHUNK_SIZE) {
-            const chunk = docsToDelete.slice(i, i + CHUNK_SIZE);
-            const batch = writeBatch(db);
-            chunk.forEach(ref => batch.delete(ref));
-            await batch.commit();
-          }
-        };
-
-        const allDocsToDelete = [];
-
-        // 1. Bets
-        const betsSnap = await getDocs(query(collection(db, 'bets'), where('userId', '==', userId)));
-        betsSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
-
-        // 2. Ideas
-        const ideasSnap = await getDocs(query(collection(db, 'ideas'), where('userId', '==', userId)));
-        ideasSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
-
-        // 3. Comments (To ensure complete erasure)
-        const commentsSnap = await getDocs(query(collection(db, 'comments'), where('userId', '==', userId)));
-        commentsSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
-
-        // 4. Notifications
-        const notifSnap = await getDocs(query(collection(db, 'notifications'), where('userId', '==', userId)));
-        notifSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
-
-        // 5. User Profile
-        allDocsToDelete.push(doc(db, 'users', userId));
-
-        console.log(`Deleting account ${userId}: ${allDocsToDelete.length} documents total.`);
-
-        // Execute Firestore Deletions
-        await commitBatchBuffer(allDocsToDelete);
-
-        // 6. Delete Auth Account
-        if (auth.currentUser) {
-          await auth.currentUser.delete();
-        }
-
-        return { success: true };
-      } catch (e) {
-        isDeletingAccount.current = false; // Reset flag on error
-        console.error("Delete Error:", e);
-        if (e.code === 'auth/requires-recent-login') {
-          return { success: false, error: "Please log out and log in again to delete your account." };
-        }
-        return { success: false, error: e.message };
-      }
-    };
-
-    const deleteUser = async (targetUserId) => {
+  const updateUserGroups = async (targetUserId, groups) => {
+    try {
       if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+      const userRef = doc(db, 'users', targetUserId);
+      await updateDoc(userRef, { groups: groups || [] });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const deleteIdea = async (ideaId) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      await deleteDoc(doc(db, 'ideas', ideaId));
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const updateUser = async (updates) => {
+    if (!user) return { success: false, error: 'Not logged in' };
+
+    try {
+      // 1. Update Firestore FIRST (Profile Pic, Username, etc.)
+      // This ensures that non-sensitive updates always succeed even if Auth fails.
+      const firestoreUpdates = { ...updates };
+      delete firestoreUpdates.password; // Don't store raw password in DB
+
+      await updateDoc(doc(db, 'users', user.id), firestoreUpdates);
+
+      // Update local state immediately for the UI
+      setUser(prev => ({ ...prev, ...firestoreUpdates }));
+
+      // 2. Attempt Auth Updates (Sensitive: Email/Password)
+      let authUpdated = false;
+      let authErrorMsg = '';
+
       try {
-        // Helper to delete in batches
-        const commitBatchBuffer = async (docsToDelete) => {
-          const CHUNK_SIZE = 400; // Safety margin below 500
-          for (let i = 0; i < docsToDelete.length; i += CHUNK_SIZE) {
-            const chunk = docsToDelete.slice(i, i + CHUNK_SIZE);
-            const batch = writeBatch(db);
-            chunk.forEach(ref => batch.delete(ref));
-            await batch.commit();
-          }
-        };
-
-        const allDocsToDelete = [];
-
-        // 1. Bets
-        const betsSnap = await getDocs(query(collection(db, 'bets'), where('userId', '==', targetUserId)));
-        betsSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
-
-        // 2. Ideas
-        const ideasSnap = await getDocs(query(collection(db, 'ideas'), where('userId', '==', targetUserId)));
-        ideasSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
-
-        // 3. Comments (New)
-        const commentsSnap = await getDocs(query(collection(db, 'comments'), where('userId', '==', targetUserId)));
-        commentsSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
-
-        // 4. Notifications (New)
-        const notifSnap = await getDocs(query(collection(db, 'notifications'), where('userId', '==', targetUserId)));
-        notifSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
-
-        // 5. User Profile
-        allDocsToDelete.push(doc(db, 'users', targetUserId));
-
-        console.log(`Deleting user ${targetUserId}: ${allDocsToDelete.length} documents total.`);
-
-        await commitBatchBuffer(allDocsToDelete);
-
-        return { success: true };
-      } catch (e) {
-        console.error("Delete User Error:", e);
-        return { success: false, error: e.message };
-      }
-    };
-
-    const syncEventStats = async () => {
-      if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
-      try {
-        // 1. Fetch all bets
-        const betsSnap = await getDocs(collection(db, 'bets'));
-        const allBets = betsSnap.docs.map(d => d.data());
-
-        // 2. Aggregate Stats
-        const statsMap = {}; // eventId -> { counts: {}, amounts: {}, totalBets: 0, totalPool: 0 }
-
-        for (const bet of allBets) {
-          if (!statsMap[bet.eventId]) {
-            statsMap[bet.eventId] = { counts: {}, amounts: {}, totalBets: 0, totalPool: 0 };
-          }
-          const s = statsMap[bet.eventId];
-          s.totalBets += 1;
-          s.totalPool += (bet.amount || 0);
-          s.counts[bet.outcomeId] = (s.counts[bet.outcomeId] || 0) + 1;
-          s.amounts[bet.outcomeId] = (s.amounts[bet.outcomeId] || 0) + (bet.amount || 0);
-        }
-
-        // 3. Update Events
-        const eventsSnap = await getDocs(collection(db, 'events'));
-        const updatePromises = eventsSnap.docs.map(async (docSnap) => {
-          const stats = statsMap[docSnap.id] || { counts: {}, amounts: {}, totalBets: 0, totalPool: 0 };
-          await updateDoc(doc(db, 'events', docSnap.id), { stats });
-        });
-
-        await Promise.all(updatePromises);
-        return { success: true };
-      } catch (e) {
-        console.error(e);
-        return { success: false, error: e.message };
-      }
-    };
-
-    const addComment = async (eventId, text) => {
-      if (!user) return { success: false, error: 'Login to comment' };
-      try {
-        const commentData = {
-          eventId,
-          userId: user.id,
-          username: user.username,
-          text,
-          createdAt: new Date().toISOString()
-        };
-        await addDoc(collection(db, 'comments'), commentData);
-
-        // Update Event with lastComment for preview
-        await updateDoc(doc(db, 'events', eventId), {
-          lastComment: {
-            username: user.username,
-            text: text.length > 50 ? text.substring(0, 50) + '...' : text,
-            createdAt: commentData.createdAt
-          }
-        });
-
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: e.message };
-      }
-    };
-
-    const deleteComment = async (commentId) => {
-      if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
-      try {
-        // 1. Get comment details before deleting (to find parent event)
-        const commentRef = doc(db, 'comments', commentId);
-        const commentSnap = await getDoc(commentRef);
-
-        if (!commentSnap.exists()) {
-          return { success: false, error: 'Comment already deleted' };
-        }
-
-        const val = commentSnap.data();
-        const eventId = val.eventId;
-        const commentCreatedAt = val.createdAt;
-
-        // 2. Delete the comment
-        await deleteDoc(commentRef);
-
-        // 3. Check if this was the "lastComment" on the event card
-        if (eventId) {
-          const eventRef = doc(db, 'events', eventId);
-          const eventSnap = await getDoc(eventRef);
-
-          if (eventSnap.exists()) {
-            const eventData = eventSnap.data();
-            // Check if the displayed lastComment matches the one we just deleted
-            if (eventData.lastComment && eventData.lastComment.createdAt === commentCreatedAt) {
-              // It was the one displayed! We need to find the new latest comment.
-              // Fetch all remaining comments for this event
-              const q = query(collection(db, 'comments'), where('eventId', '==', eventId));
-              const snap = await getDocs(q);
-
-              if (!snap.empty) {
-                // Find the newest one
-                const all = snap.docs.map(d => d.data());
-                all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-                const newest = all[0];
-
-                await updateDoc(eventRef, {
-                  lastComment: {
-                    username: newest.username,
-                    text: newest.text.length > 50 ? newest.text.substring(0, 50) + '...' : newest.text,
-                    createdAt: newest.createdAt
-                  }
-                });
-              } else {
-                // No comments left
-                await updateDoc(eventRef, {
-                  lastComment: deleteField()
-                });
+        // Update Email
+        if (updates.email && auth.currentUser) {
+          const currentAuthEmail = auth.currentUser.email;
+          if (updates.email.toLowerCase() !== currentAuthEmail.toLowerCase()) {
+            console.log(`Debug: Attempting email update from ${currentAuthEmail} to ${updates.email}`);
+            try {
+              await updateEmail(auth.currentUser, updates.email);
+              authUpdated = true;
+            } catch (emailErr) {
+              if (emailErr.code === 'auth/operation-not-allowed' || emailErr.message.includes('verify')) {
+                await verifyBeforeUpdateEmail(auth.currentUser, updates.email);
+                return { success: true, message: `Profile saved & Verification sent to ${updates.email}.` };
               }
+              throw emailErr;
             }
           }
         }
 
-        return { success: true };
-      } catch (e) {
-        console.error(e);
-        return { success: false, error: e.message };
-      }
-    };
-
-    const toggleLikeComment = async (commentId, currentLikes = []) => {
-      if (!user) return { success: false, error: 'Login to like' };
-      try {
-        const commentRef = doc(db, 'comments', commentId);
-        const isLiked = currentLikes.includes(user.id);
-
-        if (isLiked) {
-          await updateDoc(commentRef, { likes: arrayRemove(user.id) });
-        } else {
-          await updateDoc(commentRef, { likes: arrayUnion(user.id) });
+        // Update Password
+        if (updates.password && updates.password.length > 0) {
+          if (auth.currentUser) {
+            await updatePassword(auth.currentUser, updates.password);
+            authUpdated = true;
+          }
         }
-        return { success: true };
-      } catch (e) {
-        console.error(e);
-        return { success: false, error: e.message };
+
+        // Force refresh if Auth changed
+        if (authUpdated && auth.currentUser) {
+          await auth.currentUser.reload();
+        }
+
+      } catch (authErr) {
+        console.error("Auth Update Failed:", authErr);
+        if (authErr.code === 'auth/requires-recent-login') {
+          authErrorMsg = " (Note: Re-login required to update Email/Password)";
+        } else {
+          authErrorMsg = ` (Auth Error: ${authErr.message})`;
+        }
       }
-    };
 
-    const markNotificationAsRead = async (notifId) => {
-      try {
-        await updateDoc(doc(db, 'notifications', notifId), { read: true });
-      } catch (e) { console.error(e); }
-    };
+      const successMsg = authUpdated
+        ? 'Account & Profile updated!'
+        : 'Profile updated!' + authErrorMsg;
 
+      return { success: true, message: authUpdated ? 'Account & Profile updated!' : 'Profile updated!' + authErrorMsg };
 
+    } catch (e) {
+      console.error("Firestore Update Error:", e);
+      return { success: false, error: e.message };
+    }
+  }
 
-    const getUserStats = async (targetUserId) => {
-      try {
-        const userRef = doc(db, 'users', targetUserId);
-        const userSnap = await getDoc(userRef);
-        const userData = userSnap.exists() ? userSnap.data() : {};
+  const recalculateLeaderboard = async () => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      // 1. Fetch all pending bets
+      const betsQ = query(collection(db, 'bets'), where('status', '==', 'pending'));
+      const betsSnap = await getDocs(betsQ);
+      // If index missing, this line throws.
 
-        const betsQ = query(collection(db, 'bets'), where('userId', '==', targetUserId));
-        const snap = await getDocs(betsQ);
-        let wins = 0;
-        let losses = 0;
-        let profit = 0;
-        let settledCount = 0;
+      const investmentsByUser = {};
+      betsSnap.docs.forEach(doc => {
+        const bet = doc.data();
+        if (!investmentsByUser[bet.userId]) investmentsByUser[bet.userId] = 0;
+        investmentsByUser[bet.userId] += (bet.amount || 0);
+      });
 
-        snap.docs.forEach(d => {
-          const b = d.data();
-          if (b.status === 'won') {
-            wins++;
-            settledCount++;
-            profit += ((b.potentialPayout || (b.amount * b.odds)) - b.amount);
-          } else if (b.status === 'lost') {
-            losses++;
-            settledCount++;
-            profit -= b.amount;
-          }
-        });
+      // 2. Fetch all users to update their stats
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const batch = writeBatch(db);
+      let updateCount = 0;
 
-        const total = snap.size;
-        const winRate = settledCount > 0 ? ((wins / settledCount) * 100).toFixed(1) : 0;
+      usersSnap.docs.forEach(userDoc => {
+        const uid = userDoc.id;
+        const currentInvested = userDoc.data().invested || 0;
+        const correctInvested = investmentsByUser[uid] || 0;
 
-        return {
-          success: true,
-          stats: { wins, losses, total, winRate, profit },
-          profile: { bio: userData.bio || '', profilePic: userData.profilePic, username: userData.username, groups: userData.groups || [] }
-        };
-      } catch (e) { console.error(e); return { success: false, error: e.message }; }
-    };
+        // Only update if different to save writes
+        if (Math.abs(currentInvested - correctInvested) > 0.01) {
+          batch.update(userDoc.ref, { invested: correctInvested });
+          updateCount++;
+        }
+      });
 
-    const getWeeklyLeaderboard = async () => {
-      try {
-        const now = new Date();
-        const dayOfWeek = now.getDay(); // 0 (Sun) - 6 (Sat)
-        const startOfWeek = new Date(now);
-        // Reset to most recent Sunday (or today if it is Sunday)
-        startOfWeek.setDate(now.getDate() - dayOfWeek);
-        startOfWeek.setHours(0, 0, 0, 0);
-        const isoStr = startOfWeek.toISOString();
+      if (updateCount > 0) await batch.commit();
+      return { success: true, message: `Recalculated! Updated ${updateCount} users.` };
+    } catch (e) {
+      console.error("Recalc Detailed Error:", e);
+      let errMsg = e.message || String(e);
+      if (errMsg.includes("index")) errMsg = "Missing Index! Check Browser Console (F12) for the creation link.";
+      return { success: false, error: errMsg };
+    }
+  };
 
-        console.log("Fetching weekly stats since:", isoStr);
+  const backfillLastBetPercent = async () => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      console.log("Starting Backfill...");
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const batch = writeBatch(db);
+      let updateCount = 0;
 
-        const q = query(collection(db, 'bets'), where('status', 'in', ['won', 'lost']), where('settledAt', '>=', isoStr));
-        const snap = await getDocs(q);
+      // Process users in chunks to avoid blowing up memory/batch limits if many users
+      // But for <500 users, loop is fine. Batch limit is 500 ops.
 
-        const stats = {};
-        snap.docs.forEach(doc => {
-          const b = doc.data();
-          if (!stats[b.userId]) stats[b.userId] = 0;
-          if (b.status === 'won') {
-            // Profit = Payout - Wager
-            const payout = b.potentialPayout || (b.amount * b.odds);
-            stats[b.userId] += (payout - b.amount);
-          } else {
-            // Loss = -Wager
-            stats[b.userId] -= b.amount;
-          }
-        });
+      for (const userDoc of usersSnap.docs) {
+        const uid = userDoc.id;
 
-        const leaderboard = Object.entries(stats).map(([userId, profit]) => ({ userId, profit }));
-        leaderboard.sort((a, b) => b.profit - a.profit);
-        return { success: true, data: leaderboard };
-      } catch (e) {
-        console.error("Weekly Leaderboard Error:", e);
-        let msg = e.message;
-        if (msg.includes("index")) msg = "Missing Index! Check console (F12) for the creation link.";
-        return { success: false, error: msg };
-      }
-    };
+        // Get all bets for user (we crave the most recent settled one)
+        const betsQ = query(collection(db, 'bets'), where('userId', '==', uid));
+        const betsSnap = await getDocs(betsQ);
 
-    const updateSystemAnnouncement = async (data) => {
-      if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
-      try {
-        const docRef = doc(db, 'system', 'announcement');
-        // Merge true to allow partial updates if needed, though usually we replace content
-        await setDoc(docRef, data, { merge: true });
-        return { success: true };
-      } catch (e) {
-        console.error(e);
-        alert("Error posting announcement: " + e.message); // Debug
-        return { success: false, error: e.message };
-      }
-    };
+        let lastSettledBet = null;
 
-
-    const sendIdeaToAdmin = async (ideaId, ideaText) => {
-      if (!user || (!user.groups?.includes('Moderator') && user.role !== 'admin')) return { success: false, error: 'Unauthorized' };
-      try {
-        // 1. Mark idea as recommended
-        const ideaRef = doc(db, 'ideas', ideaId);
-        await updateDoc(ideaRef, {
-          modRecommended: true,
-          recommendedBy: user.username,
-          recommendedAt: new Date().toISOString()
-        });
-
-        // 2. Notify Admins
-        const adminsQ = query(collection(db, 'users'), where('role', '==', 'admin'));
-        const adminsSnap = await getDocs(adminsQ);
-        const batch = writeBatch(db);
-
-        adminsSnap.forEach(adminDoc => {
-          const notifRef = doc(collection(db, 'notifications'));
-          batch.set(notifRef, {
-            userId: adminDoc.id,
-            type: 'admin_alert',
-            title: '🛡️ Mod Recommendation',
-            message: `Mod ${user.username} thinks this looks good: "${ideaText}"`,
-            read: false,
-            createdAt: new Date().toISOString()
+        // Find latest settled bet in memory
+        const settledBets = betsSnap.docs
+          .map(d => ({ ...d.data(), id: d.id }))
+          .filter(b => b.status === 'won' || b.status === 'lost')
+          .sort((a, b) => {
+            const dateA = new Date(a.settledAt || a.placedAt || 0);
+            const dateB = new Date(b.settledAt || b.placedAt || 0);
+            return dateB - dateA; // Descending
           });
-        });
 
-        await batch.commit();
-        return { success: true };
-      } catch (e) {
-        console.error(e);
-        return { success: false, error: e.message };
+        if (settledBets.length > 0) {
+          lastSettledBet = settledBets[0];
+
+          const isWinner = lastSettledBet.status === 'won';
+          const userData = userDoc.data();
+          const currentNetWorth = (userData.balance || 0) + (userData.invested || 0);
+
+          const profit = isWinner
+            ? (lastSettledBet.potentialPayout - lastSettledBet.amount)
+            : -lastSettledBet.amount;
+
+          // Approximate Pre-Bet Net Worth
+          // Current Net Worth DOES include this bet's result (since it's settled).
+          // So we subtract the profit to get the pre-bet value.
+          const preBetNetWorth = currentNetWorth - profit;
+
+          // Avoid division by zero
+          const percentChange = preBetNetWorth > 0
+            ? (profit / preBetNetWorth) * 100
+            : 0;
+
+          batch.update(userDoc.ref, { lastBetPercent: percentChange });
+          updateCount++;
+        }
       }
-    };
 
-    const createParlay = async (legs, baseMultiplier, finalMultiplier) => {
-      if (!user) return { success: false, error: 'Not logged in' };
-      try {
-        await addDoc(collection(db, 'parlays'), {
-          creatorId: user.id,
-          creatorName: user.username,
-          legs,
-          baseMultiplier,
-          finalMultiplier,
-          createdAt: new Date().toISOString(),
-          wagersCount: 0,
-          totalPool: 0
-        });
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: e.message };
+      if (updateCount > 0) await batch.commit();
+      return { success: true, message: `Updated ${updateCount} users with last bet stats.` };
+
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const demoteSelf = async () => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.id), { role: 'user' });
+      // setUser({...user, role: 'user'}); // Optimistic update
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (!user) return { success: false };
+    isDeletingAccount.current = true; // Set flag to prevent resurrection
+    try {
+      const userId = user.id;
+
+      // Helper to delete in batches
+      const commitBatchBuffer = async (docsToDelete) => {
+        const CHUNK_SIZE = 400;
+        for (let i = 0; i < docsToDelete.length; i += CHUNK_SIZE) {
+          const chunk = docsToDelete.slice(i, i + CHUNK_SIZE);
+          const batch = writeBatch(db);
+          chunk.forEach(ref => batch.delete(ref));
+          await batch.commit();
+        }
+      };
+
+      const allDocsToDelete = [];
+
+      // 1. Bets
+      const betsSnap = await getDocs(query(collection(db, 'bets'), where('userId', '==', userId)));
+      betsSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
+
+      // 2. Ideas
+      const ideasSnap = await getDocs(query(collection(db, 'ideas'), where('userId', '==', userId)));
+      ideasSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
+
+      // 3. Comments (To ensure complete erasure)
+      const commentsSnap = await getDocs(query(collection(db, 'comments'), where('userId', '==', userId)));
+      commentsSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
+
+      // 4. Notifications
+      const notifSnap = await getDocs(query(collection(db, 'notifications'), where('userId', '==', userId)));
+      notifSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
+
+      // 5. User Profile
+      allDocsToDelete.push(doc(db, 'users', userId));
+
+      console.log(`Deleting account ${userId}: ${allDocsToDelete.length} documents total.`);
+
+      // Execute Firestore Deletions
+      await commitBatchBuffer(allDocsToDelete);
+
+      // 6. Delete Auth Account
+      if (auth.currentUser) {
+        await auth.currentUser.delete();
       }
-    };
 
-    const placeParlayBet = async (parlayId, amount) => {
-      if (!user) return { success: false, error: 'Not logged in' };
-      if (user.balance < amount) return { success: false, error: 'Insufficient funds' };
+      return { success: true };
+    } catch (e) {
+      isDeletingAccount.current = false; // Reset flag on error
+      console.error("Delete Error:", e);
+      if (e.code === 'auth/requires-recent-login') {
+        return { success: false, error: "Please log out and log in again to delete your account." };
+      }
+      return { success: false, error: e.message };
+    }
+  };
 
-      try {
-        const parlayRef = doc(db, 'parlays', parlayId);
-        const parlaySnap = await getDoc(parlayRef);
-        if (!parlaySnap.exists()) return { success: false, error: "Parlay not found" };
-        const parlay = parlaySnap.data();
+  const deleteUser = async (targetUserId) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      // Helper to delete in batches
+      const commitBatchBuffer = async (docsToDelete) => {
+        const CHUNK_SIZE = 400; // Safety margin below 500
+        for (let i = 0; i < docsToDelete.length; i += CHUNK_SIZE) {
+          const chunk = docsToDelete.slice(i, i + CHUNK_SIZE);
+          const batch = writeBatch(db);
+          chunk.forEach(ref => batch.delete(ref));
+          await batch.commit();
+        }
+      };
 
-        // Deduct Balance
-        const userRef = doc(db, 'users', user.id);
+      const allDocsToDelete = [];
 
-        // Update streak (Reuse logic from placeBet if I had it extracted, but duplicating for safety now to avoid refactor risks)
-        const today = new Date();
-        const todayStr = today.toDateString();
-        const yesterday = new Date();
-        yesterday.setDate(today.getDate() - 1);
-        const yesterdayStr = yesterday.toDateString();
+      // 1. Bets
+      const betsSnap = await getDocs(query(collection(db, 'bets'), where('userId', '==', targetUserId)));
+      betsSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
 
-        let newStreak = user.currentStreak || 0;
-        const lastDate = user.lastBetDate || "";
+      // 2. Ideas
+      const ideasSnap = await getDocs(query(collection(db, 'ideas'), where('userId', '==', targetUserId)));
+      ideasSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
 
-        let streakType = 'none';
-        if (lastDate !== todayStr) {
-          if (lastDate === yesterdayStr) {
-            newStreak += 1;
-            streakType = 'increased';
-          } else {
-            newStreak = 1;
-            streakType = 'started';
-          }
-        } else {
-          if (newStreak === 0) {
-            newStreak = 1;
-            streakType = 'started';
+      // 3. Comments (New)
+      const commentsSnap = await getDocs(query(collection(db, 'comments'), where('userId', '==', targetUserId)));
+      commentsSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
+
+      // 4. Notifications (New)
+      const notifSnap = await getDocs(query(collection(db, 'notifications'), where('userId', '==', targetUserId)));
+      notifSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
+
+      // 5. User Profile
+      allDocsToDelete.push(doc(db, 'users', targetUserId));
+
+      console.log(`Deleting user ${targetUserId}: ${allDocsToDelete.length} documents total.`);
+
+      await commitBatchBuffer(allDocsToDelete);
+
+      return { success: true };
+    } catch (e) {
+      console.error("Delete User Error:", e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const syncEventStats = async () => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      // 1. Fetch all bets
+      const betsSnap = await getDocs(collection(db, 'bets'));
+      const allBets = betsSnap.docs.map(d => d.data());
+
+      // 2. Aggregate Stats
+      const statsMap = {}; // eventId -> { counts: {}, amounts: {}, totalBets: 0, totalPool: 0 }
+
+      for (const bet of allBets) {
+        if (!statsMap[bet.eventId]) {
+          statsMap[bet.eventId] = { counts: {}, amounts: {}, totalBets: 0, totalPool: 0 };
+        }
+        const s = statsMap[bet.eventId];
+        s.totalBets += 1;
+        s.totalPool += (bet.amount || 0);
+        s.counts[bet.outcomeId] = (s.counts[bet.outcomeId] || 0) + 1;
+        s.amounts[bet.outcomeId] = (s.amounts[bet.outcomeId] || 0) + (bet.amount || 0);
+      }
+
+      // 3. Update Events
+      const eventsSnap = await getDocs(collection(db, 'events'));
+      const updatePromises = eventsSnap.docs.map(async (docSnap) => {
+        const stats = statsMap[docSnap.id] || { counts: {}, amounts: {}, totalBets: 0, totalPool: 0 };
+        await updateDoc(doc(db, 'events', docSnap.id), { stats });
+      });
+
+      await Promise.all(updatePromises);
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const addComment = async (eventId, text) => {
+    if (!user) return { success: false, error: 'Login to comment' };
+    try {
+      const commentData = {
+        eventId,
+        userId: user.id,
+        username: user.username,
+        text,
+        createdAt: new Date().toISOString()
+      };
+      await addDoc(collection(db, 'comments'), commentData);
+
+      // Update Event with lastComment for preview
+      await updateDoc(doc(db, 'events', eventId), {
+        lastComment: {
+          username: user.username,
+          text: text.length > 50 ? text.substring(0, 50) + '...' : text,
+          createdAt: commentData.createdAt
+        }
+      });
+
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const deleteComment = async (commentId) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      // 1. Get comment details before deleting (to find parent event)
+      const commentRef = doc(db, 'comments', commentId);
+      const commentSnap = await getDoc(commentRef);
+
+      if (!commentSnap.exists()) {
+        return { success: false, error: 'Comment already deleted' };
+      }
+
+      const val = commentSnap.data();
+      const eventId = val.eventId;
+      const commentCreatedAt = val.createdAt;
+
+      // 2. Delete the comment
+      await deleteDoc(commentRef);
+
+      // 3. Check if this was the "lastComment" on the event card
+      if (eventId) {
+        const eventRef = doc(db, 'events', eventId);
+        const eventSnap = await getDoc(eventRef);
+
+        if (eventSnap.exists()) {
+          const eventData = eventSnap.data();
+          // Check if the displayed lastComment matches the one we just deleted
+          if (eventData.lastComment && eventData.lastComment.createdAt === commentCreatedAt) {
+            // It was the one displayed! We need to find the new latest comment.
+            // Fetch all remaining comments for this event
+            const q = query(collection(db, 'comments'), where('eventId', '==', eventId));
+            const snap = await getDocs(q);
+
+            if (!snap.empty) {
+              // Find the newest one
+              const all = snap.docs.map(d => d.data());
+              all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+              const newest = all[0];
+
+              await updateDoc(eventRef, {
+                lastComment: {
+                  username: newest.username,
+                  text: newest.text.length > 50 ? newest.text.substring(0, 50) + '...' : newest.text,
+                  createdAt: newest.createdAt
+                }
+              });
+            } else {
+              // No comments left
+              await updateDoc(eventRef, {
+                lastComment: deleteField()
+              });
+            }
           }
         }
-        const newLongest = Math.max(newStreak, user.longestStreak || 0);
-
-        await updateDoc(userRef, {
-          balance: increment(-amount),
-          invested: increment(amount),
-          currentStreak: newStreak,
-          longestStreak: newLongest,
-          lastBetDate: todayStr
-        });
-
-        // Create Parlay Bet
-        // Note: outcomeId is null, outcomeLabel is "Parlay", but we store legs.
-        await addDoc(collection(db, 'bets'), {
-          userId: user.id,
-          username: user.username,
-          type: 'parlay',
-          parlayId: parlayId,
-          legs: parlay.legs,
-          amount: parseFloat(amount),
-          odds: parlay.finalMultiplier, // Store as 'odds' for compatibility with display if needed
-          potentialPayout: amount * parlay.finalMultiplier,
-          status: 'pending',
-          placedAt: new Date().toISOString(),
-          eventTitle: 'Parlay Ticket', // For basic display compatibility
-          outcomeLabel: `${parlay.legs.length} Legs`
-        });
-
-        // Update Parlay Stats
-        await updateDoc(parlayRef, {
-          wagersCount: increment(1),
-          totalPool: increment(amount)
-        });
-
-        return { success: true, streakType, newStreak };
-      } catch (e) {
-        return { success: false, error: e.message };
       }
-    };
 
-    const addParlayComment = async (parlayId, text) => {
-      if (!user) return { success: false, error: 'Login to comment' };
-      try {
-        const commentData = {
-          parlayId,
-          userId: user.id,
-          username: user.username,
-          text,
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const toggleLikeComment = async (commentId, currentLikes = []) => {
+    if (!user) return { success: false, error: 'Login to like' };
+    try {
+      const commentRef = doc(db, 'comments', commentId);
+      const isLiked = currentLikes.includes(user.id);
+
+      if (isLiked) {
+        await updateDoc(commentRef, { likes: arrayRemove(user.id) });
+      } else {
+        await updateDoc(commentRef, { likes: arrayUnion(user.id) });
+      }
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const markNotificationAsRead = async (notifId) => {
+    try {
+      await updateDoc(doc(db, 'notifications', notifId), { read: true });
+    } catch (e) { console.error(e); }
+  };
+
+
+
+  const getUserStats = async (targetUserId) => {
+    try {
+      const userRef = doc(db, 'users', targetUserId);
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.exists() ? userSnap.data() : {};
+
+      const betsQ = query(collection(db, 'bets'), where('userId', '==', targetUserId));
+      const snap = await getDocs(betsQ);
+      let wins = 0;
+      let losses = 0;
+      let profit = 0;
+      let settledCount = 0;
+
+      snap.docs.forEach(d => {
+        const b = d.data();
+        if (b.status === 'won') {
+          wins++;
+          settledCount++;
+          profit += ((b.potentialPayout || (b.amount * b.odds)) - b.amount);
+        } else if (b.status === 'lost') {
+          losses++;
+          settledCount++;
+          profit -= b.amount;
+        }
+      });
+
+      const total = snap.size;
+      const winRate = settledCount > 0 ? ((wins / settledCount) * 100).toFixed(1) : 0;
+
+      return {
+        success: true,
+        stats: { wins, losses, total, winRate, profit },
+        profile: { bio: userData.bio || '', profilePic: userData.profilePic, username: userData.username, groups: userData.groups || [] }
+      };
+    } catch (e) { console.error(e); return { success: false, error: e.message }; }
+  };
+
+  const getWeeklyLeaderboard = async () => {
+    try {
+      const now = new Date();
+      const dayOfWeek = now.getDay(); // 0 (Sun) - 6 (Sat)
+      const startOfWeek = new Date(now);
+      // Reset to most recent Sunday (or today if it is Sunday)
+      startOfWeek.setDate(now.getDate() - dayOfWeek);
+      startOfWeek.setHours(0, 0, 0, 0);
+      const isoStr = startOfWeek.toISOString();
+
+      console.log("Fetching weekly stats since:", isoStr);
+
+      const q = query(collection(db, 'bets'), where('status', 'in', ['won', 'lost']), where('settledAt', '>=', isoStr));
+      const snap = await getDocs(q);
+
+      const stats = {};
+      snap.docs.forEach(doc => {
+        const b = doc.data();
+        if (!stats[b.userId]) stats[b.userId] = 0;
+        if (b.status === 'won') {
+          // Profit = Payout - Wager
+          const payout = b.potentialPayout || (b.amount * b.odds);
+          stats[b.userId] += (payout - b.amount);
+        } else {
+          // Loss = -Wager
+          stats[b.userId] -= b.amount;
+        }
+      });
+
+      const leaderboard = Object.entries(stats).map(([userId, profit]) => ({ userId, profit }));
+      leaderboard.sort((a, b) => b.profit - a.profit);
+      return { success: true, data: leaderboard };
+    } catch (e) {
+      console.error("Weekly Leaderboard Error:", e);
+      let msg = e.message;
+      if (msg.includes("index")) msg = "Missing Index! Check console (F12) for the creation link.";
+      return { success: false, error: msg };
+    }
+  };
+
+  const updateSystemAnnouncement = async (data) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      const docRef = doc(db, 'system', 'announcement');
+      // Merge true to allow partial updates if needed, though usually we replace content
+      await setDoc(docRef, data, { merge: true });
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      alert("Error posting announcement: " + e.message); // Debug
+      return { success: false, error: e.message };
+    }
+  };
+
+
+  const sendIdeaToAdmin = async (ideaId, ideaText) => {
+    if (!user || (!user.groups?.includes('Moderator') && user.role !== 'admin')) return { success: false, error: 'Unauthorized' };
+    try {
+      // 1. Mark idea as recommended
+      const ideaRef = doc(db, 'ideas', ideaId);
+      await updateDoc(ideaRef, {
+        modRecommended: true,
+        recommendedBy: user.username,
+        recommendedAt: new Date().toISOString()
+      });
+
+      // 2. Notify Admins
+      const adminsQ = query(collection(db, 'users'), where('role', '==', 'admin'));
+      const adminsSnap = await getDocs(adminsQ);
+      const batch = writeBatch(db);
+
+      adminsSnap.forEach(adminDoc => {
+        const notifRef = doc(collection(db, 'notifications'));
+        batch.set(notifRef, {
+          userId: adminDoc.id,
+          type: 'admin_alert',
+          title: '🛡️ Mod Recommendation',
+          message: `Mod ${user.username} thinks this looks good: "${ideaText}"`,
+          read: false,
           createdAt: new Date().toISOString()
-        };
-        await addDoc(collection(db, 'comments'), commentData);
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: e.message };
+        });
+      });
+
+      await batch.commit();
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const createParlay = async (legs, baseMultiplier, finalMultiplier) => {
+    if (!user) return { success: false, error: 'Not logged in' };
+    try {
+      await addDoc(collection(db, 'parlays'), {
+        creatorId: user.id,
+        creatorName: user.username,
+        legs,
+        baseMultiplier,
+        finalMultiplier,
+        createdAt: new Date().toISOString(),
+        wagersCount: 0,
+        totalPool: 0
+      });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const placeParlayBet = async (parlayId, amount) => {
+    if (!user) return { success: false, error: 'Not logged in' };
+    if (user.balance < amount) return { success: false, error: 'Insufficient funds' };
+
+    try {
+      const parlayRef = doc(db, 'parlays', parlayId);
+      const parlaySnap = await getDoc(parlayRef);
+      if (!parlaySnap.exists()) return { success: false, error: "Parlay not found" };
+      const parlay = parlaySnap.data();
+
+      // Deduct Balance
+      const userRef = doc(db, 'users', user.id);
+
+      // Update streak (Reuse logic from placeBet if I had it extracted, but duplicating for safety now to avoid refactor risks)
+      const today = new Date();
+      const todayStr = today.toDateString();
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);
+      const yesterdayStr = yesterday.toDateString();
+
+      let newStreak = user.currentStreak || 0;
+      const lastDate = user.lastBetDate || "";
+
+      let streakType = 'none';
+      if (lastDate !== todayStr) {
+        if (lastDate === yesterdayStr) {
+          newStreak += 1;
+          streakType = 'increased';
+        } else {
+          newStreak = 1;
+          streakType = 'started';
+        }
+      } else {
+        if (newStreak === 0) {
+          newStreak = 1;
+          streakType = 'started';
+        }
       }
-    };
+      const newLongest = Math.max(newStreak, user.longestStreak || 0);
 
-    const deleteParlay = async (parlayId) => {
-      if (user?.role !== 'admin') return { success: false, error: 'Unauthorized' };
-      try {
-        await deleteDoc(doc(db, 'parlays', parlayId));
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: e.message };
-      }
-    };
+      await updateDoc(userRef, {
+        balance: increment(-amount),
+        invested: increment(amount),
+        currentStreak: newStreak,
+        longestStreak: newLongest,
+        lastBetDate: todayStr
+      });
 
-    return (
-      <AppContext.Provider value={{
-        user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-        events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, toggleLikeComment, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendIdeaToAdmin,
-        bets, placeBet, isLoaded, isFirebase: true, users, ideas, db,
-        isGuestMode, setIsGuestMode, // Exposed isGuestMode and its setter
-        notifications, markNotificationAsRead,
-        createParlay, placeParlayBet, addParlayComment, deleteParlay
-      }}>
-        {children}
-      </AppContext.Provider>
-    );
-  }
+      // Create Parlay Bet
+      // Note: outcomeId is null, outcomeLabel is "Parlay", but we store legs.
+      await addDoc(collection(db, 'bets'), {
+        userId: user.id,
+        username: user.username,
+        type: 'parlay',
+        parlayId: parlayId,
+        legs: parlay.legs,
+        amount: parseFloat(amount),
+        odds: parlay.finalMultiplier, // Store as 'odds' for compatibility with display if needed
+        potentialPayout: amount * parlay.finalMultiplier,
+        status: 'pending',
+        placedAt: new Date().toISOString(),
+        eventTitle: 'Parlay Ticket', // For basic display compatibility
+        outcomeLabel: `${parlay.legs.length} Legs`
+      });
 
-  export function useApp() {
-    return useContext(AppContext);
-  }
+      // Update Parlay Stats
+      await updateDoc(parlayRef, {
+        wagersCount: increment(1),
+        totalPool: increment(amount)
+      });
+
+      return { success: true, streakType, newStreak };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const addParlayComment = async (parlayId, text) => {
+    if (!user) return { success: false, error: 'Login to comment' };
+    try {
+      const commentData = {
+        parlayId,
+        userId: user.id,
+        username: user.username,
+        text,
+        createdAt: new Date().toISOString()
+      };
+      await addDoc(collection(db, 'comments'), commentData);
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const deleteParlay = async (parlayId) => {
+    if (user?.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      await deleteDoc(doc(db, 'parlays', parlayId));
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  return (
+    <AppContext.Provider value={{
+      user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
+      events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, toggleLikeComment, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendIdeaToAdmin,
+      bets, placeBet, isLoaded, isFirebase: true, users, ideas, db,
+      isGuestMode, setIsGuestMode, // Exposed isGuestMode and its setter
+      notifications, markNotificationAsRead,
+      createParlay, placeParlayBet, addParlayComment, deleteParlay
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
+}
+
+export function useApp() {
+  return useContext(AppContext);
+}
