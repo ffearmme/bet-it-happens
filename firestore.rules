@@ -33,10 +33,10 @@ service cloud.firestore {
       allow delete: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
     
-    // Notifications users can read their own. Admins can delete.
+    // Notifications users can read their own. Admins can delete or create (for results).
     match /notifications/{notificationId} {
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if false; // Only created by Server/Triggers (or Admin via other means)
+      allow create: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       allow delete: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
