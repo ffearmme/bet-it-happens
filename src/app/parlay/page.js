@@ -5,7 +5,7 @@ import { useApp } from '../../lib/store';
 import { collection, query, orderBy, onSnapshot, where, limit } from 'firebase/firestore';
 
 export default function ParlayPage() {
-    const { user, events, db, createParlay, placeParlayBet, getUserStats, deleteParlay } = useApp();
+    const { user, events, db, createParlay, placeParlayBet, getUserStats, deleteParlay, bets, addParlayComment } = useApp();
     const [mode, setMode] = useState('active'); // 'active' | 'create'
     const [parlays, setParlays] = useState([]);
 
@@ -19,12 +19,13 @@ export default function ParlayPage() {
     // Betting State
     const [bettingParlay, setBettingParlay] = useState(null); // The parlay currently being bet on
     const [wager, setWager] = useState('');
+    const [creationWager, setCreationWager] = useState('10'); // Default initial wager
 
     // Comments State
     const [expandedParlayId, setExpandedParlayId] = useState(null);
     const [parlayComments, setParlayComments] = useState([]);
     const [commentText, setCommentText] = useState('');
-    const { addParlayComment } = useApp(); // Destructure new function
+    // const { addParlayComment } = useApp(); // Destructure new function (Already in main destructure above now)
 
     // Profile Viewing State
     const [viewingUser, setViewingUser] = useState(null);
@@ -81,7 +82,26 @@ export default function ParlayPage() {
 
     // Helpers
     const toggleLeg = (event, outcome) => {
-        // limit to 1 leg per event? usually parlays allow same game parlays but let's restrict to 1 leg per event for MVP simplicity to avoid conflicting logic
+        // Loyalty Check: Prevent betting on opposite side if already verified in history
+        if (bets && bets.length > 0) {
+            // Check single bets
+            const conflict = bets.find(b =>
+                b.eventId === event.id &&
+                b.outcomeId !== outcome.id &&
+                b.type !== 'parlay' && // Only specific single bets block (or maybe all bets?)
+                b.status === 'pending' // Only pending bets matter? Or settled too? 'Loyalty' implies pending usually.
+            );
+
+            // Note: If they have a pending parlay with the OTHER side, should that block? 
+            // The prompt says "individual bet". sticking to that interpretation.
+            if (conflict) {
+                setError("Loyalty Check! You already bet on the other side of this event.");
+                setTimeout(() => setError(''), 3000);
+                return;
+            }
+        }
+
+        // limit to 1 leg per event
         const existingLeg = selectedLegs.find(l => l.eventId === event.id);
 
         if (existingLeg) {
@@ -140,14 +160,19 @@ export default function ParlayPage() {
             setError("Need at least 2 legs for a parlay.");
             return;
         }
+        if (!creationWager || parseFloat(creationWager) <= 0) {
+            setError("Please enter a valid initial wager.");
+            return;
+        }
         setIsSubmitting(true);
         setError('');
         const { base, final } = calculateParlay();
 
-        const res = await createParlay(selectedLegs, base, final);
+        const res = await createParlay(selectedLegs, base, final, creationWager);
         if (res.success) {
-            setSuccess("Parlay Created! It's now public for everyone to tail.");
+            setSuccess("Parlay Created & Bet Placed! Good luck!");
             setSelectedLegs([]);
+            setCreationWager('10');
             setMode('active');
             setTimeout(() => setSuccess(''), 3000);
         } else {
@@ -188,6 +213,200 @@ export default function ParlayPage() {
 
     // Filter events for creation (only Open events)
     const activeEvents = events.filter(e => e.status === 'open');
+
+    // --- Helper for Leg Status ---
+    const getLegStatus = (leg) => {
+        const event = events.find(e => e.id === leg.eventId);
+        if (!event) return 'pending';
+        if (event.status === 'settled' || event.winnerOutcomeId) {
+            return event.winnerOutcomeId === leg.outcomeId ? 'won' : 'lost';
+        }
+        return 'pending';
+    };
+
+    // --- Categorize Parlays ---
+    const upcomingParlays = [];
+    const activeParlays = [];
+    const lostParlays = [];
+
+    parlays.forEach(p => {
+        let hasWon = false;
+        let hasLost = false;
+        let isAllPending = true;
+
+        p.legs.forEach(leg => {
+            const status = getLegStatus(leg);
+            if (status === 'won') {
+                hasWon = true;
+                isAllPending = false;
+            }
+            if (status === 'lost') {
+                hasLost = true;
+                isAllPending = false;
+            }
+        });
+
+        if (hasLost) {
+            lostParlays.push(p);
+        } else if (hasWon) {
+            activeParlays.push(p);
+        } else {
+            upcomingParlays.push(p);
+        }
+    });
+
+    const renderParlayCard = (parlay) => (
+        <div key={parlay.id} className="card bet-card" style={{ padding: '0', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', overflow: 'hidden' }}>
+                            {parlay.creatorProfilePic ? (
+                                <img src={parlay.creatorProfilePic} alt={parlay.creatorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                                parlay.creatorName[0].toUpperCase()
+                            )}
+                        </div>
+                        <div>
+                            <div
+                                onClick={() => setViewingUser({ id: parlay.creatorId, username: parlay.creatorName })}
+                                style={{ fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline' }}
+                            >
+                                {parlay.creatorName}
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{new Date(parlay.createdAt).toLocaleDateString()}</div>
+                        </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '24px', fontWeight: '900', color: 'var(--primary)' }}>
+                            {parlay.finalMultiplier.toFixed(2)}x
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#a1a1aa' }}>PAYOUT</div>
+                        {user?.role === 'admin' && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(parlay.id);
+                                }}
+                                style={{ marginTop: '4px', fontSize: '10px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid #ef4444', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}
+                            >
+                                DELETE
+                            </button>
+                        )}
+                    </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {parlay.legs.map((leg, idx) => {
+                        const status = getLegStatus(leg);
+                        let bg = 'rgba(255,255,255,0.03)';
+                        let borderColor = 'transparent';
+                        let icon = null;
+
+                        if (status === 'won') {
+                            bg = 'rgba(34, 197, 94, 0.15)';
+                            borderColor = '#22c55e';
+                            icon = '✅';
+                        } else if (status === 'lost') {
+                            bg = 'rgba(239, 68, 68, 0.15)';
+                            borderColor = '#ef4444';
+                            icon = '❌';
+                        }
+
+                        return (
+                            <div key={idx} style={{
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                fontSize: '13px', padding: '8px',
+                                background: bg,
+                                border: `1px solid ${borderColor}`,
+                                borderRadius: '6px'
+                            }}>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <span style={{ color: status === 'lost' ? '#fca5a5' : status === 'won' ? '#86efac' : '#fff', fontWeight: 'bold' }}>
+                                        {leg.outcomeId === 'over' ? 'Over' : leg.outcomeId === 'under' ? 'Under' : leg.label} {icon}
+                                    </span>
+                                    <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{leg.eventTitle}</span>
+                                </div>
+                                <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>{leg.odds}x</span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+            <div style={{ padding: '12px', background: 'rgba(0,0,0,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    <span style={{ color: '#fff', fontWeight: 'bold' }}>{parlay.wagersCount || 0}</span> Tailing
+                </div>
+                <button
+                    className="btn btn-primary"
+                    style={{ width: 'auto', padding: '8px 20px', fontSize: '13px' }}
+                    onClick={() => setBettingParlay(parlay)}
+                >
+                    Tail This Bet
+                </button>
+            </div>
+
+            {/* COMMENTS TOGGLE & SECTION */}
+            <div style={{ padding: '0 12px 12px 12px', background: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                <div
+                    onClick={() => setExpandedParlayId(expandedParlayId === parlay.id ? null : parlay.id)}
+                    style={{ cursor: 'pointer', paddingTop: '8px' }}
+                >
+                    {expandedParlayId === parlay.id ? (
+                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', paddingBottom: '4px' }}>Hide Chat ▲</div>
+                    ) : (
+                        parlay.lastComment ? (
+                            <div style={{
+                                padding: '8px 12px',
+                                background: 'rgba(255,255,255,0.05)',
+                                borderRadius: '8px',
+                                display: 'flex', gap: '8px', alignItems: 'center',
+                                border: '1px solid rgba(255,255,255,0.03)'
+                            }}>
+                                <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: '#27272a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>💬</div>
+                                <div style={{ flex: 1, overflow: 'hidden', display: 'flex', gap: '6px' }}>
+                                    <span style={{ fontWeight: 'bold', color: '#a1a1aa' }}>{parlay.lastComment.username}:</span>
+                                    <span style={{ color: '#71717a', fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        "{parlay.lastComment.text}"
+                                    </span>
+                                </div>
+                                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>▼</span>
+                            </div>
+                        ) : (
+                            <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>Show Chat ▼</div>
+                        )
+                    )}
+                </div>
+
+                {expandedParlayId === parlay.id && (
+                    <div className="animate-fade" style={{ background: 'var(--bg-app)', borderRadius: '8px', padding: '12px', marginTop: '4px' }}>
+                        <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {parlayComments.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>No comments yet.</div>}
+                            {parlayComments.map(c => (
+                                <div key={c.id} style={{ fontSize: '13px' }}>
+                                    <span style={{ fontWeight: 'bold', color: c.userId === user?.id ? 'var(--primary)' : '#fff' }}>{c.username}: </span>
+                                    <span style={{ color: 'var(--text-muted)' }}>{c.text}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <input
+                                type="text"
+                                className="input"
+                                style={{ padding: '8px', fontSize: '13px' }}
+                                placeholder="Say something..."
+                                value={commentText}
+                                onChange={e => setCommentText(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handlePostComment()}
+                            />
+                            <button className="btn btn-primary" style={{ width: 'auto', padding: '0 16px' }} onClick={handlePostComment}>
+                                Send
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 
     return (
         <div className="container animate-fade" style={{ paddingBottom: '100px' }}>
@@ -251,107 +470,43 @@ export default function ParlayPage() {
                             No active parlays right now. Be the first to build one!
                         </div>
                     )}
-                    {parlays.map(parlay => (
-                        <div key={parlay.id} className="card bet-card" style={{ padding: '0' }}>
-                            <div style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
-                                            {parlay.creatorName[0].toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <div
-                                                onClick={() => setViewingUser({ id: parlay.creatorId, username: parlay.creatorName })}
-                                                style={{ fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline' }}
-                                            >
-                                                {parlay.creatorName}
-                                            </div>
-                                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{new Date(parlay.createdAt).toLocaleDateString()}</div>
-                                        </div>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <div style={{ fontSize: '24px', fontWeight: '900', color: 'var(--primary)' }}>
-                                            {parlay.finalMultiplier.toFixed(2)}x
-                                        </div>
-                                        <div style={{ fontSize: '11px', color: '#a1a1aa' }}>PAYOUT</div>
-                                        {user?.role === 'admin' && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDelete(parlay.id);
-                                                }}
-                                                style={{ marginTop: '4px', fontSize: '10px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid #ef4444', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}
-                                            >
-                                                DELETE
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    {parlay.legs.map((leg, idx) => (
-                                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '8px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px' }}>
-                                            <span style={{ color: '#fff' }}>{leg.outcomeId === 'over' ? 'Over' : leg.outcomeId === 'under' ? 'Under' : leg.label}</span>
-                                            <span style={{ color: 'var(--text-muted)' }}>{leg.eventTitle}</span>
-                                            <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>{leg.odds}x</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            <div style={{ padding: '12px', background: 'rgba(0,0,0,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                                    <span style={{ color: '#fff', fontWeight: 'bold' }}>{parlay.wagersCount || 0}</span> Tailing
-                                </div>
-                                <button
-                                    className="btn btn-primary"
-                                    style={{ width: 'auto', padding: '8px 20px', fontSize: '13px' }}
-                                    onClick={() => setBettingParlay(parlay)}
-                                >
-                                    Tail This Bet
-                                </button>
-                            </div>
 
-                            {/* COMMENTS TOGGLE & SECTION */}
-                            <div style={{ padding: '0 12px 12px 12px', background: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                                    <button
-                                        onClick={() => setExpandedParlayId(expandedParlayId === parlay.id ? null : parlay.id)}
-                                        style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer', padding: '8px', width: '100%' }}
-                                    >
-                                        {expandedParlayId === parlay.id ? 'Hide Chat ▲' : 'Show Chat ▼'}
-                                    </button>
-                                </div>
-
-                                {expandedParlayId === parlay.id && (
-                                    <div className="animate-fade" style={{ background: 'var(--bg-app)', borderRadius: '8px', padding: '12px', marginTop: '4px' }}>
-                                        <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            {parlayComments.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>No comments yet.</div>}
-                                            {parlayComments.map(c => (
-                                                <div key={c.id} style={{ fontSize: '13px' }}>
-                                                    <span style={{ fontWeight: 'bold', color: c.userId === user?.id ? 'var(--primary)' : '#fff' }}>{c.username}: </span>
-                                                    <span style={{ color: 'var(--text-muted)' }}>{c.text}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                            <input
-                                                type="text"
-                                                className="input"
-                                                style={{ padding: '8px', fontSize: '13px' }}
-                                                placeholder="Say something..."
-                                                value={commentText}
-                                                onChange={e => setCommentText(e.target.value)}
-                                                onKeyDown={e => e.key === 'Enter' && handlePostComment()}
-                                            />
-                                            <button className="btn btn-primary" style={{ width: 'auto', padding: '0 16px' }} onClick={handlePostComment}>
-                                                Send
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
+                    {/* 1. ACTIVE PARLAYS (One or more legs Green) */}
+                    {activeParlays.length > 0 && (
+                        <div style={{ marginBottom: '24px' }}>
+                            <h2 style={{ fontSize: '18px', color: '#4ade80', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                🔥 Heating Up <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 'normal' }}>({activeParlays.length})</span>
+                            </h2>
+                            <div style={{ display: 'grid', gap: '16px' }}>
+                                {activeParlays.map(parlay => renderParlayCard(parlay))}
                             </div>
                         </div>
-                    ))}
-                </div >
+                    )}
+
+                    {/* 2. UPCOMING PARLAYS (No action yet) */}
+                    {upcomingParlays.length > 0 && (
+                        <div style={{ marginBottom: '24px' }}>
+                            <h2 style={{ fontSize: '18px', color: '#fff', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                📅 Upcoming <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 'normal' }}>({upcomingParlays.length})</span>
+                            </h2>
+                            <div style={{ display: 'grid', gap: '16px' }}>
+                                {upcomingParlays.map(parlay => renderParlayCard(parlay))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 3. LOST PARLAYS */}
+                    {lostParlays.length > 0 && (
+                        <div>
+                            <h2 style={{ fontSize: '18px', color: '#ef4444', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                💀 Busted <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 'normal' }}>({lostParlays.length})</span>
+                            </h2>
+                            <div style={{ display: 'grid', gap: '16px', opacity: 0.75 }}>
+                                {lostParlays.map(parlay => renderParlayCard(parlay))}
+                            </div>
+                        </div>
+                    )}
+                </div>
             )}
 
             {/* BETTING MODAL */}
@@ -419,12 +574,36 @@ export default function ParlayPage() {
                                 <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '12px' }}>
                                     Includes {((selectedLegs.length - 1) * 5)}% Parlay Bonus
                                 </p>
+
+                                <div style={{ marginBottom: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <div className="input-group" style={{ flex: 1, margin: 0 }}>
+                                        <label style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '2px', display: 'block' }}>Initial Wager</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#fff' }}>$</span>
+                                            <input
+                                                type="number"
+                                                className="input"
+                                                style={{ paddingLeft: '24px', height: '36px' }}
+                                                value={creationWager}
+                                                onChange={e => setCreationWager(e.target.value)}
+                                                placeholder="10"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div style={{ flex: 1, textAlign: 'right' }}>
+                                        <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Potential Win</div>
+                                        <div style={{ color: '#fbbf24', fontWeight: 'bold' }}>
+                                            ${((parseFloat(creationWager) || 0) * calculateParlay().final).toFixed(2)}
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <button
                                     className="btn btn-primary"
                                     disabled={selectedLegs.length < 2 || isSubmitting}
                                     onClick={handleCreate}
                                 >
-                                    {isSubmitting ? 'Creating...' : 'Post Shared Parlay'}
+                                    {isSubmitting ? 'Creating...' : 'Place Bet & Share Parlay'}
                                 </button>
                             </div>
                         )}

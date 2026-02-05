@@ -10,7 +10,21 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
     title: 'Bet It Happens',
-    description: 'Fake Money Betting App',
+    description: 'The risk is fake. The thrill is real. Join the ultimate social betting platform for sports, pop culture, and more.',
+    openGraph: {
+        title: 'Bet It Happens',
+        description: 'The risk is fake. The thrill is real. Join the ultimate social betting platform for sports, pop culture, and more.',
+        url: 'https://betithappens.com',
+        siteName: 'Bet It Happens',
+        images: [
+            {
+                url: '/logo.png',
+                width: 1200,
+                height: 630,
+            },
+        ],
+        type: 'website',
+    },
     icons: {
         icon: '/text_logo.svg',
         apple: [

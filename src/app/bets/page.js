@@ -51,14 +51,34 @@ export default function MyBets() {
         if (bet.status === 'won') statusColor = '#22c55e';
         if (bet.status === 'lost') statusColor = '#ef4444';
 
+        const isParlay = bet.type === 'parlay';
+
         return (
             <div className="card" style={{ borderLeft: `4px solid ${statusColor}`, marginBottom: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontWeight: 600 }}>{bet.outcomeLabel}</span>
+                    <span style={{ fontWeight: 600, fontSize: '16px' }}>
+                        {isParlay ? 'Parlay Ticket' : bet.eventTitle}
+                    </span>
                     <span style={{ fontWeight: 700, color: statusColor }}>{bet.status.toUpperCase()}</span>
                 </div>
-                <p className="text-sm" style={{ marginBottom: '4px' }}>{bet.eventTitle}</p>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
+
+                {isParlay ? (
+                    <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px', marginBottom: '12px', fontSize: '13px' }}>
+                        <div style={{ marginBottom: '4px', color: 'var(--text-muted)' }}>{bet.legs.length} Legs:</div>
+                        {bet.legs.map((leg, idx) => (
+                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', paddingBottom: '4px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                <span style={{ color: '#ccc' }}>{leg.eventTitle}</span>
+                                <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{leg.label}</span>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div style={{ marginBottom: '12px', fontSize: '15px' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Your Pick:</span> <span style={{ fontWeight: 'bold', color: '#fff' }}>{bet.outcomeLabel}</span>
+                    </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
                     <div style={{ fontSize: '14px' }}>
                         <span className="text-sm">Wager:</span> ${bet.amount.toFixed(2)}
                     </div>

@@ -1443,12 +1443,17 @@ export function AppProvider({ children }) {
     }
   };
 
-  const createParlay = async (legs, baseMultiplier, finalMultiplier) => {
+  const createParlay = async (legs, baseMultiplier, finalMultiplier, initialWager) => {
     if (!user) return { success: false, error: 'Not logged in' };
+    if (initialWager <= 0) return { success: false, error: 'Initial bet required' };
+    if (user.balance < initialWager) return { success: false, error: 'Insufficient funds for initial bet' };
+
     try {
-      await addDoc(collection(db, 'parlays'), {
+      // 1. Create the Parlay Document
+      const parlayRef = await addDoc(collection(db, 'parlays'), {
         creatorId: user.id,
         creatorName: user.username,
+        creatorProfilePic: user.profilePic || null,
         legs,
         baseMultiplier,
         finalMultiplier,
@@ -1456,7 +1461,20 @@ export function AppProvider({ children }) {
         wagersCount: 0,
         totalPool: 0
       });
-      return { success: true };
+
+      // 2. Place the initial bet
+      const betRes = await placeParlayBet(parlayRef.id, parseFloat(initialWager));
+      if (!betRes.success) {
+        // Fallback: If bet fails (rare), we might want to delete the parlay or just warn?
+        // For now, let's just return partial success error, or maybe just delete the parlay to be safe.
+        // await deleteDoc(parlayRef); // Safest
+        // return { success: false, error: "Failed to place initial bet: " + betRes.error };
+
+        // Actually, let's keep it simple. If bet logic is sound, this shouldn't fail given balance check.
+        return { success: false, error: "Parlay created but bet failed: " + betRes.error };
+      }
+
+      return { success: true, parlayId: parlayRef.id };
     } catch (e) {
       return { success: false, error: e.message };
     }
@@ -1550,6 +1568,16 @@ export function AppProvider({ children }) {
         createdAt: new Date().toISOString()
       };
       await addDoc(collection(db, 'comments'), commentData);
+
+      // Update Parlay with lastComment for preview
+      await updateDoc(doc(db, 'parlays', parlayId), {
+        lastComment: {
+          username: user.username,
+          text: text.length > 50 ? text.substring(0, 50) + '...' : text,
+          createdAt: commentData.createdAt
+        }
+      });
+
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };

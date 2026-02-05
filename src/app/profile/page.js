@@ -161,6 +161,40 @@ export default function Profile() {
                         <p style={{ fontSize: '24px', fontWeight: '900', color: '#fff', letterSpacing: '4px', fontFamily: 'monospace', margin: '4px 0' }}>
                             {user.referralCode || '---'}
                         </p>
+
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '12px', marginBottom: '8px' }}>
+                            <button
+                                style={{ flex: 1, padding: '8px', background: 'var(--primary)', border: 'none', borderRadius: '6px', color: '#000', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '12px' }}
+                                onClick={() => {
+                                    const shareData = {
+                                        title: 'Bet It Happens',
+                                        text: `Join me on Bet It Happens! Use my code ${user.referralCode} to get started with $500 free play money!`,
+                                        url: 'https://betithappens.com'
+                                    };
+                                    if (navigator.share) {
+                                        navigator.share(shareData).catch(console.error);
+                                    } else {
+                                        navigator.clipboard.writeText(`Join me on Bet It Happens! Use code ${user.referralCode}`).then(() => alert('Copied to clipboard!'));
+                                    }
+                                }}
+                            >
+                                <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: '14px', height: '14px' }}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
+                                </svg>
+                                Share
+                            </button>
+                            <button
+                                style={{ padding: '8px 12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px' }}
+                                onClick={(e) => {
+                                    navigator.clipboard.writeText(user.referralCode);
+                                    e.currentTarget.innerText = 'Copied!';
+                                    setTimeout(() => e.target.innerText = 'Copy', 2000);
+                                }}
+                            >
+                                Copy
+                            </button>
+                        </div>
+
                         <p style={{ fontSize: '11px', color: 'var(--primary)', fontWeight: 'bold' }}>
                             Give this to friends! You get $500 when they sign up. 💰
                         </p>
