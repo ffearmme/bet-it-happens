@@ -847,4 +847,129 @@ h2 {
   .mod-welcome-card p {
     font-size: 13px;
   }
+
+  /* Form Responsive Stacks */
+  .mod-form-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .mod-form-row .input-group,
+  .mod-form-row .input {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+/* Default Desktop Form Row */
+.mod-form-row {
+  display: flex;
+  gap: 12px;
+}
+
+/* Mod Table Styles (Desktop) */
+.mod-table {
+  width: 100%;
+}
+
+.mod-table-header {
+  display: grid;
+  grid-template-columns: 2fr 1fr 0.8fr 2fr 0.8fr;
+  padding: 12px;
+  border-bottom: 1px solid #333;
+  color: #888;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.mod-table-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 0.8fr 2fr 0.8fr;
+  align-items: center;
+  padding: 12px;
+  border-bottom: 1px solid #222;
+  gap: 12px;
+}
+
+.mod-col {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Mobile Responsive Table (Cards) */
+@media (max-width: 768px) {
+  .mod-table-header {
+    display: none;
+  }
+
+  .mod-table-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .mod-table-row {
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    background: #1c1c1c;
+    border: 1px solid #333;
+    border-radius: 8px;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .mod-col {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    width: 100%;
+  }
+
+  /* Add label before content on mobile via attribute */
+  .mod-col::before {
+    content: attr(data-label);
+    color: #888;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-right: auto;
+    width: 80px;
+    /* Fixed width for labels */
+    flex-shrink: 0;
+  }
+
+  .mod-col[data-label="User"]::before {
+    display: none;
+    /* User block is custom styled */
+  }
+
+  .mod-col[data-label="User"] {
+    flex-direction: column;
+    align-items: flex-start;
+    border-bottom: 1px solid #333;
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+  }
+
+  .mod-col[data-label="Groups"] {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .mod-col[data-label="Groups"]::before {
+    width: 100%;
+    margin-bottom: 4px;
+  }
+
+  .mod-col[data-label="Actions"]::before {
+    display: none;
+  }
+
+  .mod-col[data-label="Actions"] {
+    justify-content: flex-end;
+    margin-top: 4px;
+  }
 }

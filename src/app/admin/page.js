@@ -375,31 +375,34 @@ function AdminContent() {
                                         <div className="input-group">
                                             <input className="input" placeholder="Description" value={newEvent.description} onChange={e => setNewEvent({ ...newEvent, description: e.target.value })} required />
                                         </div>
+
                                         <div className="input-group">
                                             <label className="text-sm">Created By / Resolution</label>
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                            <div className="mod-form-row">
                                                 <input className="input" placeholder="Creator (Optional)" value={newEvent.createdBy || ''} onChange={e => setNewEvent({ ...newEvent, createdBy: e.target.value })} />
                                                 <input className="input" placeholder="Res Criteria (Optional)" value={newEvent.resolutionCriteria || ''} onChange={e => setNewEvent({ ...newEvent, resolutionCriteria: e.target.value })} />
                                             </div>
                                         </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', margin: '12px 0' }}>
-                                            <div className="input-group">
+
+                                        <div className="mod-form-row" style={{ margin: '12px 0' }}>
+                                            <div className="input-group" style={{ flex: 1, minWidth: '140px' }}>
                                                 <label className="text-sm">Deadline</label>
-                                                <input className="input" type="datetime-local" value={newEvent.deadline} onChange={e => setNewEvent({ ...newEvent, deadline: e.target.value })} />
+                                                <input className="input" type="datetime-local" value={newEvent.deadline} onChange={e => setNewEvent({ ...newEvent, deadline: e.target.value })} style={{ width: '100%' }} />
                                             </div>
-                                            <div className="input-group">
+                                            <div className="input-group" style={{ flex: 1, minWidth: '140px' }}>
                                                 <label className="text-sm">Start / Resolve Date</label>
-                                                <input className="input" type="datetime-local" required value={newEvent.startAt} onChange={e => setNewEvent({ ...newEvent, startAt: e.target.value })} />
+                                                <input className="input" type="datetime-local" required value={newEvent.startAt} onChange={e => setNewEvent({ ...newEvent, startAt: e.target.value })} style={{ width: '100%' }} />
                                             </div>
                                         </div>
+
                                         <div style={{ padding: '12px', background: '#222', borderRadius: '8px', marginBottom: '16px' }}>
                                             <h3 style={{ fontSize: '14px', marginBottom: '8px', color: '#888' }}>Outcomes (Moneyline)</h3>
-                                            <div style={{ display: 'flex', gap: '12px', marginBottom: '8px' }}>
-                                                <input className="input" placeholder="Outcome A" value={newEvent.outcome1 || ''} onChange={e => setNewEvent({ ...newEvent, outcome1: e.target.value })} />
+                                            <div className="mod-form-row" style={{ marginBottom: '8px' }}>
+                                                <input className="input" placeholder="Outcome A" value={newEvent.outcome1 || ''} onChange={e => setNewEvent({ ...newEvent, outcome1: e.target.value })} style={{ flex: 1 }} />
                                                 <input className="input" type="number" step="0.01" placeholder="Odds" style={{ width: '80px' }} value={newEvent.odds1 || ''} onChange={e => setNewEvent({ ...newEvent, odds1: e.target.value })} />
                                             </div>
-                                            <div style={{ display: 'flex', gap: '12px' }}>
-                                                <input className="input" placeholder="Outcome B" value={newEvent.outcome2 || ''} onChange={e => setNewEvent({ ...newEvent, outcome2: e.target.value })} />
+                                            <div className="mod-form-row">
+                                                <input className="input" placeholder="Outcome B" value={newEvent.outcome2 || ''} onChange={e => setNewEvent({ ...newEvent, outcome2: e.target.value })} style={{ flex: 1 }} />
                                                 <input className="input" type="number" step="0.01" placeholder="Odds" style={{ width: '80px' }} value={newEvent.odds2 || ''} onChange={e => setNewEvent({ ...newEvent, odds2: e.target.value })} />
                                             </div>
                                         </div>
@@ -542,27 +545,30 @@ function AdminContent() {
                     {activeTab === 'users' && (
                         <div className="card">
                             <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>Users Directory ({filteredUsers.length})</h2>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                                <thead style={{ textAlign: 'left', color: '#888', borderBottom: '1px solid #333' }}>
-                                    <tr>
-                                        <th style={{ padding: '8px' }}>User</th>
-                                        <th style={{ padding: '8px' }}>Balance</th>
-                                        <th style={{ padding: '8px' }}>Role</th>
-                                        <th style={{ padding: '8px' }}>Groups</th>
-                                        <th style={{ padding: '8px' }}>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
+
+                            <div className="mod-table">
+                                {/* Table Header */}
+                                <div className="mod-table-header">
+                                    <div className="mod-col">User</div>
+                                    <div className="mod-col">Balance</div>
+                                    <div className="mod-col">Role</div>
+                                    <div className="mod-col">Groups</div>
+                                    <div className="mod-col">Actions</div>
+                                </div>
+
+                                {/* Table Rows */}
+                                <div className="mod-table-body">
                                     {filteredUsers.sort((a, b) => (b.balance || 0) - (a.balance || 0)).map(u => (
-                                        <tr key={u.id} style={{ borderBottom: '1px solid #222' }}>
-                                            <td style={{ padding: '8px' }}>
+                                        <div key={u.id} className="mod-table-row">
+                                            <div className="mod-col" data-label="User">
                                                 <div style={{ fontWeight: 'bold' }}>{u.username}</div>
                                                 <div style={{ fontSize: '10px', color: '#666' }}>{u.email}</div>
                                                 <div style={{ fontSize: '10px', color: '#444' }}>ID: {u.id}</div>
-                                            </td>
-                                            <td style={{ padding: '8px' }}>${u.balance?.toFixed(2)}</td>
-                                            <td style={{ padding: '8px' }}>
-                                                {/* Role Toggle Button */}
+                                            </div>
+                                            <div className="mod-col" data-label="Balance">
+                                                <span className="mod-balance">${u.balance?.toFixed(2)}</span>
+                                            </div>
+                                            <div className="mod-col" data-label="Role">
                                                 <button
                                                     onClick={() => toggleUserRole(u)}
                                                     style={{
@@ -579,9 +585,8 @@ function AdminContent() {
                                                 >
                                                     {u.role ? u.role.toUpperCase() : 'USER'}
                                                 </button>
-                                            </td>
-                                            <td style={{ padding: '8px' }}>
-                                                {/* Groups Toggles */}
+                                            </div>
+                                            <div className="mod-col" data-label="Groups">
                                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                                     {['The Boys', 'The Fam', 'Moderator'].map(g => {
                                                         const isActive = (u.groups || []).includes(g);
@@ -602,8 +607,8 @@ function AdminContent() {
                                                         );
                                                     })}
                                                 </div>
-                                            </td>
-                                            <td style={{ padding: '8px' }}>
+                                            </div>
+                                            <div className="mod-col" data-label="Actions">
                                                 <div style={{ display: 'flex', gap: '4px' }}>
                                                     {u.id !== user.id && (
                                                         <button
@@ -614,11 +619,11 @@ function AdminContent() {
                                                         </button>
                                                     )}
                                                 </div>
-                                            </td>
-                                        </tr>
+                                            </div>
+                                        </div>
                                     ))}
-                                </tbody>
-                            </table>
+                                </div>
+                            </div>
                         </div>
                     )}
 
