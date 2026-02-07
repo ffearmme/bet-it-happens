@@ -831,7 +831,7 @@ export default function ParlayPage() {
                                     display: 'flex',
                                     gap: '16px',
                                     overflowX: 'auto',
-                                    paddingBottom: '16px',
+                                    paddingBottom: '24px',
                                     scrollSnapType: 'x mandatory',
                                     scrollbarWidth: 'none', // Firefox
                                     msOverflowStyle: 'none', // IE/Edge
@@ -843,7 +843,7 @@ export default function ParlayPage() {
                                         }
                                     `}</style>
                                     {onFireParlays.map(parlay => (
-                                        <div key={parlay.id} style={{ flex: '0 0 85%', maxWidth: '350px', scrollSnapAlign: 'start' }}>
+                                        <div key={parlay.id} style={{ flex: '0 0 100%', maxWidth: '400px', scrollSnapAlign: 'center' }}>
                                             {renderOnFireCard(parlay)}
                                         </div>
                                     ))}
