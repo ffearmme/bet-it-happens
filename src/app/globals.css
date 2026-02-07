@@ -693,37 +693,40 @@ h2 {
     height: 100vh;
   }
 
-  /* Make sidebar a top navbar */
+  /* Compact Top Bar Navigation */
   .mod-sidebar {
     width: 100%;
-    height: auto;
+    height: 50px;
     border-right: none;
     border-bottom: 1px solid #333;
-    padding: 10px 16px;
+    padding: 0 12px;
     flex-direction: row;
     align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 10px;
+    justify-content: flex-start;
+    /* Align start to allow scroll if needed */
+    flex-wrap: nowrap;
+    gap: 12px;
+    overflow-x: auto;
+    background: #000;
   }
 
+  /* Hide the large title "Moderator" completely to save space, or just show the icon */
   .mod-title {
     margin-bottom: 0;
     font-size: 16px;
-    margin-right: auto;
+    margin-right: 0;
+  }
+
+  .mod-title-text {
+    display: none;
   }
 
   .mod-nav-links {
     flex-direction: row;
-    gap: 6px;
-    overflow-x: auto;
+    gap: 4px;
     padding-bottom: 0;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-
-  .mod-nav-links::-webkit-scrollbar {
-    display: none;
+    height: 100%;
+    align-items: center;
   }
 
   .mod-nav-btn {
@@ -732,22 +735,20 @@ h2 {
     white-space: nowrap;
     justify-content: center;
     gap: 6px;
+    background: transparent;
+    height: 36px;
   }
 
-  /* Hide labels on very small screens, keep icons */
-  @media (max-width: 480px) {
-    .mod-nav-label {
-      display: none;
-    }
+  .mod-nav-label {
+    display: none;
+  }
 
-    .mod-title-text {
-      display: none;
-    }
-
-    .mod-nav-btn span:first-child {
-      font-size: 18px;
-      /* Bigger icon when no text */
-    }
+  /* Show active indicator more clearly since label is gone */
+  .mod-nav-btn.active {
+    background: rgba(34, 197, 94, 0.15);
+    /* Green tint */
+    color: var(--primary);
+    border: 1px solid rgba(34, 197, 94, 0.3);
   }
 
   .mod-footer {
@@ -757,61 +758,93 @@ h2 {
   /* Main Content Adjustments */
   .mod-header {
     height: auto;
-    padding: 16px;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
+    min-height: 44px;
+    padding: 8px 12px;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    justify-content: space-between;
   }
 
   .mod-header-title {
-    font-size: 18px;
+    font-size: 14px;
+    white-space: nowrap;
   }
 
+  /* Make search expandable or just smaller width */
   .mod-search-container {
-    width: 100%;
+    width: 140px;
   }
 
+  .mod-search-input {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  /* Compact Content Padding */
+  .mod-scroll-content {
+    padding: 12px;
+  }
+
+  /* 2-Column Grid instead of stacked 1-Column for stats to save vertical space */
   .mod-dashboard-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
   }
 
+  /* Make "Your Role" card span full width if odd number */
+  .mod-stat-card:last-child {
+    grid-column: span 2;
+  }
+
+  .mod-stat-card {
+    padding: 12px;
+  }
+
+  .mod-stat-card p {
+    font-size: 24px;
+    /* Smaller number */
+    margin: 4px 0;
+  }
+
+  /* Compact Idea Item */
   .mod-idea-item {
     flex-direction: column;
     align-items: flex-start;
-    gap: 16px;
-    padding: 20px;
+    gap: 10px;
+    padding: 12px;
   }
 
-  .mod-idea-content {
-    margin-right: 0;
-    width: 100%;
-  }
-
-  .mod-idea-meta {
-    width: 100%;
-    flex-wrap: wrap;
-    gap: 8px;
+  .mod-idea-text {
+    font-size: 14px;
+    line-height: 1.4;
   }
 
   .mod-idea-actions {
     width: 100%;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    gap: 8px;
   }
 
   .mod-btn-approve,
   .mod-btn-deny {
     width: 100%;
-    padding: 12px;
-    font-size: 14px;
-    display: flex;
+    padding: 8px;
+    font-size: 12px;
     justify-content: center;
-    align-items: center;
   }
 
-  .mod-scroll-content {
+  /* Hide welcome msg on mobile? Or make it smaller */
+  .mod-welcome-card {
     padding: 16px;
+  }
+
+  .mod-welcome-card h2 {
+    font-size: 16px;
+  }
+
+  .mod-welcome-card p {
+    font-size: 13px;
   }
 }

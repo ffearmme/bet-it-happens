@@ -176,13 +176,15 @@ function AdminContent() {
 
     // --- Main Render ---
     return (
-        <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#000', color: '#fff' }}>
+        <div className="mod-container">
 
             {/* SIDEBAR NAVIGATION */}
-            <div style={{ width: '220px', background: '#111', borderRight: '1px solid #333', display: 'flex', flexDirection: 'column', padding: '20px' }}>
-                <h1 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '32px', color: 'var(--primary)' }}>Admin Panel</h1>
+            <nav className="mod-sidebar">
+                <h1 className="mod-title">
+                    <span className="mod-title-text">Admin Panel</span>
+                </h1>
 
-                <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div className="mod-nav-links">
                     {[
                         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
                         { id: 'events', label: 'Events', icon: '📅' },
@@ -194,84 +196,64 @@ function AdminContent() {
                         <button
                             key={item.id}
                             onClick={() => setActiveTab(item.id)}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: '12px',
-                                padding: '10px 12px',
-                                borderRadius: '8px',
-                                border: 'none',
-                                background: activeTab === item.id ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
-                                color: activeTab === item.id ? '#fff' : '#888',
-                                cursor: 'pointer',
-                                textAlign: 'left',
-                                fontSize: '14px',
-                                fontWeight: activeTab === item.id ? '600' : 'normal',
-                                transition: 'all 0.2s'
-                            }}
+                            className={`mod-nav-btn ${activeTab === item.id ? 'active' : ''}`}
                         >
                             <span>{item.icon}</span>
-                            {item.label}
+                            <span className="mod-nav-label">{item.label}</span>
                         </button>
                     ))}
-                </nav>
+                </div>
 
-                <div style={{ marginTop: 'auto', fontSize: '12px', color: '#444' }}>
+                <div className="mod-footer">
                     v1.1.0 Admin
                 </div>
-            </div>
+            </nav>
 
             {/* MAIN CONTENT AREA */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div className="mod-content">
 
                 {/* TOP BAR */}
-                <div style={{ height: '64px', borderBottom: '1px solid #333', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', background: '#111' }}>
-                    <div style={{ fontSize: '16px', fontWeight: '600', textTransform: 'capitalize' }}>
+                <header className="mod-header">
+                    <div className="mod-header-title">
                         {activeTab}
                     </div>
 
                     {/* Global Search */}
-                    <div style={{ position: 'relative', width: '300px' }}>
+                    <div className="mod-search-container">
                         <input
                             type="text"
                             placeholder="Search events, users, bets..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            style={{
-                                width: '100%',
-                                background: '#222',
-                                border: '1px solid #333',
-                                borderRadius: '6px',
-                                padding: '8px 12px',
-                                color: '#fff',
-                                fontSize: '14px',
-                                outline: 'none'
-                            }}
+                            className="mod-search-input"
                         />
                     </div>
-                </div>
+                </header>
 
                 {/* SCROLLABLE PAGE CONTENT */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+                <div className="mod-scroll-content">
 
                     {/* --- DASHBOARD TAB --- */}
                     {activeTab === 'dashboard' && (
                         <div className="animate-fade">
                             {/* Stats Overview (Optional Placeholder) */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-                                <div className="card" style={{ padding: '16px', textAlign: 'center' }}>
-                                    <h3 style={{ fontSize: '12px', color: '#888' }}>Open Events</h3>
-                                    <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{events.filter(e => e.status === 'open').length}</p>
+                            {/* Stats Overview (Optional Placeholder) */}
+                            <div className="mod-dashboard-grid">
+                                <div className="card mod-stat-card">
+                                    <h3>Open Events</h3>
+                                    <p>{events.filter(e => e.status === 'open').length}</p>
                                 </div>
-                                <div className="card" style={{ padding: '16px', textAlign: 'center' }}>
-                                    <h3 style={{ fontSize: '12px', color: '#888' }}>Total Users</h3>
-                                    <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{users.length}</p>
+                                <div className="card mod-stat-card">
+                                    <h3>Total Users</h3>
+                                    <p>{users.length}</p>
                                 </div>
-                                <div className="card" style={{ padding: '16px', textAlign: 'center' }}>
-                                    <h3 style={{ fontSize: '12px', color: '#888' }}>Pending Ideas</h3>
-                                    <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{ideas.length}</p>
+                                <div className="card mod-stat-card">
+                                    <h3>Pending Ideas</h3>
+                                    <p>{ideas.length}</p>
                                 </div>
-                                <div className="card" style={{ padding: '16px', textAlign: 'center' }}>
-                                    <h3 style={{ fontSize: '12px', color: '#888' }}>System Status</h3>
-                                    <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#10b981', marginTop: '6px' }}>Online</p>
+                                <div className="card mod-stat-card">
+                                    <h3>System Status</h3>
+                                    <p style={{ color: '#10b981', fontSize: '14px', marginTop: '6px' }}>Online</p>
                                 </div>
                             </div>
 
