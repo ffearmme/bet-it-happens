@@ -574,7 +574,8 @@ export function AppProvider({ children }) {
       // 1. Mark Event as Settled
       batch.update(eventRef, {
         status: 'settled',
-        winnerOutcomeId
+        winnerOutcomeId,
+        settledAt: new Date().toISOString()
       });
 
       // 2. Process Bets

@@ -1563,8 +1563,11 @@ export default function Home() {
                                                 <span className="badge" style={{ background: '#27272a', color: '#fff', whiteSpace: 'nowrap' }}>ENDED</span>
                                             </div>
                                         </div>
-                                        <div style={{ fontSize: '12px', marginTop: '8px', color: '#a1a1aa' }}>
-                                            Winner: <span style={{ color: 'var(--primary)' }}>{event.outcomes.find(o => o.id === event.winnerOutcomeId)?.label}</span>
+                                        <div style={{ fontSize: '12px', marginTop: '8px', color: '#a1a1aa', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span>Winner: <span style={{ color: 'var(--primary)' }}>{event.outcomes.find(o => o.id === event.winnerOutcomeId)?.label}</span></span>
+                                            <span style={{ fontSize: '10px', opacity: 0.7 }}>
+                                                {new Date(event.settledAt || event.startAt).toLocaleDateString()}
+                                            </span>
                                         </div>
                                     </div>
                                 ))}
