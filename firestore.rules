@@ -56,8 +56,12 @@ service cloud.firestore {
       allow create: if isAdmin() || 
                    (request.auth != null && request.resource.data.type == 'referral');
       
-      // Users can update their own (for marking as read)
-      allow update: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
+      // Users can update their own (for marking as read), restricted to 'read' field only
+      allow update: if isAdmin() || (
+        request.auth != null && 
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+      );
 
       allow delete: if isAdmin();
     }
@@ -75,7 +79,7 @@ service cloud.firestore {
       allow create: if request.auth != null;
       allow update: if request.auth != null && (
          isAdmin() ||
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wagersCount', 'totalPool'])
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wagersCount', 'totalPool', 'lastComment'])
       );
       allow delete: if isAdmin();
     }

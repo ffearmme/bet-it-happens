@@ -160,6 +160,19 @@ export default function ParlayPage() {
             setError("Need at least 2 legs for a parlay.");
             return;
         }
+
+        // Validate that all legs are from OPEN events and haven't started
+        const closedLeg = selectedLegs.find(leg => {
+            const event = events.find(e => e.id === leg.eventId);
+            if (!event || event.status !== 'open') return true;
+            if (event.startAt && new Date(event.startAt) < new Date()) return true;
+            return false;
+        });
+
+        if (closedLeg) {
+            setError("One or more selected events have closed or started. Please remove them.");
+            return;
+        }
         if (!creationWager || parseFloat(creationWager) <= 0) {
             setError("Please enter a valid initial wager.");
             return;
@@ -183,6 +196,19 @@ export default function ParlayPage() {
 
     const handlePlaceBet = async () => {
         if (!bettingParlay) return;
+
+        // Validate that all legs are from OPEN events and haven't started
+        const closedLeg = bettingParlay.legs.find(leg => {
+            const event = events.find(e => e.id === leg.eventId);
+            if (!event || event.status !== 'open') return true;
+            if (event.startAt && new Date(event.startAt) < new Date()) return true;
+            return false;
+        });
+
+        if (closedLeg) {
+            setError("Cannot bet. One or more events in this parlay have closed or started.");
+            return;
+        }
         if (!wager || parseFloat(wager) <= 0) {
             setError("Enter a valid wager");
             return;
@@ -211,8 +237,13 @@ export default function ParlayPage() {
         }
     };
 
-    // Filter events for creation (only Open events)
-    const activeEvents = events.filter(e => e.status === 'open');
+    // Filter events for creation (only Open & Future events)
+    const activeEvents = events.filter(e => {
+        if (e.status !== 'open') return false;
+        // If startAt exists, ensure it hasn't passed
+        if (e.startAt && new Date(e.startAt) < new Date()) return false;
+        return true;
+    });
 
     // --- Helper for Leg Status ---
     const getLegStatus = (leg) => {
@@ -357,19 +388,19 @@ export default function ParlayPage() {
                         parlay.lastComment ? (
                             <div style={{
                                 padding: '8px 12px',
-                                background: 'rgba(255,255,255,0.05)',
+                                background: 'rgba(0,0,0,0.2)',
                                 borderRadius: '8px',
                                 display: 'flex', gap: '8px', alignItems: 'center',
                                 border: '1px solid rgba(255,255,255,0.03)'
                             }}>
-                                <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: '#27272a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>💬</div>
-                                <div style={{ flex: 1, overflow: 'hidden', display: 'flex', gap: '6px' }}>
-                                    <span style={{ fontWeight: 'bold', color: '#a1a1aa' }}>{parlay.lastComment.username}:</span>
+                                <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: '#27272a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>💬</div>
+                                <div style={{ flex: 1, overflow: 'hidden', display: 'flex', gap: '6px', minWidth: 0 }}>
+                                    <span style={{ fontWeight: 'bold', color: '#a1a1aa', flexShrink: 0 }}>{parlay.lastComment.username}:</span>
                                     <span style={{ color: '#71717a', fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                         "{parlay.lastComment.text}"
                                     </span>
                                 </div>
-                                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>▼</span>
+                                <span style={{ fontSize: '10px', color: 'var(--text-muted)', flexShrink: 0 }}>▼</span>
                             </div>
                         ) : (
                             <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>Show Chat ▼</div>
