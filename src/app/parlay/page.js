@@ -23,6 +23,17 @@ export default function ParlayPage() {
     const [creationWager, setCreationWager] = useState('10'); // Default initial wager
     const [parlayTitle, setParlayTitle] = useState(''); // New State for Title
 
+    // Collapsible Sections State
+    const [openSections, setOpenSections] = useState({
+        heatingUp: false,
+        upcoming: false,
+        busted: false
+    });
+
+    const toggleSection = (section) => {
+        setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+    };
+
     // Comments State
     const [expandedParlayId, setExpandedParlayId] = useState(null);
     const [parlayComments, setParlayComments] = useState([]);
@@ -594,39 +605,87 @@ export default function ParlayPage() {
                         </div>
                     )}
 
-                    {/* 1. UPCOMING PARLAYS (No action yet) - Swapped to top */}
-                    {upcomingParlays.length > 0 && (
-                        <div style={{ marginBottom: '24px' }}>
-                            <h2 style={{ fontSize: '18px', color: '#fff', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                📅 Upcoming <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 'normal' }}>({upcomingParlays.length})</span>
-                            </h2>
-                            <div style={{ display: 'grid', gap: '16px' }}>
-                                {upcomingParlays.map(parlay => renderParlayCard(parlay))}
+                    {/* 1. ACTIVE PARLAYS ("Heating Up") */}
+                    {activeParlays.length > 0 && (
+                        <div style={{ marginBottom: '16px', border: '1px solid rgba(74, 222, 128, 0.3)', borderRadius: '12px', background: 'rgba(74, 222, 128, 0.05)', overflow: 'hidden' }}>
+                            <div
+                                onClick={() => toggleSection('heatingUp')}
+                                style={{
+                                    padding: '16px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    background: 'rgba(74, 222, 128, 0.1)'
+                                }}
+                            >
+                                <h2 style={{ fontSize: '18px', color: '#4ade80', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    🔥 Heating Up <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontWeight: 'normal' }}>({activeParlays.length})</span>
+                                </h2>
+                                <span style={{ color: '#4ade80', fontSize: '12px' }}>{openSections.heatingUp ? '▼' : '►'}</span>
                             </div>
+
+                            {openSections.heatingUp && (
+                                <div style={{ padding: '16px', display: 'grid', gap: '16px' }} className="animate-fade">
+                                    {activeParlays.map(parlay => renderParlayCard(parlay))}
+                                </div>
+                            )}
                         </div>
                     )}
 
-                    {/* 2. ACTIVE PARLAYS (One or more legs Green) */}
-                    {activeParlays.length > 0 && (
-                        <div style={{ marginBottom: '24px' }}>
-                            <h2 style={{ fontSize: '18px', color: '#4ade80', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                🔥 Heating Up <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 'normal' }}>({activeParlays.length})</span>
-                            </h2>
-                            <div style={{ display: 'grid', gap: '16px' }}>
-                                {activeParlays.map(parlay => renderParlayCard(parlay))}
+                    {/* 2. UPCOMING PARLAYS */}
+                    {upcomingParlays.length > 0 && (
+                        <div style={{ marginBottom: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.05)', overflow: 'hidden' }}>
+                            <div
+                                onClick={() => toggleSection('upcoming')}
+                                style={{
+                                    padding: '16px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    background: 'rgba(255, 255, 255, 0.05)'
+                                }}
+                            >
+                                <h2 style={{ fontSize: '18px', color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    📅 Upcoming <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', fontWeight: 'normal' }}>({upcomingParlays.length})</span>
+                                </h2>
+                                <span style={{ color: '#aaa', fontSize: '12px' }}>{openSections.upcoming ? '▼' : '►'}</span>
                             </div>
+
+                            {openSections.upcoming && (
+                                <div style={{ padding: '16px', display: 'grid', gap: '16px' }} className="animate-fade">
+                                    {upcomingParlays.map(parlay => renderParlayCard(parlay))}
+                                </div>
+                            )}
                         </div>
                     )}
 
                     {/* 3. LOST PARLAYS */}
                     {lostParlays.length > 0 && (
-                        <div>
-                            <h2 style={{ fontSize: '18px', color: '#ef4444', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                💀 Busted <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 'normal' }}>({lostParlays.length})</span>
-                            </h2>
-                            <div style={{ display: 'grid', gap: '16px', opacity: 0.75 }}>
-                                {lostParlays.map(parlay => renderParlayCard(parlay))}
+                        <div style={{ marginBottom: '16px', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.05)', overflow: 'hidden' }}>
+                            <div
+                                onClick={() => toggleSection('busted')}
+                                style={{
+                                    padding: '16px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    background: 'rgba(239, 68, 68, 0.1)'
+                                }}
+                            >
+                                <h2 style={{ fontSize: '18px', color: '#ef4444', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    💀 Busted <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', fontWeight: 'normal' }}>({lostParlays.length})</span>
+                                </h2>
+                                <span style={{ color: '#ef4444', fontSize: '12px' }}>{openSections.busted ? '▼' : '►'}</span>
                             </div>
+
+                            {openSections.busted && (
+                                <div style={{ padding: '16px', display: 'grid', gap: '16px', opacity: 0.75 }} className="animate-fade">
+                                    {lostParlays.map(parlay => renderParlayCard(parlay))}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
