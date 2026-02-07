@@ -143,6 +143,33 @@ export default function Home() {
         setQuote(FUNNY_QUOTES[Math.floor(Math.random() * FUNNY_QUOTES.length)]);
     }, []);
 
+    // Optimistic Logic for Liking Comments
+    const handleLikeComment = (commentId, currentLikes) => {
+        if (!user) {
+            setShowAuthModal(true);
+            return;
+        }
+
+        // 1. Optimistic Update
+        const isLiked = currentLikes.includes(user.id);
+        const newLikes = isLiked
+            ? currentLikes.filter(id => id !== user.id)
+            : [...currentLikes, user.id];
+
+        setEventComments(prev => prev.map(c =>
+            c.id === commentId ? { ...c, likes: newLikes } : c
+        ));
+
+        // 2. Server Update
+        toggleLikeComment(commentId, currentLikes).catch(err => {
+            console.error("Like failed, reverting:", err);
+            // Revert on failure
+            setEventComments(prev => prev.map(c =>
+                c.id === commentId ? { ...c, likes: currentLikes } : c
+            ));
+        });
+    };
+
     const handleRestrictedAction = (action) => {
         if (!user) {
             setShowAuthModal(true);
@@ -1859,8 +1886,7 @@ export default function Home() {
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        // Simple "pop" animation logic could go here, but CSS transition handles the heavy lifting
-                                                        toggleLikeComment(c.id, c.likes || []);
+                                                        handleLikeComment(c.id, c.likes || []);
                                                     }}
                                                     style={{
                                                         background: c.likes?.includes(user?.id) ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255,255,255,0.05)',

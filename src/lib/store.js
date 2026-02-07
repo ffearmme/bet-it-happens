@@ -1444,7 +1444,7 @@ export function AppProvider({ children }) {
     }
   };
 
-  const createParlay = async (legs, baseMultiplier, finalMultiplier, initialWager) => {
+  const createParlay = async (legs, baseMultiplier, finalMultiplier, initialWager, title = '') => {
     if (!user) return { success: false, error: 'Not logged in' };
     if (initialWager <= 0) return { success: false, error: 'Initial bet required' };
     if (user.balance < initialWager) return { success: false, error: 'Insufficient funds for initial bet' };
@@ -1455,6 +1455,7 @@ export function AppProvider({ children }) {
         creatorId: user.id,
         creatorName: user.username,
         creatorProfilePic: user.profilePic || null,
+        title: title || '', // Add title here
         legs,
         baseMultiplier,
         finalMultiplier,

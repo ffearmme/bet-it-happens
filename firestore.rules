@@ -3,9 +3,6 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // Robust Admin Check
-    // 1. Checks if Auth exists
-    // 2. Checks if Email contains 'admin' (Safest fallback)
-    // 3. Checks if Firestore User doc exists AND has role == 'admin'
     function isAdmin() {
       return request.auth != null && (
         (request.auth.token.email != null && request.auth.token.email.lower().matches('.*admin.*')) ||
@@ -18,7 +15,6 @@ service cloud.firestore {
     match /events/{eventId} {
       allow read: if true;
       allow create, delete: if isAdmin();
-      // Allow updates if Admin OR if it's just a stats/comment update (which users might trigger via cloud functions or client logic if applicable, essentially relaxed for betting flow)
       allow update: if isAdmin() || (
         request.auth != null &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastComment', 'stats'])
@@ -44,25 +40,22 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
       allow delete: if isAdmin();
+      // Allow auth users to update 'likes' (for fire emoji)
+      allow update: if request.auth != null && (
+        isAdmin() ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+      );
     }
     
     // NOTIFICATIONS
     match /notifications/{notificationId} {
-      // Users can read their own
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      
-      // Admins can create any notification (e.g. Results)
-      // Users can create 'referral' notifications (triggered during signup)
-      allow create: if isAdmin() || 
-                   (request.auth != null && request.resource.data.type == 'referral');
-      
-      // Users can update their own (for marking as read), restricted to 'read' field only
+      allow create: if isAdmin() || (request.auth != null && request.resource.data.type == 'referral');
       allow update: if isAdmin() || (
         request.auth != null && 
         resource.data.userId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
       );
-
       allow delete: if isAdmin();
     }
 
@@ -71,12 +64,18 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
       allow delete: if isAdmin();
+      // Allow mods to recommend
+      allow update: if isAdmin() || (
+        request.auth != null && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['modRecommended', 'recommendedBy', 'recommendedAt'])
+      );
     }
 
     // PARLAYS
     match /parlays/{parlayId} {
       allow read: if true;
       allow create: if request.auth != null;
+      // Added 'lastComment' to allowed update fields
       allow update: if request.auth != null && (
          isAdmin() ||
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wagersCount', 'totalPool', 'lastComment'])

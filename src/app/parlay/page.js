@@ -15,11 +15,13 @@ export default function ParlayPage() {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [expandedCategories, setExpandedCategories] = useState([]); // Track expanded categories
+    const [expandedParlays, setExpandedParlays] = useState([]); // Track expanded parlay cards
 
     // Betting State
     const [bettingParlay, setBettingParlay] = useState(null); // The parlay currently being bet on
     const [wager, setWager] = useState('');
     const [creationWager, setCreationWager] = useState('10'); // Default initial wager
+    const [parlayTitle, setParlayTitle] = useState(''); // New State for Title
 
     // Comments State
     const [expandedParlayId, setExpandedParlayId] = useState(null);
@@ -81,6 +83,51 @@ export default function ParlayPage() {
     }, [db]);
 
     // Helpers
+    const isEventOpen = (event) => {
+        if (!event) return false;
+        if (event.status !== 'open') return false;
+
+        const now = new Date();
+
+        // 1. Check Deadline (Explicit Betting Cutoff)
+        if (event.deadline) {
+            let deadline;
+            if (event.deadline.seconds) {
+                deadline = new Date(event.deadline.seconds * 1000);
+            } else {
+                deadline = new Date(event.deadline);
+            }
+
+            if (!isNaN(deadline.getTime()) && deadline < now) {
+                return false;
+            }
+        }
+
+        // 2. Check startAt (Resolution Time / Game Start) - Sanity check
+        if (event.startAt) {
+            let start;
+            if (event.startAt.seconds) {
+                // Firestore Timestamp
+                start = new Date(event.startAt.seconds * 1000);
+            } else {
+                // String or Date
+                start = new Date(event.startAt);
+            }
+
+            // Check if valid date
+            if (isNaN(start.getTime())) {
+                console.warn("Invalid startAt for event:", event.title, event.startAt);
+                return true;
+            }
+
+            // Check if start time is in the past
+            if (start < new Date()) {
+                return false;
+            }
+        }
+        return true;
+    };
+
     const toggleLeg = (event, outcome) => {
         // Loyalty Check: Prevent betting on opposite side if already verified in history
         if (bets && bets.length > 0) {
@@ -147,6 +194,14 @@ export default function ParlayPage() {
         }
     };
 
+    const toggleParlayLegs = (parlayId) => {
+        if (expandedParlays.includes(parlayId)) {
+            setExpandedParlays(expandedParlays.filter(id => id !== parlayId));
+        } else {
+            setExpandedParlays([...expandedParlays, parlayId]);
+        }
+    };
+
     const calculateParlay = () => {
         if (selectedLegs.length < 2) return { base: 0, final: 0, bonus: 0 };
         const base = selectedLegs.reduce((acc, leg) => acc * leg.odds, 1);
@@ -164,9 +219,7 @@ export default function ParlayPage() {
         // Validate that all legs are from OPEN events and haven't started
         const closedLeg = selectedLegs.find(leg => {
             const event = events.find(e => e.id === leg.eventId);
-            if (!event || event.status !== 'open') return true;
-            if (event.startAt && new Date(event.startAt) < new Date()) return true;
-            return false;
+            return !isEventOpen(event);
         });
 
         if (closedLeg) {
@@ -181,11 +234,12 @@ export default function ParlayPage() {
         setError('');
         const { base, final } = calculateParlay();
 
-        const res = await createParlay(selectedLegs, base, final, creationWager);
+        const res = await createParlay(selectedLegs, base, final, creationWager, parlayTitle);
         if (res.success) {
             setSuccess("Parlay Created & Bet Placed! Good luck!");
             setSelectedLegs([]);
             setCreationWager('10');
+            setParlayTitle('');
             setMode('active');
             setTimeout(() => setSuccess(''), 3000);
         } else {
@@ -200,9 +254,7 @@ export default function ParlayPage() {
         // Validate that all legs are from OPEN events and haven't started
         const closedLeg = bettingParlay.legs.find(leg => {
             const event = events.find(e => e.id === leg.eventId);
-            if (!event || event.status !== 'open') return true;
-            if (event.startAt && new Date(event.startAt) < new Date()) return true;
-            return false;
+            return !isEventOpen(event);
         });
 
         if (closedLeg) {
@@ -238,12 +290,8 @@ export default function ParlayPage() {
     };
 
     // Filter events for creation (only Open & Future events)
-    const activeEvents = events.filter(e => {
-        if (e.status !== 'open') return false;
-        // If startAt exists, ensure it hasn't passed
-        if (e.startAt && new Date(e.startAt) < new Date()) return false;
-        return true;
-    });
+    // Filter events for creation (only Open & Future events)
+    const activeEvents = events.filter(e => isEventOpen(e));
 
     // --- Helper for Leg Status ---
     const getLegStatus = (leg) => {
@@ -289,6 +337,11 @@ export default function ParlayPage() {
     const renderParlayCard = (parlay) => (
         <div key={parlay.id} className="card bet-card" style={{ padding: '0', border: '1px solid rgba(255,255,255,0.05)' }}>
             <div style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                {parlay.title && (
+                    <div style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '12px', color: '#fff' }}>
+                        {parlay.title}
+                    </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', overflow: 'hidden' }}>
@@ -326,54 +379,93 @@ export default function ParlayPage() {
                         )}
                     </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {parlay.legs.map((leg, idx) => {
-                        const status = getLegStatus(leg);
-                        let bg = 'rgba(255,255,255,0.03)';
-                        let borderColor = 'transparent';
-                        let icon = null;
-
-                        if (status === 'won') {
-                            bg = 'rgba(34, 197, 94, 0.15)';
-                            borderColor = '#22c55e';
-                            icon = '✅';
-                        } else if (status === 'lost') {
-                            bg = 'rgba(239, 68, 68, 0.15)';
-                            borderColor = '#ef4444';
-                            icon = '❌';
-                        }
-
-                        return (
-                            <div key={idx} style={{
-                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                fontSize: '13px', padding: '8px',
-                                background: bg,
-                                border: `1px solid ${borderColor}`,
-                                borderRadius: '6px'
-                            }}>
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                    <span style={{ color: status === 'lost' ? '#fca5a5' : status === 'won' ? '#86efac' : '#fff', fontWeight: 'bold' }}>
-                                        {leg.outcomeId === 'over' ? 'Over' : leg.outcomeId === 'under' ? 'Under' : leg.label} {icon}
-                                    </span>
-                                    <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{leg.eventTitle}</span>
-                                </div>
-                                <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>{leg.odds}x</span>
-                            </div>
-                        );
-                    })}
+                {/* Collapse/Expand Toggle (Replacing the always visible legs) */}
+                <div
+                    onClick={() => toggleParlayLegs(parlay.id)}
+                    style={{
+                        fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center',
+                        padding: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.03)',
+                        borderRadius: '4px', marginTop: '8px'
+                    }}
+                >
+                    {expandedParlays.includes(parlay.id) ? 'Hide Legs ▲' : `View ${parlay.legs.length} Legs ▼`}
                 </div>
+
+                {expandedParlays.includes(parlay.id) && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }} className="animate-fade">
+                        {parlay.legs.map((leg, idx) => {
+                            const status = getLegStatus(leg);
+                            let bg = 'rgba(255,255,255,0.03)';
+                            let borderColor = 'transparent';
+                            let icon = null;
+
+                            if (status === 'won') {
+                                bg = 'rgba(34, 197, 94, 0.15)';
+                                borderColor = '#22c55e';
+                                icon = '✅';
+                            } else if (status === 'lost') {
+                                bg = 'rgba(239, 68, 68, 0.15)';
+                                borderColor = '#ef4444';
+                                icon = '❌';
+                            }
+
+                            return (
+                                <div key={idx} style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    fontSize: '13px', padding: '8px',
+                                    background: bg,
+                                    border: `1px solid ${borderColor}`,
+                                    borderRadius: '6px'
+                                }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <span style={{ color: status === 'lost' ? '#fca5a5' : status === 'won' ? '#86efac' : '#fff', fontWeight: 'bold' }}>
+                                            {leg.outcomeId === 'over' ? 'Over' : leg.outcomeId === 'under' ? 'Under' : leg.label} {icon}
+                                        </span>
+                                        <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{leg.eventTitle}</span>
+                                    </div>
+                                    <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>{leg.odds}x</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
             <div style={{ padding: '12px', background: 'rgba(0,0,0,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                     <span style={{ color: '#fff', fontWeight: 'bold' }}>{parlay.wagersCount || 0}</span> Tailing
                 </div>
-                <button
-                    className="btn btn-primary"
-                    style={{ width: 'auto', padding: '8px 20px', fontSize: '13px' }}
-                    onClick={() => setBettingParlay(parlay)}
-                >
-                    Tail This Bet
-                </button>
+                {/* Tailing Button Logic */}
+                {(() => {
+                    // Check if any leg has started/closed/settled
+                    // The simplest check given our categorization: 
+                    // If it's Heating Up, it means something WON.
+                    // If it's Busted, it means something LOST.
+                    // In both cases, we can't tail.
+                    // We can check if any leg status is NOT 'pending'.
+                    const hasStarted = parlay.legs.some(leg => getLegStatus(leg) !== 'pending');
+
+                    if (hasStarted) {
+                        return (
+                            <button
+                                className="btn"
+                                style={{ width: 'auto', padding: '8px 20px', fontSize: '13px', background: 'rgba(255,255,255,0.1)', color: 'var(--text-muted)', cursor: 'not-allowed' }}
+                                disabled
+                            >
+                                Closed
+                            </button>
+                        );
+                    }
+
+                    return (
+                        <button
+                            className="btn btn-primary"
+                            style={{ width: 'auto', padding: '8px 20px', fontSize: '13px' }}
+                            onClick={() => setBettingParlay(parlay)}
+                        >
+                            Tail This Bet
+                        </button>
+                    );
+                })()}
             </div>
 
             {/* COMMENTS TOGGLE & SECTION */}
@@ -436,7 +528,7 @@ export default function ParlayPage() {
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 
     return (
@@ -502,19 +594,7 @@ export default function ParlayPage() {
                         </div>
                     )}
 
-                    {/* 1. ACTIVE PARLAYS (One or more legs Green) */}
-                    {activeParlays.length > 0 && (
-                        <div style={{ marginBottom: '24px' }}>
-                            <h2 style={{ fontSize: '18px', color: '#4ade80', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                🔥 Heating Up <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 'normal' }}>({activeParlays.length})</span>
-                            </h2>
-                            <div style={{ display: 'grid', gap: '16px' }}>
-                                {activeParlays.map(parlay => renderParlayCard(parlay))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 2. UPCOMING PARLAYS (No action yet) */}
+                    {/* 1. UPCOMING PARLAYS (No action yet) - Swapped to top */}
                     {upcomingParlays.length > 0 && (
                         <div style={{ marginBottom: '24px' }}>
                             <h2 style={{ fontSize: '18px', color: '#fff', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -522,6 +602,18 @@ export default function ParlayPage() {
                             </h2>
                             <div style={{ display: 'grid', gap: '16px' }}>
                                 {upcomingParlays.map(parlay => renderParlayCard(parlay))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 2. ACTIVE PARLAYS (One or more legs Green) */}
+                    {activeParlays.length > 0 && (
+                        <div style={{ marginBottom: '24px' }}>
+                            <h2 style={{ fontSize: '18px', color: '#4ade80', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                🔥 Heating Up <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 'normal' }}>({activeParlays.length})</span>
+                            </h2>
+                            <div style={{ display: 'grid', gap: '16px' }}>
+                                {activeParlays.map(parlay => renderParlayCard(parlay))}
                             </div>
                         </div>
                     )}
@@ -605,6 +697,18 @@ export default function ParlayPage() {
                                 <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '12px' }}>
                                     Includes {((selectedLegs.length - 1) * 5)}% Parlay Bonus
                                 </p>
+
+                                <div style={{ marginBottom: '12px' }}>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        style={{ width: '100%', padding: '8px', fontSize: '14px' }}
+                                        placeholder="Parlay Title (Optional) e.g. 'Sunday Funday'"
+                                        value={parlayTitle}
+                                        onChange={e => setParlayTitle(e.target.value)}
+                                        maxLength={50}
+                                    />
+                                </div>
 
                                 <div style={{ marginBottom: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
                                     <div className="input-group" style={{ flex: 1, margin: 0 }}>
@@ -708,7 +812,23 @@ export default function ParlayPage() {
                                                     <div style={{ display: 'grid', gap: '12px' }} className="animate-fade">
                                                         {categoryEvents.map(event => (
                                                             <div key={event.id} className="card" style={{ marginBottom: '0' }}>
-                                                                <h3 style={{ fontSize: '16px', marginBottom: '12px' }}>{event.title}</h3>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                                                                    <h3 style={{ fontSize: '16px', margin: 0 }}>{event.title}</h3>
+                                                                    {(event.deadline || event.startAt) && (
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                                                            <div style={{ fontSize: '9px', textTransform: 'uppercase', color: '#ef4444', fontWeight: 'bold' }}>Betting Ends</div>
+                                                                            <div style={{ fontSize: '10px', color: 'var(--text-muted)', textAlign: 'right' }}>
+                                                                                {(() => {
+                                                                                    // Prefer deadline, fallback to startAt
+                                                                                    const dateVal = event.deadline || event.startAt;
+                                                                                    if (!dateVal) return '';
+                                                                                    const d = dateVal.seconds ? new Date(dateVal.seconds * 1000) : new Date(dateVal);
+                                                                                    return isNaN(d.getTime()) ? 'Invalid Date' : d.toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                                                                })()}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '8px' }}>
                                                                     {event.outcomes.map(outcome => {
                                                                         const isSelected = selectedLegs.some(l => l.eventId === event.id && l.outcomeId === outcome.id);
