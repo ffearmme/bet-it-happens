@@ -43,6 +43,7 @@ function AdminContent() {
     const [allBets, setAllBets] = useState([]);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingBets, setEditingBets] = useState([]);
+    const [expandedCategories, setExpandedCategories] = useState({});
 
     // State for Ideas
     const [ideaFilter, setIdeaFilter] = useState('pending');
@@ -428,19 +429,80 @@ function AdminContent() {
                             {eventSubTab === 'edit' && (
                                 <div className="card">
                                     <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>Manage Events ({filteredEvents.length})</h2>
-                                    {filteredEvents.map(event => (
-                                        <div key={event.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#222', marginBottom: '8px', borderRadius: '8px' }}>
-                                            <div>
-                                                <div style={{ fontWeight: 'bold' }}>{event.title}</div>
-                                                <div style={{ fontSize: '12px', color: '#888' }}>{event.category} • {event.status}</div>
-                                            </div>
-                                            <div style={{ display: 'flex', gap: '8px' }}>
-                                                <button onClick={() => toggleFeatured(event.id, event.featured)} style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', background: event.featured ? 'gold' : '#444', color: event.featured ? '#000' : '#fff', border: 'none', cursor: 'pointer' }}>★</button>
-                                                <button onClick={() => startEdit(event)} style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', background: '#444', color: '#fff', border: 'none', cursor: 'pointer' }}>Edit</button>
-                                                <button onClick={() => { if (confirm('Delete?')) deleteEvent(event.id) }} style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer' }}>Del</button>
-                                            </div>
-                                        </div>
-                                    ))}
+
+                                    {/* Categorized List */}
+                                    {(() => {
+                                        // Helper to determine display category
+                                        const getDisplayCategory = (e) => {
+                                            if (e.status === 'resolved' || e.status === 'completed' || e.status === 'settled') return 'Settled';
+                                            return e.category || 'Uncategorized';
+                                        };
+
+                                        // Get all unique categories from events + predefined list
+                                        const eventCats = new Set(filteredEvents.map(e => getDisplayCategory(e)));
+                                        const allCats = Array.from(new Set([...CATEGORIES, ...eventCats, 'Settled']));
+
+                                        // Remove 'Settled' from the list if it's empty in filteredEvents? 
+                                        // Actually the loop below handles empty categories by returning null.
+
+                                        // Sort categories? Maybe 'Settled' should be last?
+                                        // For now, let's just use the order. CATEGORIES is hardcoded.
+                                        // We can force 'Settled' to be at the end if we want.
+                                        const sortedCats = allCats.sort((a, b) => {
+                                            if (a === 'Settled') return 1;
+                                            if (b === 'Settled') return -1;
+                                            return 0; // Keep original order for others
+                                        });
+
+
+                                        return sortedCats.map(category => {
+                                            const catEvents = filteredEvents.filter(e => getDisplayCategory(e) === category);
+                                            if (catEvents.length === 0) return null;
+
+                                            const isExpanded = expandedCategories[category];
+
+                                            return (
+                                                <div key={category} style={{ marginBottom: '8px', background: '#222', borderRadius: '8px', overflow: 'hidden' }}>
+                                                    <button
+                                                        onClick={() => setExpandedCategories(prev => ({ ...prev, [category]: !prev[category] }))}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '12px',
+                                                            background: '#333',
+                                                            border: 'none',
+                                                            color: '#fff',
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center',
+                                                            cursor: 'pointer',
+                                                            fontWeight: 'bold'
+                                                        }}
+                                                    >
+                                                        <span>{category} ({catEvents.length})</span>
+                                                        <span>{isExpanded ? '▼' : '▶'}</span>
+                                                    </button>
+
+                                                    {isExpanded && (
+                                                        <div style={{ padding: '8px' }}>
+                                                            {catEvents.map(event => (
+                                                                <div key={event.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#111', marginBottom: '8px', borderRadius: '6px', border: '1px solid #333' }}>
+                                                                    <div>
+                                                                        <div style={{ fontWeight: 'bold' }}>{event.title}</div>
+                                                                        <div style={{ fontSize: '12px', color: '#888' }}>{event.status} • {new Date(event.startAt).toLocaleDateString()}</div>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                                                        <button onClick={() => toggleFeatured(event.id, event.featured)} style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', background: event.featured ? 'gold' : '#444', color: event.featured ? '#000' : '#fff', border: 'none', cursor: 'pointer' }}>★</button>
+                                                                        <button onClick={() => startEdit(event)} style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', background: '#444', color: '#fff', border: 'none', cursor: 'pointer' }}>Edit</button>
+                                                                        <button onClick={() => { if (confirm('Delete?')) deleteEvent(event.id) }} style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer' }}>Del</button>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        });
+                                    })()}
                                 </div>
                             )}
 

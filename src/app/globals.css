@@ -402,3 +402,416 @@ h2 {
   animation: ring 2s infinite ease-in-out;
   transform-origin: top center;
 }
+
+/* Mod Panel Styles */
+
+.mod-container {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+}
+
+.mod-sidebar {
+  width: 220px;
+  background: #111;
+  border-right: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+
+.mod-title {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 32px;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mod-nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mod-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  text-align: left;
+  font-size: 14px;
+  font-weight: normal;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.mod-nav-btn.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-weight: 600;
+}
+
+.mod-footer {
+  margin-top: auto;
+  font-size: 12px;
+  color: #444;
+}
+
+.mod-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mod-header {
+  height: 64px;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: #111;
+}
+
+.mod-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.mod-search-container {
+  position: relative;
+  width: 300px;
+}
+
+.mod-search-input {
+  width: 100%;
+  background: #222;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+}
+
+.mod-scroll-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  padding-bottom: 100px;
+}
+
+.mod-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.mod-stat-card {
+  padding: 20px;
+  text-align: center;
+  background: #111;
+  border: 1px solid #333;
+}
+
+.mod-stat-card h3 {
+  font-size: 12px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.mod-stat-card p {
+  font-size: 32px;
+  font-weight: bold;
+  margin: 10px 0;
+  color: #fff;
+}
+
+.mod-stat-card p.text-primary {
+  color: var(--primary);
+}
+
+.mod-stat-card div:last-child {
+  font-size: 12px;
+  color: #666;
+}
+
+.mod-welcome-card {
+  padding: 24px;
+  background: #111;
+  border: 1px solid #333;
+}
+
+.mod-welcome-card p {
+  color: #aaa;
+  line-height: 1.6;
+}
+
+.mod-ideas-card {
+  background: #111;
+  border: 1px solid #333;
+  padding: 0;
+}
+
+.mod-ideas-header {
+  padding: 20px;
+  border-bottom: 1px solid #333;
+}
+
+.mod-idea-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #222;
+}
+
+.mod-idea-content {
+  flex: 1;
+  min-width: 0;
+  /* Enable text truncation if needed */
+  margin-right: 16px;
+}
+
+.mod-idea-text {
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+
+.mod-idea-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: #888;
+  flex-wrap: wrap;
+}
+
+.mod-status-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+}
+
+.mod-status-badge.approved {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.mod-status-badge.denied {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.mod-idea-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.mod-btn-approve {
+  background: #10b981;
+  color: #000;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.mod-btn-approve:hover {
+  opacity: 0.9;
+}
+
+.mod-btn-deny {
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid #ef4444;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mod-btn-deny:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
+.mod-no-ideas {
+  padding: 40px;
+  text-align: center;
+  color: #666;
+}
+
+.mod-concern-card {
+  width: 100%;
+  max-width: 600px;
+  background: #111;
+  border: 1px solid #333;
+  padding: 24px;
+}
+
+.mod-concern-input {
+  width: 100%;
+  height: 150px;
+  margin-bottom: 16px;
+  background: #222;
+  border: 1px solid #333;
+  color: #fff;
+  padding: 12px;
+  border-radius: 8px;
+  resize: vertical;
+}
+
+/* --- MOBILE RESPONSIVE STYLES --- */
+@media (max-width: 768px) {
+  .mod-container {
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  /* Make sidebar a top navbar */
+  .mod-sidebar {
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid #333;
+    padding: 10px 16px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .mod-title {
+    margin-bottom: 0;
+    font-size: 16px;
+    margin-right: auto;
+  }
+
+  .mod-nav-links {
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 0;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .mod-nav-links::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mod-nav-btn {
+    width: auto;
+    padding: 6px 10px;
+    white-space: nowrap;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  /* Hide labels on very small screens, keep icons */
+  @media (max-width: 480px) {
+    .mod-nav-label {
+      display: none;
+    }
+
+    .mod-title-text {
+      display: none;
+    }
+
+    .mod-nav-btn span:first-child {
+      font-size: 18px;
+      /* Bigger icon when no text */
+    }
+  }
+
+  .mod-footer {
+    display: none;
+  }
+
+  /* Main Content Adjustments */
+  .mod-header {
+    height: auto;
+    padding: 16px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .mod-header-title {
+    font-size: 18px;
+  }
+
+  .mod-search-container {
+    width: 100%;
+  }
+
+  .mod-dashboard-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .mod-idea-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .mod-idea-content {
+    margin-right: 0;
+    width: 100%;
+  }
+
+  .mod-idea-meta {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .mod-idea-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .mod-btn-approve,
+  .mod-btn-deny {
+    width: 100%;
+    padding: 12px;
+    font-size: 14px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .mod-scroll-content {
+    padding: 16px;
+  }
+}
