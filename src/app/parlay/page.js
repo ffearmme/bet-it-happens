@@ -844,10 +844,11 @@ export default function ParlayPage() {
                                     `}</style>
                                     {onFireParlays.map(parlay => (
                                         <div key={parlay.id} style={{
-                                            flex: '0 0 100%',
-                                            maxWidth: '400px',
+                                            flex: '0 0 95%',
+                                            maxWidth: '350px',
                                             margin: '0 auto',
-                                            scrollSnapAlign: 'center'
+                                            scrollSnapAlign: 'center',
+                                            scrollSnapStop: 'always'
                                         }}>
                                             {renderOnFireCard(parlay)}
                                         </div>
