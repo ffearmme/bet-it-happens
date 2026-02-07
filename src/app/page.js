@@ -514,47 +514,7 @@ export default function Home() {
                 </div>
             )}
 
-            {/* --- GENERAL NOTIFICATION POPUP (Referrals, etc.) --- */}
-            {user && notifications && notifications.filter(n => !n.read).length > 0 && (
-                (() => {
-                    const notif = notifications.filter(n => !n.read)[0]; // Show first unread
-                    return (
-                        <div className="toast-notification">
-                            <div className="card" style={{
-                                background: 'rgba(24, 24, 27, 0.95)',
-                                backdropFilter: 'blur(10px)',
-                                border: '1px solid var(--primary)',
-                                boxShadow: '0 0 20px rgba(34, 197, 94, 0.3)',
-                                padding: '16px',
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: '12px',
-                                position: 'relative'
-                            }}>
-                                <div style={{ fontSize: '24px' }}>
-                                    {notif.type === 'referral' ? '💰' : '🔔'}
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <h4 style={{ fontSize: '16px', fontWeight: 'bold', color: '#fff', marginBottom: '4px' }}>
-                                        {notif.title}
-                                    </h4>
-                                    <p style={{ fontSize: '13px', color: '#d4d4d8', marginBottom: '12px', lineHeight: '1.4' }}>
-                                        {notif.message}
-                                    </p>
-                                    <button
-                                        className="btn btn-sm btn-primary"
-                                        onClick={() => markNotificationAsRead(notif.id)}
-                                        style={{ fontSize: '11px', padding: '4px 12px', height: 'auto' }}
-                                    >
-                                        Awesome (Dismiss)
-                                    </button>
-                                </div>
-                            </div>
 
-                        </div>
-                    );
-                })()
-            )}
 
             {/* --- STREAK NOTIFICATION --- */}
             {streakNotification && (

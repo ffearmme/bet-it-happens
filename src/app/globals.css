@@ -354,7 +354,51 @@ h2 {
   box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
 }
 
+
 .outcome-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+@keyframes ring {
+  0% {
+    transform: rotate(0);
+  }
+
+  10% {
+    transform: rotate(15deg);
+  }
+
+  20% {
+    transform: rotate(-15deg);
+  }
+
+  30% {
+    transform: rotate(10deg);
+  }
+
+  40% {
+    transform: rotate(-10deg);
+  }
+
+  50% {
+    transform: rotate(5deg);
+  }
+
+  60% {
+    transform: rotate(-5deg);
+  }
+
+  70% {
+    transform: rotate(0);
+  }
+
+  100% {
+    transform: rotate(0);
+  }
+}
+
+.animate-ring {
+  animation: ring 2s infinite ease-in-out;
+  transform-origin: top center;
 }

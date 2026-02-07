@@ -4,11 +4,13 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
 export default function ModDashboard() {
-    const { user, isLoaded, ideas, sendIdeaToAdmin } = useApp();
+    const { user, isLoaded, ideas, sendIdeaToAdmin, reviewIdea, submitModConcern } = useApp();
     const router = useRouter();
     const [collapsed, setCollapsed] = useState({
-        ideas: false
+        ideas: true,
+        concerns: true
     });
+    const [concernMsg, setConcernMsg] = useState('');
 
     const toggle = (key) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
     const Minimizer = ({ section }) => (
@@ -67,36 +69,87 @@ export default function ModDashboard() {
                                 <div>
                                     <span className="text-sm" style={{ fontSize: '12px', color: 'var(--primary)', marginRight: '8px' }}>By: {idea.username}</span>
                                     <span className="text-sm" style={{ fontSize: '10px' }}>{new Date(idea.submittedAt).toLocaleDateString()}</span>
+                                    {idea.status && (
+                                        <span style={{
+                                            marginLeft: '8px', fontSize: '10px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px',
+                                            background: idea.status === 'approved' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                                            color: idea.status === 'approved' ? '#10b981' : '#ef4444'
+                                        }}>
+                                            {idea.status.toUpperCase()}
+                                        </span>
+                                    )}
                                 </div>
-                                <button
-                                    onClick={async () => {
-                                        if (idea.modRecommended) return;
-                                        if (confirm(`Recommend "${idea.text}" to Admin?`)) {
-                                            const res = await sendIdeaToAdmin(idea.id, idea.text);
-                                            if (res.success) alert("Sent to Admin!");
-                                            else alert("Error: " + res.error);
-                                        }
-                                    }}
-                                    disabled={idea.modRecommended}
-                                    style={{
-                                        background: idea.modRecommended ? '#333' : 'var(--primary)',
-                                        color: idea.modRecommended ? '#888' : '#000',
-                                        border: 'none',
-                                        padding: '4px 8px',
-                                        borderRadius: '4px',
-                                        fontSize: '11px',
-                                        fontWeight: 'bold',
-                                        cursor: idea.modRecommended ? 'default' : 'pointer'
-                                    }}
-                                >
-                                    {idea.modRecommended ? 'Sent ✓' : 'Send to Admin 📤'}
-                                </button>
+                                {!idea.status && (
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button
+                                            onClick={async () => {
+                                                if (confirm(`Approve idea "${idea.text}"?`)) {
+                                                    await reviewIdea(idea.id, 'approved');
+                                                }
+                                            }}
+                                            style={{
+                                                background: '#10b981', color: '#000', border: 'none', padding: '4px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer'
+                                            }}
+                                        >
+                                            Approve ✓
+                                        </button>
+                                        <button
+                                            onClick={async () => {
+                                                if (confirm(`Deny idea "${idea.text}"?`)) {
+                                                    await reviewIdea(idea.id, 'denied');
+                                                }
+                                            }}
+                                            style={{
+                                                background: '#ef4444', color: '#fff', border: 'none', padding: '4px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer'
+                                            }}
+                                        >
+                                            Deny ✕
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))
                 ) : (
                     <p className="text-sm">No ideas submitted yet.</p>
                 ))}
+            </div>
+
+            <div className="card">
+                <div onClick={() => toggle('concerns')} style={sectionHeaderStyle(!collapsed.concerns)}>
+                    <h2 style={{ fontSize: '18px', margin: 0 }}>Report Concern to Admin</h2>
+                    <Minimizer section="concerns" />
+                </div>
+                {!collapsed.concerns && (
+                    <div>
+                        <p style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>
+                            Something look wrong? Send a direct message to the admins.
+                        </p>
+                        <textarea
+                            className="input"
+                            style={{ width: '100%', height: '100px', marginBottom: '8px', resize: 'vertical' }}
+                            placeholder="Describe the issue..."
+                            value={concernMsg}
+                            onChange={(e) => setConcernMsg(e.target.value)}
+                        />
+                        <button
+                            className="btn btn-primary"
+                            disabled={!concernMsg.trim()}
+                            onClick={async () => {
+                                const res = await submitModConcern(concernMsg);
+                                if (res.success) {
+                                    alert('Concern sent to admins.');
+                                    setConcernMsg('');
+                                    setCollapsed(prev => ({ ...prev, concerns: true }));
+                                } else {
+                                    alert('Error: ' + res.error);
+                                }
+                            }}
+                        >
+                            Send Report
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -1408,6 +1408,21 @@ export function AppProvider({ children }) {
   };
 
 
+  const reviewIdea = async (ideaId, status) => {
+    if (!user || (!user.groups?.includes('Moderator') && user.role !== 'admin')) return { success: false, error: 'Unauthorized' };
+    try {
+      const ideaRef = doc(db, 'ideas', ideaId);
+      await updateDoc(ideaRef, {
+        status: status, // 'approved' or 'denied'
+        reviewedBy: user.username,
+        reviewedAt: new Date().toISOString()
+      });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
   const sendIdeaToAdmin = async (ideaId, ideaText) => {
     if (!user || (!user.groups?.includes('Moderator') && user.role !== 'admin')) return { success: false, error: 'Unauthorized' };
     try {
@@ -1440,6 +1455,49 @@ export function AppProvider({ children }) {
       return { success: true };
     } catch (e) {
       console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    if (!user) return { success: false, error: 'Not logged in' };
+    try {
+      const q = query(collection(db, 'notifications'), where('userId', '==', user.id));
+      const snap = await getDocs(q);
+      const batch = writeBatch(db);
+      snap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      setNotifications([]); // Optimistic update
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const submitModConcern = async (message) => {
+    if (!user || (!user.groups?.includes('Moderator') && user.role !== 'admin')) return { success: false, error: 'Unauthorized' };
+    if (!message.trim()) return { success: false, error: 'Message empty' };
+
+    try {
+      const adminsQ = query(collection(db, 'users'), where('role', '==', 'admin'));
+      const adminsSnap = await getDocs(adminsQ);
+      const batch = writeBatch(db);
+
+      adminsSnap.forEach(adminDoc => {
+        const notifRef = doc(collection(db, 'notifications'));
+        batch.set(notifRef, {
+          userId: adminDoc.id,
+          type: 'mod_concern',
+          title: '🚨 Mod Concern',
+          message: `${user.username}: ${message}`,
+          read: false,
+          createdAt: new Date().toISOString()
+        });
+      });
+
+      await batch.commit();
+      return { success: true };
+    } catch (e) {
       return { success: false, error: e.message };
     }
   };
@@ -1599,10 +1657,10 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-      events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, toggleLikeComment, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendIdeaToAdmin,
+      events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, toggleLikeComment, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendIdeaToAdmin, reviewIdea,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db,
       isGuestMode, setIsGuestMode, // Exposed isGuestMode and its setter
-      notifications, markNotificationAsRead,
+      notifications, markNotificationAsRead, clearAllNotifications, submitModConcern,
       createParlay, placeParlayBet, addParlayComment, deleteParlay
     }}>
       {children}
