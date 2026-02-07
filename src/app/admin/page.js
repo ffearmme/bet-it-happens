@@ -1,12 +1,12 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
 import { db } from '../../lib/firebase';
 import { collection, query, limit, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 
-export default function Admin() {
+function AdminContent() {
     const {
         user, events, createEvent, resolveEvent, deleteEvent, updateEvent,
         updateEventOrder, deleteBet, toggleFeatured, ideas, deleteIdea,
@@ -712,5 +712,13 @@ export default function Admin() {
             )}
 
         </div>
+    );
+}
+
+export default function Admin() {
+    return (
+        <Suspense fallback={<div className="container" style={{ padding: '20px', color: '#fff' }}>Loading Admin Dashboard...</div>}>
+            <AdminContent />
+        </Suspense>
     );
 }
