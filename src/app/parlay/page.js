@@ -843,12 +843,17 @@ export default function ParlayPage() {
                                         }
                                     `}</style>
                                     {onFireParlays.map(parlay => (
-                                        <div key={parlay.id} style={{ flex: '0 0 100%', maxWidth: '400px', scrollSnapAlign: 'center' }}>
+                                        <div key={parlay.id} style={{
+                                            flex: '0 0 100%',
+                                            maxWidth: '400px',
+                                            margin: '0 auto',
+                                            scrollSnapAlign: 'center'
+                                        }}>
                                             {renderOnFireCard(parlay)}
                                         </div>
                                     ))}
-                                    {/* Padding at the end for scroll */}
-                                    <div style={{ flex: '0 0 1px' }}></div>
+                                    {/* Spacer for right padding visual balance */}
+                                    <div style={{ flex: '0 0 1px' }} />
                                 </div>
                             )}
                         </div>
