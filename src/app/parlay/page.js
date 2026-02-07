@@ -25,6 +25,7 @@ export default function ParlayPage() {
 
     // Collapsible Sections State
     const [openSections, setOpenSections] = useState({
+        onFire: true, // Auto-open this exciting category? Or start closed? Let's auto-open for excitement.
         heatingUp: false,
         upcoming: false,
         busted: false
@@ -315,32 +316,36 @@ export default function ParlayPage() {
     };
 
     // --- Categorize Parlays ---
+    // --- Categorize Parlays ---
     const upcomingParlays = [];
-    const activeParlays = [];
+    const activeParlays = []; // 1+ won, others pending
+    const onFireParlays = []; // All won except 1 pending
     const lostParlays = [];
 
     parlays.forEach(p => {
-        let hasWon = false;
-        let hasLost = false;
-        let isAllPending = true;
+        let legsWon = 0;
+        let legsLost = 0;
+        let legsPending = 0;
 
         p.legs.forEach(leg => {
             const status = getLegStatus(leg);
-            if (status === 'won') {
-                hasWon = true;
-                isAllPending = false;
-            }
-            if (status === 'lost') {
-                hasLost = true;
-                isAllPending = false;
-            }
+            if (status === 'won') legsWon++;
+            if (status === 'lost') legsLost++;
+            if (status === 'pending') legsPending++;
         });
 
-        if (hasLost) {
+        if (legsLost > 0) {
             lostParlays.push(p);
-        } else if (hasWon) {
-            activeParlays.push(p);
+        } else if (legsWon > 0) {
+            // It has started winning.
+            // Check if it's "On Fire" (Meaning only 1 leg left)
+            if (legsPending === 1 && legsWon === (p.legs.length - 1)) {
+                onFireParlays.push(p);
+            } else {
+                activeParlays.push(p);
+            }
         } else {
+            // No wins, no losses -> All Pending (Upcoming)
             upcomingParlays.push(p);
         }
     });
@@ -542,6 +547,191 @@ export default function ParlayPage() {
         </div >
     );
 
+    const renderOnFireCard = (parlay) => (
+        <div key={parlay.id} className="card animate-pulse-slow" style={{
+            padding: '0',
+            background: 'linear-gradient(135deg, #2a0a0a 0%, #1a0505 100%)', // Deep red/dark theme
+            border: '2px solid #ef4444',
+            boxShadow: '0 0 25px rgba(239, 68, 68, 0.3)',
+            position: 'relative',
+            overflow: 'hidden'
+        }}>
+            {/* Fire Background Effect */}
+            <div style={{
+                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                background: 'radial-gradient(circle at 50% 0%, rgba(239, 68, 68, 0.2), transparent 70%)',
+                pointerEvents: 'none'
+            }} />
+
+            <div style={{ padding: '20px', borderBottom: '1px solid rgba(239, 68, 68, 0.3)', position: 'relative', zIndex: 1 }}>
+
+                {/* Header: Title + Creator */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                    <div>
+                        {parlay.title ? (
+                            <div style={{ fontSize: '20px', fontWeight: '900', color: '#fff', textShadow: '0 0 10px rgba(239, 68, 68, 0.5)', marginBottom: '4px' }}>
+                                {parlay.title}
+                            </div>
+                        ) : (
+                            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#fff', fontStyle: 'italic', marginBottom: '4px' }}>
+                                {parlay.creatorName}'s Bet
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ color: '#a1a1aa', fontSize: '12px' }}>by</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#444', overflow: 'hidden' }}>
+                                    {parlay.creatorProfilePic ? (
+                                        <img src={parlay.creatorProfilePic} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : (
+                                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '8px' }}>
+                                            {parlay.creatorName[0].toUpperCase()}
+                                        </div>
+                                    )}
+                                </div>
+                                <span style={{ color: '#fff', fontSize: '13px', fontWeight: 'bold' }}>{parlay.creatorName}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '28px', fontWeight: '900', color: '#fbbf24', textShadow: '0 0 15px rgba(251, 191, 36, 0.4)' }}>
+                            {parlay.finalMultiplier.toFixed(2)}x
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#ef4444', fontWeight: 'bold', textTransform: 'uppercase' }}>POTENTIAL PAYOUT</div>
+                    </div>
+                </div>
+
+                {/* Social Proof */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px', background: 'rgba(0,0,0,0.3)', padding: '8px 12px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '14px' }}>👥</span>
+                        <span style={{ color: '#e5e7eb', fontSize: '13px' }}><b>{parlay.wagersCount || 0}</b> Tailing</span>
+                    </div>
+                    <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.2)' }}></div>
+                    <div style={{ fontSize: '13px', color: '#fca5a5', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        🔥 1 LEG AWAY
+                    </div>
+                </div>
+
+                {/* LEGS DISPLAY (Always Expanded for On Fire) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {parlay.legs.map((leg, idx) => {
+                        const status = getLegStatus(leg);
+                        // Special Styles for On Fire
+                        let bg = 'rgba(0,0,0,0.4)';
+                        let borderColor = 'rgba(255,255,255,0.1)';
+                        let icon = null;
+                        let labelColor = '#d1d5db';
+
+                        if (status === 'won') {
+                            bg = 'rgba(34, 197, 94, 0.1)';
+                            borderColor = 'rgba(34, 197, 94, 0.4)';
+                            icon = '✅';
+                            labelColor = '#86efac';
+                        } else if (status === 'pending') {
+                            // Highlight the pending leg!
+                            bg = 'rgba(251, 191, 36, 0.1)';
+                            borderColor = '#fbbf24';
+                            icon = '⏳';
+                            labelColor = '#fbbf24';
+                        }
+
+                        return (
+                            <div key={idx} style={{
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                fontSize: '13px', padding: '10px',
+                                background: bg,
+                                border: `1px solid ${borderColor}`,
+                                borderRadius: '6px',
+                                transition: 'transform 0.2s',
+                            }}>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <span style={{ color: labelColor, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        {icon} {leg.outcomeId === 'over' ? 'Over' : leg.outcomeId === 'under' ? 'Under' : leg.label}
+                                    </span>
+                                    <span style={{ color: '#a1a1aa', fontSize: '11px' }}>{leg.eventTitle}</span>
+                                </div>
+
+                                {status === 'pending' && (
+                                    <div style={{ fontSize: '10px', background: '#fbbf24', color: '#000', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                                        Needs This
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Footer: Chat Preview */}
+            <div style={{ background: 'rgba(0,0,0,0.6)', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', borderTop: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                {/* Chat Preview - Absolute Left */}
+                {parlay.lastComment && (
+                    <div
+                        onClick={() => setExpandedParlayId(expandedParlayId === parlay.id ? null : parlay.id)}
+                        style={{ position: 'absolute', left: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', maxWidth: '40%' }}
+                    >
+                        <div style={{ fontSize: '14px' }}>💬</div>
+                        <div style={{ display: 'flex', gap: '4px', overflow: 'hidden', alignItems: 'center', color: '#d4d4d8', fontSize: '12px' }}>
+                            <span style={{ fontWeight: 'bold', color: '#fff' }}>{parlay.lastComment.username}:</span>
+                            <span style={{ fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>"{parlay.lastComment.text}"</span>
+                        </div>
+                    </div>
+                )}
+
+                {/* "View" Button - Centered */}
+                <button
+                    onClick={() => setExpandedParlayId(expandedParlayId === parlay.id ? null : parlay.id)}
+                    className="btn"
+                    style={{
+                        fontSize: '11px',
+                        padding: '6px 24px',
+                        height: 'auto',
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        color: '#fca5a5',
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                        borderRadius: '20px',
+                        flexShrink: 0,
+                        fontWeight: 'bold',
+                        letterSpacing: '0.5px'
+                    }}
+                >
+                    CHAT
+                </button>
+            </div>
+
+            {/* Expanded Chat Section (Reused logic, just need to ensure container is correct) */}
+            {expandedParlayId === parlay.id && (
+                <div className="animate-fade" style={{ background: '#09090b', padding: '12px', borderTop: '1px solid #333' }}>
+                    <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {parlayComments.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>No comments yet.</div>}
+                        {parlayComments.map(c => (
+                            <div key={c.id} style={{ fontSize: '13px' }}>
+                                <span style={{ fontWeight: 'bold', color: c.userId === user?.id ? 'var(--primary)' : '#fff' }}>{c.username}: </span>
+                                <span style={{ color: 'var(--text-muted)' }}>{c.text}</span>
+                            </div>
+                        ))}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                            type="text"
+                            className="input"
+                            style={{ padding: '8px', fontSize: '13px' }}
+                            placeholder="Cheer them on..."
+                            value={commentText}
+                            onChange={e => setCommentText(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handlePostComment()}
+                        />
+                        <button className="btn btn-primary" style={{ width: 'auto', padding: '0 16px' }} onClick={handlePostComment}>
+                            Send
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+
     return (
         <div className="container animate-fade" style={{ paddingBottom: '100px' }}>
             <header style={{ marginBottom: '24px', textAlign: 'center' }}>
@@ -602,6 +792,65 @@ export default function ParlayPage() {
                     {parlays.length === 0 && (
                         <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                             No active parlays right now. Be the first to build one!
+                        </div>
+                    )}
+
+                    {/* 0. ON FIRE PARLAYS (1 LEG AWAY) */}
+                    {onFireParlays.length > 0 && (
+                        <div style={{ marginBottom: '32px' }}>
+                            {/* Section Header */}
+                            <div
+                                onClick={() => toggleSection('onFire')}
+                                style={{
+                                    padding: '12px 0',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    marginBottom: '16px'
+                                }}
+                            >
+                                <h2 style={{
+                                    fontSize: '24px',
+                                    fontWeight: '900',
+                                    color: '#fff',
+                                    margin: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                    textShadow: '0 0 15px rgba(239, 68, 68, 0.6)',
+                                    letterSpacing: '1px'
+                                }}>
+                                    🔥 ON FIRE <span style={{ fontSize: '14px', color: '#fca5a5', fontWeight: 'bold', background: '#991b1b', padding: '2px 8px', borderRadius: '12px' }}>{onFireParlays.length} ACTIVE</span>
+                                </h2>
+                                <span style={{ color: '#fff', fontSize: '14px', opacity: 0.7 }}>{openSections.onFire ? 'Collapse ▲' : 'Expand ▼'}</span>
+                            </div>
+
+                            {openSections.onFire && (
+                                <div className="animate-fade" style={{
+                                    display: 'flex',
+                                    gap: '16px',
+                                    overflowX: 'auto',
+                                    paddingBottom: '16px',
+                                    scrollSnapType: 'x mandatory',
+                                    scrollbarWidth: 'none', // Firefox
+                                    msOverflowStyle: 'none', // IE/Edge
+                                }}>
+                                    {/* Hide scrollbar for Chrome/Safari/Opera */}
+                                    <style jsx>{`
+                                        div::-webkit-scrollbar {
+                                            display: none;
+                                        }
+                                    `}</style>
+                                    {onFireParlays.map(parlay => (
+                                        <div key={parlay.id} style={{ flex: '0 0 85%', maxWidth: '350px', scrollSnapAlign: 'start' }}>
+                                            {renderOnFireCard(parlay)}
+                                        </div>
+                                    ))}
+                                    {/* Padding at the end for scroll */}
+                                    <div style={{ flex: '0 0 1px' }}></div>
+                                </div>
+                            )}
                         </div>
                     )}
 
