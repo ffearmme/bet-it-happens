@@ -1654,14 +1654,52 @@ export function AppProvider({ children }) {
     }
   };
 
+  const sendSystemNotification = async (title, message) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      // Fetch ALL users (no limit)
+      const usersSnap = await getDocs(collection(db, 'users'));
+
+      // Chunk batches (limit 500)
+      const CHUNK_SIZE = 400;
+      const chunks = [];
+
+      for (let i = 0; i < usersSnap.docs.length; i += CHUNK_SIZE) {
+        chunks.push(usersSnap.docs.slice(i, i + CHUNK_SIZE));
+      }
+
+      let count = 0;
+      for (const chunk of chunks) {
+        const batch = writeBatch(db);
+        chunk.forEach(docSnap => {
+          const notifRef = doc(collection(db, 'notifications'));
+          batch.set(notifRef, {
+            userId: docSnap.id,
+            type: 'system',
+            title: title,
+            message: message,
+            read: false,
+            createdAt: new Date().toISOString()
+          });
+          count++;
+        });
+        await batch.commit();
+      }
+
+      return { success: true, count };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
       events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, toggleLikeComment, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendIdeaToAdmin, reviewIdea,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db,
-      isGuestMode, setIsGuestMode, // Exposed isGuestMode and its setter
+      isGuestMode, setIsGuestMode,
       notifications, markNotificationAsRead, clearAllNotifications, submitModConcern,
-      createParlay, placeParlayBet, addParlayComment, deleteParlay
+      createParlay, placeParlayBet, addParlayComment, deleteParlay, sendSystemNotification
     }}>
       {children}
     </AppContext.Provider>

@@ -10,7 +10,7 @@ function AdminContent() {
     const {
         user, events, createEvent, resolveEvent, deleteEvent, updateEvent,
         updateEventOrder, deleteBet, toggleFeatured, ideas, deleteIdea,
-        users, deleteUser, updateUserGroups, updateSystemAnnouncement, systemAnnouncement
+        users, deleteUser, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendSystemNotification
     } = useApp();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -635,37 +635,75 @@ function AdminContent() {
 
                     {/* --- SYSTEM TAB --- */}
                     {activeTab === 'system' && (
-                        <div className="card" style={{ maxWidth: '600px' }}>
-                            <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>📢 System Announcements</h2>
-                            <div style={{ marginBottom: '24px' }}>
-                                <label className="text-sm" style={{ display: 'block', marginBottom: '8px' }}>Current Announcement</label>
-                                <div style={{ padding: '12px', background: '#333', borderRadius: '8px', marginBottom: '12px', color: '#ddd' }}>
-                                    {systemAnnouncement?.active ? systemAnnouncement.message : 'No active announcement'}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) minmax(300px, 1fr)', gap: '24px', maxWidth: '1200px' }}>
+                            {/* Left Column: System Announcements */}
+                            <div className="card">
+                                <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>📢 System Announcements</h2>
+                                <div style={{ marginBottom: '24px' }}>
+                                    <label className="text-sm" style={{ display: 'block', marginBottom: '8px' }}>Current Announcement</label>
+                                    <div style={{ padding: '12px', background: '#333', borderRadius: '8px', marginBottom: '12px', color: '#ddd' }}>
+                                        {systemAnnouncement?.active ? systemAnnouncement.message : 'No active announcement'}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                                        <input id="sys-msg" className="input" placeholder="New announcement..." style={{ flex: 1 }} />
+                                        <select id="sys-type" className="input" style={{ width: '100px' }}>
+                                            <option value="info">Info</option>
+                                            <option value="warning">Warning</option>
+                                        </select>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '12px' }}>
+                                        <button
+                                            className="btn btn-primary"
+                                            onClick={() => {
+                                                const msg = document.getElementById('sys-msg').value;
+                                                const type = document.getElementById('sys-type').value;
+                                                if (msg) updateSystemAnnouncement({ message: msg, type, active: true, postedAt: new Date().toISOString() });
+                                            }}
+                                        >
+                                            Post
+                                        </button>
+                                        <button
+                                            className="btn"
+                                            style={{ background: '#444' }}
+                                            onClick={() => updateSystemAnnouncement({ active: false })}
+                                        >
+                                            Clear Active
+                                        </button>
+                                    </div>
                                 </div>
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                    <input id="sys-msg" className="input" placeholder="New announcement..." />
-                                    <select id="sys-type" className="input" style={{ width: '100px' }}>
-                                        <option value="info">Info</option>
-                                        <option value="warning">Warning</option>
-                                    </select>
-                                </div>
-                                <div style={{ marginTop: '12px', display: 'flex', gap: '12px' }}>
+                            </div>
+
+                            {/* Right Column: Global Notification */}
+                            <div className="card">
+                                <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>🔔 Send Global Notification</h2>
+                                <p style={{ fontSize: '13px', color: '#888', marginBottom: '12px' }}>
+                                    This will send a notification to ALL users. Use sparingly!
+                                </p>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    <input id="notif-title" className="input" placeholder="Notification Title" />
+                                    <textarea id="notif-msg" className="input" style={{ height: '80px', resize: 'vertical' }} placeholder="Message body..." />
+
                                     <button
                                         className="btn btn-primary"
-                                        onClick={() => {
-                                            const msg = document.getElementById('sys-msg').value;
-                                            const type = document.getElementById('sys-type').value;
-                                            if (msg) updateSystemAnnouncement({ message: msg, type, active: true, postedAt: new Date().toISOString() });
+                                        onClick={async () => {
+                                            const title = document.getElementById('notif-title').value;
+                                            const msg = document.getElementById('notif-msg').value;
+                                            if (!title || !msg) return alert("Please fill both title and message.");
+
+                                            if (confirm(`Send to ALL users?\nTitle: ${title}`)) {
+                                                const res = await sendSystemNotification(title, msg);
+                                                if (res.success) {
+                                                    alert(`Sent to ${res.count} users.`);
+                                                    document.getElementById('notif-title').value = '';
+                                                    document.getElementById('notif-msg').value = '';
+                                                } else {
+                                                    alert("Error: " + res.error);
+                                                }
+                                            }
                                         }}
                                     >
-                                        Post
-                                    </button>
-                                    <button
-                                        className="btn"
-                                        style={{ background: '#444' }}
-                                        onClick={() => updateSystemAnnouncement({ active: false })}
-                                    >
-                                        Clear Active
+                                        Send to Everyone
                                     </button>
                                 </div>
                             </div>
