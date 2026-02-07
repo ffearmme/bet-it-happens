@@ -1654,18 +1654,30 @@ export function AppProvider({ children }) {
     }
   };
 
-  const sendSystemNotification = async (title, message) => {
+  const sendSystemNotification = async (title, message, targetGroup = 'all') => {
     if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
     try {
       // Fetch ALL users (no limit)
       const usersSnap = await getDocs(collection(db, 'users'));
 
+      let targets = [];
+      if (targetGroup === 'all') {
+        targets = usersSnap.docs;
+      } else {
+        targets = usersSnap.docs.filter(doc => {
+          const u = doc.data();
+          return u.groups && u.groups.includes(targetGroup);
+        });
+      }
+
+      if (targets.length === 0) return { success: true, count: 0 };
+
       // Chunk batches (limit 500)
       const CHUNK_SIZE = 400;
       const chunks = [];
 
-      for (let i = 0; i < usersSnap.docs.length; i += CHUNK_SIZE) {
-        chunks.push(usersSnap.docs.slice(i, i + CHUNK_SIZE));
+      for (let i = 0; i < targets.length; i += CHUNK_SIZE) {
+        chunks.push(targets.slice(i, i + CHUNK_SIZE));
       }
 
       let count = 0;

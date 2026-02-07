@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
 import { db } from '../../lib/firebase';
-import { collection, query, limit, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, limit, onSnapshot, doc, updateDoc, where, getDocs, orderBy } from 'firebase/firestore';
 
 function AdminContent() {
     const {
@@ -42,6 +42,7 @@ function AdminContent() {
     const [editingId, setEditingId] = useState(null);
     const [allBets, setAllBets] = useState([]);
     const [showEditModal, setShowEditModal] = useState(false);
+    const [editingBets, setEditingBets] = useState([]);
 
     // State for Ideas
     const [ideaFilter, setIdeaFilter] = useState('pending');
@@ -52,13 +53,24 @@ function AdminContent() {
         "Weather", "Tech", "Pop Culture", "The Boys", "The Fam"
     ];
 
+    // Fetch Bets for Editing Event
+    useEffect(() => {
+        if (!editingId) return;
+        const q = query(collection(db, 'bets'), where('eventId', '==', editingId));
+        getDocs(q).then(snap => {
+            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            // Sort by placedAt
+            list.sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
+            setEditingBets(list);
+        });
+    }, [editingId]);
+
     // Fetch Global Bets
     useEffect(() => {
         if (!user || user.role !== 'admin') return;
-        const q = query(collection(db, 'bets'), limit(50));
+        const q = query(collection(db, 'bets'), limit(50), orderBy('placedAt', 'desc'));
         const unsub = onSnapshot(q, (snapshot) => {
             const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            list.sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
             setAllBets(list);
         });
         return () => unsub();
@@ -677,22 +689,45 @@ function AdminContent() {
                             <div className="card">
                                 <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>🔔 Send Global Notification</h2>
                                 <p style={{ fontSize: '13px', color: '#888', marginBottom: '12px' }}>
-                                    This will send a notification to ALL users. Use sparingly!
+                                    Send a notification to specific user groups or everyone.
                                 </p>
 
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                    <input id="notif-title" className="input" placeholder="Notification Title" />
-                                    <textarea id="notif-msg" className="input" style={{ height: '80px', resize: 'vertical' }} placeholder="Message body..." />
+                                    <div>
+                                        <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>Target Audience</label>
+                                        <select id="notif-target" className="input" style={{ width: '100%', background: '#222' }}>
+                                            <option value="all">Everyone (All Users)</option>
+                                            <option value="The Boys">The Boys</option>
+                                            <option value="The Fam">The Fam</option>
+                                            <option value="Moderator">Moderators</option>
+                                            <option value="admin">Admins</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>Title</label>
+                                        <input id="notif-title" className="input" placeholder="Notification Title" style={{ width: '100%' }} />
+                                    </div>
+
+                                    <div>
+                                        <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>Message Body</label>
+                                        <textarea id="notif-msg" className="input" style={{ width: '100%', height: '80px', resize: 'vertical' }} placeholder="Message body..." />
+                                    </div>
 
                                     <button
                                         className="btn btn-primary"
                                         onClick={async () => {
+                                            const targetSelect = document.getElementById('notif-target');
+                                            const target = targetSelect.value;
                                             const title = document.getElementById('notif-title').value;
                                             const msg = document.getElementById('notif-msg').value;
+
                                             if (!title || !msg) return alert("Please fill both title and message.");
 
-                                            if (confirm(`Send to ALL users?\nTitle: ${title}`)) {
-                                                const res = await sendSystemNotification(title, msg);
+                                            const targetLabel = targetSelect.options[targetSelect.selectedIndex].text;
+
+                                            if (confirm(`Send to ${targetLabel}?\nTitle: ${title}`)) {
+                                                const res = await sendSystemNotification(title, msg, target);
                                                 if (res.success) {
                                                     alert(`Sent to ${res.count} users.`);
                                                     document.getElementById('notif-title').value = '';
@@ -703,7 +738,7 @@ function AdminContent() {
                                             }
                                         }}
                                     >
-                                        Send to Everyone
+                                        Send Notification
                                     </button>
                                 </div>
                             </div>
@@ -745,6 +780,77 @@ function AdminContent() {
                                 <button type="button" onClick={() => setShowEditModal(false)} className="btn" style={{ flex: 1, background: '#333' }}>Cancel</button>
                             </div>
                         </form>
+
+                        {/* --- BETS MANAGEMENT --- */}
+                        <hr style={{ borderColor: '#333', margin: '24px 0' }} />
+                        <h3 style={{ fontSize: '16px', marginBottom: '12px' }}>Event Bets</h3>
+
+                        {(() => {
+                            const active = editingBets.filter(b => b.status === 'pending');
+                            const completed = editingBets.filter(b => b.status !== 'pending');
+
+                            // Helper to group by outcome
+                            const groupByOutcome = (list) => {
+                                const grouped = {};
+                                list.forEach(b => {
+                                    const key = b.outcomeLabel || 'Unknown';
+                                    if (!grouped[key]) grouped[key] = [];
+                                    grouped[key].push(b);
+                                });
+                                return grouped;
+                            };
+
+                            const activeGrouped = groupByOutcome(active);
+                            const completedGrouped = groupByOutcome(completed);
+
+                            return (
+                                <div>
+                                    {/* ACTIVE */}
+                                    <div style={{ marginBottom: '24px' }}>
+                                        <h4 style={{ fontSize: '14px', color: '#10b981', marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '4px' }}>
+                                            Active / Pending ({active.length})
+                                        </h4>
+                                        {active.length === 0 ? <p style={{ fontSize: '12px', color: '#666' }}>No active bets.</p> : (
+                                            Object.entries(activeGrouped).map(([outcome, bets]) => (
+                                                <div key={outcome} style={{ marginBottom: '12px' }}>
+                                                    <div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--primary)', marginBottom: '4px' }}>
+                                                        {outcome}
+                                                    </div>
+                                                    {bets.map(b => (
+                                                        <div key={b.id} style={{ fontSize: '12px', padding: '4px 8px', background: '#222', marginBottom: '2px', display: 'flex', justifyContent: 'space-between' }}>
+                                                            <span>{b.username}: ${b.amount}</span>
+                                                            <button onClick={() => { if (confirm('Delete?')) deleteBet(b.id) }} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}>x</button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+
+                                    {/* COMPLETED */}
+                                    <div>
+                                        <h4 style={{ fontSize: '14px', color: '#666', marginBottom: '8px', borderBottom: '1px solid #333', paddingBottom: '4px' }}>
+                                            Completed / Settled ({completed.length})
+                                        </h4>
+                                        {completed.length === 0 ? <p style={{ fontSize: '12px', color: '#666' }}>No settled bets.</p> : (
+                                            Object.entries(completedGrouped).map(([outcome, bets]) => (
+                                                <div key={outcome} style={{ marginBottom: '12px' }}>
+                                                    <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#888', marginBottom: '4px' }}>
+                                                        {outcome}
+                                                    </div>
+                                                    {bets.map(b => (
+                                                        <div key={b.id} style={{ fontSize: '12px', padding: '4px 8px', background: '#222', marginBottom: '2px', display: 'flex', justifyContent: 'space-between', opacity: 0.7 }}>
+                                                            <span>{b.username}: ${b.amount} ({b.status})</span>
+                                                            <button onClick={() => { if (confirm('Delete?')) deleteBet(b.id) }} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}>x</button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
                 </div>
             )}
