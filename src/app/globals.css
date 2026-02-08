@@ -1090,3 +1090,17 @@ h2 {
 
 
 }
+
+/* Header Actions Responsive Gap */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .header-actions {
+    gap: 8px;
+    /* Closer on mobile */
+  }
+}

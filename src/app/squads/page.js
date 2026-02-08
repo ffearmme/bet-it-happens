@@ -902,6 +902,26 @@ export default function SquadsPage() {
                                         <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', whiteSpace: 'nowrap' }}>Members</div>
                                         <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#fff' }}>{mySquad.members?.length || 0}</div>
                                     </div>
+
+                                    {/* Squad Boost Badge (If Ranked) */}
+                                    {squadRanks[mySquad.id] === 1 && (
+                                        <div style={{ background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(234, 179, 8, 0.05))', padding: '12px 16px', borderRadius: '12px', border: '1px solid rgba(234, 179, 8, 0.3)', flex: '1 1 100px', boxShadow: '0 0 15px rgba(234, 179, 8, 0.1)' }}>
+                                            <div style={{ fontSize: '12px', color: '#eab308', marginBottom: '4px', whiteSpace: 'nowrap', fontWeight: 'bold' }}>Active Boost</div>
+                                            <div style={{ fontSize: '18px', fontWeight: '900', color: '#fff', textShadow: '0 0 10px rgba(234, 179, 8, 0.5)' }}>15%</div>
+                                        </div>
+                                    )}
+                                    {squadRanks[mySquad.id] === 2 && (
+                                        <div style={{ background: 'linear-gradient(135deg, rgba(148, 163, 184, 0.2), rgba(148, 163, 184, 0.05))', padding: '12px 16px', borderRadius: '12px', border: '1px solid rgba(148, 163, 184, 0.3)', flex: '1 1 100px' }}>
+                                            <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '4px', whiteSpace: 'nowrap', fontWeight: 'bold' }}>Active Boost</div>
+                                            <div style={{ fontSize: '18px', fontWeight: '900', color: '#fff' }}>7%</div>
+                                        </div>
+                                    )}
+                                    {squadRanks[mySquad.id] === 3 && (
+                                        <div style={{ background: 'linear-gradient(135deg, rgba(180, 83, 9, 0.2), rgba(180, 83, 9, 0.05))', padding: '12px 16px', borderRadius: '12px', border: '1px solid rgba(180, 83, 9, 0.3)', flex: '1 1 100px' }}>
+                                            <div style={{ fontSize: '12px', color: '#b45309', marginBottom: '4px', whiteSpace: 'nowrap', fontWeight: 'bold' }}>Active Boost</div>
+                                            <div style={{ fontSize: '18px', fontWeight: '900', color: '#fff' }}>3%</div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -964,11 +984,13 @@ export default function SquadsPage() {
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
                                 style={{
+                                    flex: 1,
                                     padding: '10px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 'bold',
                                     textTransform: 'capitalize', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
                                     background: active ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
                                     color: active ? '#000' : 'var(--text-muted)',
                                     display: 'flex', alignItems: 'center', gap: '8px',
+                                    justifyContent: 'center',
                                     transition: 'all 0.2s'
                                 }}
                             >

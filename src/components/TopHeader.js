@@ -40,11 +40,11 @@ export default function TopHeader() {
                 </Link>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div className="header-actions">
                 {user && (
                     <div className="bell-wrapper" ref={notifRef}>
                         <div
-                            style={{ position: 'relative', cursor: 'pointer', padding: '6px', marginRight: '8px' }}
+                            style={{ position: 'relative', cursor: 'pointer', padding: '6px' }}
                             className={unreadCount > 0 ? "animate-ring" : ""}
                             onClick={() => setShowNotifs(!showNotifs)}
                         >
