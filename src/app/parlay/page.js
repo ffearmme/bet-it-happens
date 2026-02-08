@@ -158,6 +158,20 @@ export default function ParlayPage() {
                 setTimeout(() => setError(''), 3000);
                 return;
             }
+
+            // check limit
+            const existingCount = bets.filter(b => {
+                if (b.userId !== user.id) return false;
+                if (b.eventId === event.id) return true;
+                if (b.legs && b.legs.some(l => l.eventId === event.id)) return true;
+                return false;
+            }).length;
+
+            if (existingCount >= 3) {
+                setError("Limit reached! You already have 3 bets on this event.");
+                setTimeout(() => setError(''), 3000);
+                return;
+            }
         }
 
         // limit to 1 leg per event
@@ -272,6 +286,21 @@ export default function ParlayPage() {
         if (closedLeg) {
             setError("Cannot bet. One or more events in this parlay have closed or started.");
             return;
+        }
+
+        // Check Max Limits (3 bets per event)
+        for (const leg of bettingParlay.legs) {
+            const count = bets.filter(b => {
+                if (b.userId !== user.id) return false;
+                if (b.eventId === leg.eventId) return true;
+                if (b.legs && b.legs.some(l => l.eventId === leg.eventId)) return true;
+                return false;
+            }).length;
+
+            if (count >= 3) {
+                setError(`Limit reached (3 max) for event: ${leg.eventTitle}`);
+                return;
+            }
         }
         if (!wager || parseFloat(wager) <= 0) {
             setError("Enter a valid wager");

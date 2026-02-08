@@ -9,7 +9,7 @@ import { collection, query, limit, onSnapshot, doc, updateDoc, where, getDocs, o
 function AdminContent() {
     const {
         user, events, createEvent, resolveEvent, deleteEvent, updateEvent,
-        updateEventOrder, deleteBet, toggleFeatured, ideas, deleteIdea,
+        updateEventOrder, deleteBet, toggleFeatured, ideas, deleteIdea, replyToIdea,
         users, deleteUser, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendSystemNotification
     } = useApp();
     const router = useRouter();
@@ -47,6 +47,8 @@ function AdminContent() {
 
     // State for Ideas
     const [ideaFilter, setIdeaFilter] = useState('pending');
+    const [openReplyId, setOpenReplyId] = useState(null);
+    const [replyText, setReplyText] = useState('');
 
     // Hardcoded Categories List
     const CATEGORIES = [
@@ -282,21 +284,70 @@ function AdminContent() {
                                     <div className="card">
                                         <h2 style={{ fontSize: '18px', marginBottom: '16px', borderBottom: '1px solid #333', paddingBottom: '8px' }}>💬 Recent Bet Ideas</h2>
                                         {ideas.slice(0, 5).map(idea => (
-                                            <div key={idea.id} style={{ marginBottom: '12px' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                    <span style={{ fontWeight: '600' }}>"{idea.text}"</span>
-                                                    <span style={{ fontSize: '12px', color: '#666' }}>{new Date(idea.submittedAt).toLocaleDateString()}</span>
+                                            <div key={idea.id} style={{ marginBottom: '12px', borderBottom: '1px solid #333', paddingBottom: '8px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                    <div>
+                                                        <span style={{ fontWeight: '600', display: 'block', fontSize: '13px' }}>"{idea.text}"</span>
+                                                        <span style={{ fontSize: '11px', color: '#666' }}>By {idea.username} • {new Date(idea.submittedAt).toLocaleDateString()}</span>
+                                                        {idea.adminReply && <div style={{ fontSize: '11px', color: '#10b981', marginTop: '2px' }}>↩ Replied: "{idea.adminReply}"</div>}
+                                                    </div>
                                                 </div>
-                                                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                                                <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
                                                     <button
                                                         onClick={() => {
                                                             setNewEvent({ ...newEvent, title: idea.text, description: `Suggested by ${idea.username}`, createdBy: idea.username, category: 'Community' });
                                                             setActiveTab('events'); setEventSubTab('create');
                                                         }}
-                                                        style={{ fontSize: '10px', background: 'var(--primary)', color: '#000', border: 'none', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}>
-                                                        Review & Create
+                                                        style={{ fontSize: '10px', background: 'var(--primary)', color: '#000', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                                        Convert
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            if (openReplyId === idea.id) {
+                                                                setOpenReplyId(null);
+                                                            } else {
+                                                                setOpenReplyId(idea.id);
+                                                                setReplyText(idea.adminReply || '');
+                                                            }
+                                                        }}
+                                                        style={{ fontSize: '10px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}>
+                                                        Reply
+                                                    </button>
+                                                    <button
+                                                        onClick={() => deleteIdea(idea.id)}
+                                                        style={{ fontSize: '10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}>
+                                                        Delete
                                                     </button>
                                                 </div>
+
+                                                {/* Reply Box (Inline) */}
+                                                {openReplyId === idea.id && (
+                                                    <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #333' }}>
+                                                        <textarea
+                                                            value={replyText}
+                                                            onChange={e => setReplyText(e.target.value)}
+                                                            placeholder="Reply..."
+                                                            style={{ width: '100%', padding: '6px', background: '#111', color: '#fff', border: '1px solid #444', borderRadius: '4px', minHeight: '40px', marginBottom: '6px', fontSize: '12px' }}
+                                                        />
+                                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                                                            <button onClick={() => setOpenReplyId(null)} style={{ padding: '4px 8px', background: 'transparent', color: '#888', border: 'none', cursor: 'pointer', fontSize: '10px' }}>Cancel</button>
+                                                            <button
+                                                                onClick={async () => {
+                                                                    const res = await replyToIdea(idea.id, replyText);
+                                                                    if (res.success) {
+                                                                        setOpenReplyId(null);
+                                                                        setReplyText('');
+                                                                    } else {
+                                                                        alert('Error: ' + res.error);
+                                                                    }
+                                                                }}
+                                                                style={{ padding: '4px 8px', background: 'var(--primary)', color: '#000', borderRadius: '4px', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '10px' }}
+                                                            >
+                                                                Send
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                         {ideas.length === 0 && <p style={{ fontSize: '14px', color: '#888' }}>No new ideas.</p>}
@@ -670,24 +721,70 @@ function AdminContent() {
                                     return status === ideaFilter;
                                 })
                                 .map(idea => (
-                                    <div key={idea.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#222', marginBottom: '8px', borderRadius: '8px', borderLeft: idea.status === 'approved' ? '4px solid #10b981' : (idea.status === 'denied' ? '4px solid #ef4444' : '4px solid #f59e0b') }}>
-                                        <div>
-                                            <div style={{ fontStyle: 'italic', marginBottom: '4px' }}>"{idea.text}"</div>
-                                            <div style={{ fontSize: '12px', color: '#888' }}>
-                                                By {idea.username} • <span style={{ color: idea.status === 'approved' ? '#10b981' : (idea.status === 'denied' ? '#ef4444' : '#f59e0b') }}>{idea.status ? idea.status.toUpperCase() : 'PENDING'}</span>
+                                    <div key={idea.id} style={{ marginBottom: '8px', background: '#222', borderRadius: '8px', borderLeft: idea.status === 'approved' ? '4px solid #10b981' : (idea.status === 'denied' ? '4px solid #ef4444' : '4px solid #f59e0b'), padding: '12px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div>
+                                                <div style={{ fontStyle: 'italic', marginBottom: '4px' }}>"{idea.text}"</div>
+                                                <div style={{ fontSize: '12px', color: '#888' }}>
+                                                    By {idea.username} • <span style={{ color: idea.status === 'approved' ? '#10b981' : (idea.status === 'denied' ? '#ef4444' : '#f59e0b') }}>{idea.status ? idea.status.toUpperCase() : 'PENDING'}</span>
+                                                </div>
+                                                {idea.adminReply && <div style={{ fontSize: '12px', color: '#10b981', marginTop: '4px' }}>↩ Replied: "{idea.adminReply}"</div>}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                <button
+                                                    onClick={() => {
+                                                        setNewEvent({ ...newEvent, title: idea.text, description: `Suggested by ${idea.username}`, createdBy: idea.username, category: 'Community' });
+                                                        setActiveTab('events'); setEventSubTab('create');
+                                                    }}
+                                                    className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '12px' }}>
+                                                    Convert
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        if (openReplyId === idea.id) {
+                                                            setOpenReplyId(null);
+                                                        } else {
+                                                            setOpenReplyId(idea.id);
+                                                            setReplyText(idea.adminReply || '');
+                                                        }
+                                                    }}
+                                                    style={{ padding: '4px 8px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                                                >
+                                                    Reply
+                                                </button>
+                                                <button onClick={() => deleteIdea(idea.id)} style={{ padding: '4px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Del</button>
                                             </div>
                                         </div>
-                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                            <button
-                                                onClick={() => {
-                                                    setNewEvent({ ...newEvent, title: idea.text, description: `Suggested by ${idea.username}`, createdBy: idea.username, category: 'Community' });
-                                                    setActiveTab('events'); setEventSubTab('create');
-                                                }}
-                                                className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '12px' }}>
-                                                Convert
-                                            </button>
-                                            <button onClick={() => deleteIdea(idea.id)} style={{ padding: '4px 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Del</button>
-                                        </div>
+
+                                        {/* Reply Box */}
+                                        {openReplyId === idea.id && (
+                                            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #333' }}>
+                                                <textarea
+                                                    value={replyText}
+                                                    onChange={e => setReplyText(e.target.value)}
+                                                    placeholder="Write a reply to the user..."
+                                                    style={{ width: '100%', padding: '8px', background: '#111', color: '#fff', border: '1px solid #444', borderRadius: '4px', minHeight: '60px', marginBottom: '8px', fontSize: '13px' }}
+                                                />
+                                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                                                    <button onClick={() => setOpenReplyId(null)} style={{ padding: '6px 12px', background: 'transparent', color: '#888', border: 'none', cursor: 'pointer', fontSize: '12px' }}>Cancel</button>
+                                                    <button
+                                                        onClick={async () => {
+                                                            const res = await replyToIdea(idea.id, replyText);
+                                                            if (res.success) {
+                                                                setOpenReplyId(null);
+                                                                setReplyText('');
+                                                                alert('Reply sent and user notified!');
+                                                            } else {
+                                                                alert('Error: ' + res.error);
+                                                            }
+                                                        }}
+                                                        style={{ padding: '6px 12px', background: 'var(--primary)', color: '#000', borderRadius: '4px', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
+                                                    >
+                                                        Send Reply
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             {ideas.length === 0 && <p style={{ color: '#888', fontStyle: 'italic' }}>No ideas found.</p>}

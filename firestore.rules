@@ -24,7 +24,23 @@ service cloud.firestore {
     // USERS
     match /users/{userId} {
       allow read: if true;
-      allow write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow create: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      // Explicitly allow users to delete their own doc
+      allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      
+      allow update: if request.auth != null && (
+        request.auth.uid == userId || 
+        isAdmin() ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['squadInvites']) ||
+        (
+          resource.data.squadId != null && // Must be in a squad
+          get(/databases/$(database)/documents/squads/$(resource.data.squadId)).data.leaderId == request.auth.uid && // Requester must be leader of THAT squad
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['squadId']) ||
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance'])
+          )
+        )
+      );
     }
     
     // BETS
@@ -32,14 +48,17 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
       allow update: if isAdmin();
-      allow delete: if isAdmin();
+      // Allow users to delete their own bets
+      allow delete: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
     }
     
     // COMMENTS
     match /comments/{commentId} {
       allow read: if true;
       allow create: if request.auth != null;
-      allow delete: if isAdmin();
+      // Allow users to delete their own comments
+      allow delete: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
+      
       // Allow auth users to update 'likes' (for fire emoji)
       allow update: if request.auth != null && (
         isAdmin() ||
@@ -50,21 +69,30 @@ service cloud.firestore {
     // NOTIFICATIONS
     match /notifications/{notificationId} {
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if isAdmin() || (request.auth != null && request.resource.data.type == 'referral');
+      allow create: if isAdmin() || (request.auth != null && (
+        request.resource.data.type == 'referral' || 
+        request.resource.data.type == 'squad_invite' || 
+        request.resource.data.type == 'squad_join' || 
+        request.resource.data.type == 'squad_promotion' || 
+        request.resource.data.type == 'squad_role_update' || 
+        request.resource.data.type == 'squad_kick' || 
+        request.resource.data.type == 'mod_concern'
+      ));
       allow update: if isAdmin() || (
         request.auth != null && 
         resource.data.userId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
       );
-      allow delete: if isAdmin();
+      // Allow users to delete their own notifications
+      allow delete: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
     }
 
     // IDEAS
     match /ideas/{ideaId} {
       allow read: if true;
       allow create: if request.auth != null;
-      allow delete: if isAdmin();
-      // Allow mods to recommend
+      // Allow users to delete their own ideas
+      allow delete: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
       allow update: if isAdmin() || (
         request.auth != null && 
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['modRecommended', 'recommendedBy', 'recommendedAt'])
@@ -80,7 +108,29 @@ service cloud.firestore {
          isAdmin() ||
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wagersCount', 'totalPool', 'lastComment'])
       );
-      allow delete: if isAdmin();
+      // Allow users to delete their own parlays
+      allow delete: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
+    }
+
+    // SQUADS
+    match /squads/{squadId} {
+      allow read: if true;
+      
+      // Create: Auth user
+      allow create: if request.auth != null;
+
+      // Update: Open to auth users for prototype (Join/Leave/Deposit/Withdraw)
+      allow update: if request.auth != null; 
+
+      allow delete: if isAdmin() || (request.auth != null && resource.data.leaderId == request.auth.uid);
+    }
+
+    // TRANSACTIONS
+    match /transactions/{transId} {
+      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null;
+      // Allow users to delete their own transactions
+      allow delete: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
     }
 
     // SYSTEM

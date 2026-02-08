@@ -150,6 +150,7 @@ export function AppProvider({ children }) {
   }, []);
 
   const [users, setUsers] = useState([]); // List of all users for leaderboard
+  const [squads, setSquads] = useState([]); // List of all squads
   const [systemAnnouncement, setSystemAnnouncement] = useState(null);
 
   // ... (existing timeout code) ...
@@ -206,10 +207,20 @@ export function AppProvider({ children }) {
       setUsers(list);
     });
 
+    // Listen to Squads (No limit for now, squads are important)
+    const squadsQuery = query(collection(db, 'squads'));
+    const unsubSquads = onSnapshot(squadsQuery, (snapshot) => {
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Sort: My squad first? Or by size? Or by name? lets do by size (members count)
+      list.sort((a, b) => (b.members?.length || 0) - (a.members?.length || 0));
+      setSquads(list);
+    });
+
     return () => {
       unsubEvents();
       unsubIdeas();
       unsubUsers();
+      unsubSquads();
     };
 
 
@@ -1423,6 +1434,44 @@ export function AppProvider({ children }) {
     }
   };
 
+  const replyToIdea = async (ideaId, replyMessage) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    if (!replyMessage.trim()) return { success: false, error: 'Message empty' };
+
+    try {
+      const ideaRef = doc(db, 'ideas', ideaId);
+      const ideaSnap = await getDoc(ideaRef);
+      if (!ideaSnap.exists()) return { success: false, error: 'Idea not found' };
+
+      const ideaData = ideaSnap.data();
+
+      // 1. Update Idea with Admin Reply
+      await updateDoc(ideaRef, {
+        adminReply: replyMessage,
+        repliedBy: user.username,
+        repliedAt: new Date().toISOString(),
+        status: 'reviewed' // Optional: Mark as reviewed
+      });
+
+      // 2. Notify the User (if userId exists)
+      if (ideaData.userId) {
+        await addDoc(collection(db, 'notifications'), {
+          userId: ideaData.userId,
+          type: 'admin_reply',
+          title: 'Admin Replied to your Idea',
+          message: `Admin says: "${replyMessage}"`,
+          read: false,
+          createdAt: new Date().toISOString(),
+          relatedIdeaId: ideaId
+        });
+      }
+
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
   const sendIdeaToAdmin = async (ideaId, ideaText) => {
     if (!user || (!user.groups?.includes('Moderator') && user.role !== 'admin')) return { success: false, error: 'Unauthorized' };
     try {
@@ -1654,6 +1703,755 @@ export function AppProvider({ children }) {
     }
   };
 
+
+  const createSquad = async (name, privacy = 'open', description = '') => {
+    if (!user) return { success: false, error: 'Not logged in' };
+    if (user.squadId) return { success: false, error: 'You are already in a squad!' };
+
+    // Validate name uniqueness (simple check)
+    const existingSquad = squads.find(s => s.name.toLowerCase() === name.trim().toLowerCase());
+    if (existingSquad) return { success: false, error: 'Squad name already taken.' };
+
+    try {
+      const batch = writeBatch(db);
+      const squadRef = doc(collection(db, 'squads'));
+      const userRef = doc(db, 'users', user.id);
+
+      const newSquad = {
+        name: name.trim(),
+        description: description.trim(),
+        privacy, // 'open', 'request', 'invite'
+        createdBy: user.id,
+        leaderId: user.id,
+        createdAt: new Date().toISOString(),
+        members: [user.id],
+        memberDetails: [{ // Store basic details for quicker access without joining users
+          id: user.id,
+          username: user.username,
+          profilePic: user.profilePic || null,
+          role: 'leader'
+        }],
+        requests: [], // Apply requests
+        wallet: { balance: 0, history: [] },
+        parlays: [] // Parlay IDs
+      };
+
+      batch.set(squadRef, newSquad);
+      batch.update(userRef, { squadId: squadRef.id });
+
+      await batch.commit();
+
+      // Optimistic user update
+      setUser(prev => ({ ...prev, squadId: squadRef.id }));
+
+      return { success: true, squadId: squadRef.id };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const joinSquad = async (squadId) => {
+    if (!user) return { success: false, error: 'Not logged in' };
+    if (user.squadId) return { success: false, error: 'Leave your current squad first.' };
+
+    try {
+      const squadRef = doc(db, 'squads', squadId);
+      const userRef = doc(db, 'users', user.id);
+
+      const squad = squads.find(s => s.id === squadId);
+      if (!squad) return { success: false, error: 'Squad not found' };
+
+      if (squad.privacy === 'invite-only') return { success: false, error: 'This squad is invite only' };
+
+      if (squad.privacy === 'request') {
+        // Check if already requested
+        if (squad.requests?.some(r => r.userId === user.id)) {
+          return { success: false, error: 'Already requested' };
+        }
+        await updateDoc(squadRef, {
+          requests: arrayUnion({
+            userId: user.id,
+            username: user.username,
+            requestedAt: new Date().toISOString()
+          })
+        });
+        return { success: true, status: 'requested', message: 'Request sent to squad leader.' };
+      }
+
+      // If Open, join directly
+      const batch = writeBatch(db);
+
+      // Add to squad members
+      batch.update(squadRef, {
+        members: arrayUnion(user.id),
+        memberDetails: arrayUnion({
+          id: user.id,
+          username: user.username,
+          profilePic: user.profilePic || null,
+          role: 'member'
+        })
+      });
+
+      // Update user
+      batch.update(userRef, { squadId: squadId });
+
+      await batch.commit();
+
+      setUser(prev => ({ ...prev, squadId: squadId }));
+
+      // Send notification to leader
+      if (squad.leaderId && squad.leaderId !== user.id) {
+        try {
+          await addDoc(collection(db, 'notifications'), {
+            userId: squad.leaderId,
+            type: 'squad_join',
+            title: 'New Squad Member',
+            message: `${user.username} has joined your squad!`,
+            read: false,
+            createdAt: new Date().toISOString(),
+            metadata: {
+              squadId: squadId,
+              newMemberId: user.id
+            }
+          });
+        } catch (err) {
+          console.error("Failed to notify leader", err);
+        }
+      }
+
+      return { success: true, status: 'joined', message: 'Welcome to the squad!' };
+
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const leaveSquad = async () => {
+    if (!user || !user.squadId) return { success: false, error: 'Not in a squad' };
+
+    try {
+      const squadRef = doc(db, 'squads', user.squadId);
+      const userRef = doc(db, 'users', user.id);
+
+      const squad = squads.find(s => s.id === user.squadId);
+      if (!squad) {
+        // Data inconsistency handling: just clear the user's squadId
+        await updateDoc(userRef, { squadId: null });
+        setUser(prev => ({ ...prev, squadId: null }));
+        return { success: true };
+      }
+
+      const batch = writeBatch(db);
+
+      // Remove from members
+      // ArrayRemove for objects only works if the object is IDENTICAL. 
+      // This is risky if member details changed. safer to read, filter, write back.
+      // But for concurrent safety, we should use arrayRemove.
+      // Let's rely on filter-write pattern for memberDetails since it's cleaner to manage roles there.
+
+      const newMemberDetails = squad.memberDetails.filter(m => m.id !== user.id);
+      const newMembers = squad.members.filter(uid => uid !== user.id);
+
+      if (newMembers.length === 0) {
+        // Squad empty -> Delete it
+        batch.delete(squadRef);
+      } else {
+        // If leader is leaving, assign new leader (oldest member?)
+        if (squad.leaderId === user.id) {
+          const newLeader = newMemberDetails[0]; // First one remaining
+          newLeader.role = 'leader';
+          batch.update(squadRef, {
+            members: newMembers,
+            memberDetails: newMemberDetails,
+            leaderId: newLeader.id
+          });
+        } else {
+          batch.update(squadRef, {
+            members: newMembers,
+            memberDetails: newMemberDetails
+          });
+        }
+      }
+
+      batch.update(userRef, { squadId: null });
+
+      await batch.commit();
+      setUser(prev => ({ ...prev, squadId: null }));
+      return { success: true };
+
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const manageSquadRequest = async (squadId, targetUserId, action) => {
+    // action: 'accept' | 'reject'
+    if (!user) return { success: false, error: 'Not logged in' };
+    const squad = squads.find(s => s.id === squadId);
+    if (!squad) return { success: false, error: 'Squad not found' };
+    if (squad.leaderId !== user.id && user.role !== 'admin') return { success: false, error: 'Only leader can manage requests' };
+
+    try {
+      const squadRef = doc(db, 'squads', squadId);
+      const targetUserRef = doc(db, 'users', targetUserId);
+
+      // Use filter to remove the request
+      const newRequests = (squad.requests || []).filter(r => r.userId !== targetUserId);
+
+      if (action === 'reject') {
+        await updateDoc(squadRef, { requests: newRequests });
+        return { success: true };
+      }
+
+      if (action === 'accept') {
+        // Fetch target user strictly to get latest profile (pic/name)
+        const targetSnap = await getDoc(targetUserRef);
+        const targetData = targetSnap.data();
+
+        const batch = writeBatch(db);
+
+        // Update Squad: remove request, add member
+        batch.update(squadRef, {
+          requests: newRequests,
+          members: arrayUnion(targetUserId),
+          memberDetails: arrayUnion({
+            id: targetUserId,
+            username: targetData.username,
+            profilePic: targetData.profilePic || null,
+            role: 'member'
+          })
+        });
+
+        // Update User
+        batch.update(targetUserRef, { squadId: squadId });
+
+        await batch.commit();
+        return { success: true };
+      }
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const kickMember = async (squadId, targetUserId) => {
+    if (!user) return { success: false, error: 'Not logged in' };
+    const squad = squads.find(s => s.id === squadId);
+    if (!squad) return { success: false, error: 'Squad not found' };
+    if (squad.leaderId !== user.id && user.role !== 'admin') return { success: false, error: 'Only leader can kick' };
+
+    try {
+      const squadRef = doc(db, 'squads', squadId);
+      const targetUserRef = doc(db, 'users', targetUserId);
+
+      const newMembers = squad.members.filter(m => m !== targetUserId);
+      const newMemberDetails = squad.memberDetails.filter(m => m.id !== targetUserId);
+
+      const batch = writeBatch(db);
+      batch.update(squadRef, {
+        members: newMembers,
+        memberDetails: newMemberDetails
+      });
+      batch.update(targetUserRef, { squadId: null });
+
+      await batch.commit();
+
+      // Notify kicked user
+      try {
+        await addDoc(collection(db, 'notifications'), {
+          userId: targetUserId,
+          type: 'squad_kick',
+          title: 'Removed from Squad',
+          message: `You have been removed from ${squad.name}.`,
+          read: false,
+          createdAt: new Date().toISOString()
+        });
+      } catch (err) { console.error("Notification Error:", err); }
+
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  const transferSquadLeadership = async (squadId, newLeaderId) => {
+    if (!user) return { success: false, error: 'Not logged in' };
+    const squad = squads.find(s => s.id === squadId);
+    if (!squad) return { success: false, error: 'Squad not found' };
+    if (squad.leaderId !== user.id && user.role !== 'admin') return { success: false, error: 'Only leader can transfer leadership' };
+
+    if (newLeaderId === user.id) return { success: false, error: "You are already the leader." };
+
+    try {
+      const squadRef = doc(db, 'squads', squadId);
+
+      const newMemberDetails = squad.memberDetails.map(m => {
+        if (m.id === newLeaderId) {
+          return { ...m, role: 'leader' };
+        }
+        if (m.id === user.id) {
+          return { ...m, role: 'top_dog' };
+        }
+        return m;
+      });
+
+      await updateDoc(squadRef, {
+        leaderId: newLeaderId,
+        memberDetails: newMemberDetails
+      });
+
+      // Notify new leader
+      try {
+        await addDoc(collection(db, 'notifications'), {
+          userId: newLeaderId,
+          type: 'squad_promotion',
+          title: 'Promoted to Leader!',
+          message: `You are now the LEADER of ${squad.name}!`,
+          read: false,
+          createdAt: new Date().toISOString()
+        });
+      } catch (err) { console.error("Notification Error:", err); }
+
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const updateMemberRole = async (squadId, targetUserId, newRole) => {
+    if (!user) return { success: false, error: 'Not logged in' };
+    const squad = squads.find(s => s.id === squadId);
+    if (!squad) return { success: false, error: 'Squad not found' };
+    if (squad.leaderId !== user.id && user.role !== 'admin') return { success: false, error: 'Only leader can change roles' };
+
+    if (targetUserId === squad.leaderId) return { success: false, error: "Cannot change leader's role this way." };
+
+    try {
+      const squadRef = doc(db, 'squads', squadId);
+      const newMemberDetails = squad.memberDetails.map(m => {
+        if (m.id === targetUserId) {
+          return { ...m, role: newRole };
+        }
+        return m;
+      });
+
+      await updateDoc(squadRef, { memberDetails: newMemberDetails });
+
+      // Notify user
+      try {
+        let title = 'Role Updated';
+        let message = `Your role in ${squad.name} is now ${newRole}.`;
+        if (newRole === 'top_dog') {
+          title = 'Promoted to Top Dog!';
+          message = `Congratulations! You've been promoted to Top Dog in ${squad.name}.`;
+        } else if (newRole === 'member') {
+          title = 'Role Changed';
+          message = `Your role in ${squad.name} has been changed to Member.`;
+        }
+
+        await addDoc(collection(db, 'notifications'), {
+          userId: targetUserId,
+          type: 'squad_role_update',
+          title: title,
+          message: message,
+          read: false,
+          createdAt: new Date().toISOString()
+        });
+      } catch (err) { console.error("Notification Error:", err); }
+
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const updateSquad = async (squadId, updates) => {
+    if (!user) return { success: false, error: 'Not logged in' };
+    const squad = squads.find(s => s.id === squadId);
+    if (!squad) return { success: false, error: 'Squad not found' };
+    if (squad.leaderId !== user.id && user.role !== 'admin') return { success: false, error: 'Only leader can update squad settings' };
+
+    try {
+      const squadRef = doc(db, 'squads', squadId);
+
+      // Basic validation
+      if (updates.name && updates.name.trim().length < 3) return { success: false, error: "Squad name must be at least 3 chars" };
+
+      await updateDoc(squadRef, updates);
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const inviteUserToSquad = async (squadId, targetUsername) => {
+    if (!user) return { success: false, error: 'Not logged in' };
+    const squad = squads.find(s => s.id === squadId);
+    if (!squad) return { success: false, error: 'Squad not found' };
+    if (squad.leaderId !== user.id && user.role !== 'admin') return { success: false, error: 'Only leader can invite' };
+
+    try {
+      // 1. Find User by Username
+      const q = query(collection(db, "users"), where("username", "==", targetUsername));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        return { success: false, error: "User not found." };
+      }
+
+      const targetDoc = querySnapshot.docs[0];
+      const targetUser = targetDoc.data();
+      const targetUserId = targetDoc.id;
+
+      if (targetUser.squadId) {
+        return { success: false, error: "User is already in a squad." };
+      }
+
+      if (targetUser.squadInvites && targetUser.squadInvites.some(inv => inv.squadId === squadId)) {
+        return { success: false, error: "User already has an invite from this squad." };
+      }
+
+      // 2. Add Invite to User
+      await updateDoc(doc(db, 'users', targetUserId), {
+        squadInvites: arrayUnion({
+          squadId: squadId,
+          squadName: squad.name,
+          invitedAt: new Date().toISOString(),
+          invitedBy: user.username
+        })
+      });
+
+      // 3. Send Notification
+      try {
+        await addDoc(collection(db, 'notifications'), {
+          userId: targetUserId,
+          type: 'squad_invite',
+          title: 'Squad Invite',
+          message: `You have been invited to join ${squad.name} by ${user.username}.`,
+          read: false,
+          createdAt: new Date().toISOString(),
+          metadata: {
+            squadId: squadId,
+            invitedBy: user.username
+          }
+        });
+      } catch (err) {
+        console.error("Failed to send invite notification", err);
+        // Continue, as core invite succeeded
+      }
+
+      return { success: true, message: `Invite sent to ${targetUsername}` };
+
+    } catch (e) {
+      console.error("Invite Error:", e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const respondToSquadInvite = async (squadId, action) => {
+    // action: 'accept' | 'reject'
+    if (!user) return { success: false, error: 'Not logged in' };
+    if (!user.squadInvites) return { success: false, error: "No invites found." };
+
+    const invite = user.squadInvites.find(i => i.squadId === squadId);
+    if (!invite) return { success: false, error: "Invite no longer valid." };
+
+    try {
+      const userRef = doc(db, 'users', user.id);
+
+      // Remove the invite first (optimistic for reject, necessary for accept)
+      // Note: arrayRemove needs exact object match which is tricky if timestamps vary. 
+      // Better to filter and update.
+      const newInvites = user.squadInvites.filter(i => i.squadId !== squadId);
+
+      if (action === 'reject') {
+        await updateDoc(userRef, { squadInvites: newInvites });
+        setUser(prev => ({ ...prev, squadInvites: newInvites }));
+        return { success: true };
+      }
+
+      if (action === 'accept') {
+        const squadRef = doc(db, 'squads', squadId);
+        const squadSnap = await getDoc(squadRef);
+
+        if (!squadSnap.exists()) {
+          // Squad deleted?
+          await updateDoc(userRef, { squadInvites: newInvites });
+          setUser(prev => ({ ...prev, squadInvites: newInvites }));
+          return { success: false, error: "Squad no longer exists." };
+        }
+
+        const batch = writeBatch(db);
+
+        // Update Squad: Add member
+        batch.update(squadRef, {
+          members: arrayUnion(user.id),
+          memberDetails: arrayUnion({
+            id: user.id,
+            username: user.username,
+            profilePic: user.profilePic || null,
+            role: 'member'
+          })
+        });
+
+        // Update User: Set squadId, Remove invite
+        batch.update(userRef, {
+          squadId: squadId,
+          squadInvites: newInvites
+        });
+
+        await batch.commit();
+
+        const squadData = squadSnap.data();
+        if (squadData.leaderId && squadData.leaderId !== user.id) {
+          try {
+            await addDoc(collection(db, 'notifications'), {
+              userId: squadData.leaderId,
+              type: 'squad_join',
+              title: 'New Squad Member',
+              message: `${user.username} has joined your squad!`,
+              read: false,
+              createdAt: new Date().toISOString(),
+              metadata: {
+                squadId: squadId,
+                newMemberId: user.id
+              }
+            });
+          } catch (e) { console.error(e); }
+        }
+
+        // Local state update handled by listener usually, but for immediate UI:
+        setUser(prev => ({ ...prev, squadId: squadId, squadInvites: newInvites }));
+        return { success: true };
+      }
+
+    } catch (e) {
+      console.error("Respond Invite Error:", e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const depositToSquad = async (amount) => {
+    if (!user || !user.squadId) return { success: false, error: 'Not in a squad' };
+    if (amount <= 0) return { success: false, error: 'Invalid amount' };
+    if ((user.balance || 0) < amount) return { success: false, error: 'Insufficient funds' };
+
+    try {
+      const batch = writeBatch(db);
+      const userRef = doc(db, 'users', user.id);
+      const squadRef = doc(db, 'squads', user.squadId);
+
+      // Deduct from user
+      batch.update(userRef, { 'balance': increment(-amount) });
+
+      // Add to squad
+      batch.update(squadRef, { 'wallet.balance': increment(amount) });
+
+      // Record Transaction
+      const transRef = doc(collection(db, 'transactions'));
+      batch.set(transRef, {
+        type: 'squad_deposit',
+        userId: user.id,
+        squadId: user.squadId,
+        amount: amount,
+        createdAt: new Date().toISOString()
+      });
+
+      await batch.commit();
+
+      // Local update
+      setUser(prev => ({ ...prev, balance: (prev.balance || 0) - amount }));
+
+      return { success: true };
+    } catch (e) {
+      console.error("Deposit Error:", e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const withdrawFromSquad = async (amount) => {
+    if (!user || !user.squadId) return { success: false, error: 'Not in a squad' };
+    const squad = squads.find(s => s.id === user.squadId);
+    if (!squad) return { success: false, error: 'Squad not found' };
+    if (squad.leaderId !== user.id) return { success: false, error: 'Only leader can withdraw' };
+    if (amount <= 0) return { success: false, error: 'Invalid amount' };
+    if ((squad.wallet?.balance || 0) < amount) return { success: false, error: 'Insufficient squad funds' };
+
+    try {
+      const batch = writeBatch(db);
+      const userRef = doc(db, 'users', user.id);
+      const squadRef = doc(db, 'squads', user.squadId);
+
+      // Add to user
+      batch.update(userRef, { 'balance': increment(amount) });
+
+      // Deduct from squad
+      batch.update(squadRef, { 'wallet.balance': increment(-amount) });
+
+      await batch.commit();
+
+      setUser(prev => ({ ...prev, balance: (prev.balance || 0) + amount }));
+      return { success: true };
+
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const requestSquadWithdrawal = async (amount, reason) => {
+    if (!user || !user.squadId) return { success: false, error: 'Not in a squad' };
+    if (amount <= 0) return { success: false, error: 'Invalid amount' };
+
+    const squad = squads.find(s => s.id === user.squadId);
+    if (!squad) return { success: false, error: 'Squad not found' };
+    if ((squad.wallet?.balance || 0) < amount) return { success: false, error: 'Insufficient squad funds' };
+
+    try {
+      const squadRef = doc(db, 'squads', user.squadId);
+      const request = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        userId: user.id,
+        username: user.username,
+        amount: parseFloat(amount),
+        reason,
+        createdAt: new Date().toISOString(),
+        status: 'pending'
+      };
+
+      await updateDoc(squadRef, {
+        withdrawalRequests: arrayUnion(request)
+      });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const respondToWithdrawalRequest = async (squadId, request, approved) => {
+    if (!user) return { success: false, error: 'Not logged in' };
+    const squad = squads.find(s => s.id === squadId);
+    if (!squad) return { success: false, error: 'Squad not found' };
+    if (squad.leaderId !== user.id && user.role !== 'admin') return { success: false, error: 'Only leader can manage requests' };
+
+    try {
+      const squadRef = doc(db, 'squads', squadId);
+      const userRef = doc(db, 'users', request.userId);
+      const batch = writeBatch(db);
+
+      if (approved) {
+        if ((squad.wallet?.balance || 0) < request.amount) return { success: false, error: 'Insufficient squad funds' };
+        // Transfer
+        batch.update(squadRef, { 'wallet.balance': increment(-request.amount) });
+        batch.update(userRef, { 'balance': increment(request.amount) });
+      }
+
+      // Remove request
+      batch.update(squadRef, {
+        withdrawalRequests: arrayRemove(request)
+      });
+
+      await batch.commit();
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const getSquadStats = async (squadId) => {
+    try {
+      const squadRef = doc(db, 'squads', squadId);
+      const squadSnap = await getDoc(squadRef);
+      if (!squadSnap.exists()) return { success: false, error: 'Squad not found' };
+
+      const squadData = squadSnap.data();
+      const memberIds = squadData.members || [];
+
+      if (memberIds.length === 0) {
+        return { success: true, stats: { bets: 0, wins: 0, winRate: 0, profit: 0 } };
+      }
+
+      // Query all bets where userId is in memberIds
+      // optimized: iterate members and query their bets. Parallelize for speed.
+      const promises = memberIds.map(async (mid) => {
+        const q = query(collection(db, 'bets'), where('userId', '==', mid));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => d.data());
+      });
+
+      const results = await Promise.all(promises);
+      const allBets = results.flat();
+
+      let totalBets = 0;
+      let totalWins = 0;
+      let totalSettled = 0;
+      let totalProfit = 0;
+
+      allBets.forEach(b => {
+        if (b.status === 'won') {
+          totalWins++;
+          totalSettled++;
+          totalProfit += ((b.potentialPayout || (b.amount * b.odds)) - b.amount);
+          totalBets++;
+        } else if (b.status === 'lost') {
+          totalSettled++;
+          totalProfit -= b.amount;
+          totalBets++;
+        } else {
+          // open/pending
+          totalBets++;
+        }
+      });
+      const winRate = totalSettled > 0 ? ((totalWins / totalSettled) * 100).toFixed(1) : 0;
+
+      // Calculate Squad Score
+      // Rules: Min 50 total bets (activity) AND 10 settled bets (validity)
+      let score = 0;
+      if (totalSettled >= 10 && totalBets >= 50) {
+        // Formula: Profit * (WinRate / 100)
+        // Example: $1000 profit * 0.60 = 600
+        // Formula: Profit * (WinRate / 10000)
+        score = Math.floor(totalProfit * (parseFloat(winRate) / 10000));
+      }
+
+      // Update squad doc with new stats for sorting
+      await updateDoc(squadRef, {
+        stats: {
+          bets: totalBets,
+          wins: totalWins,
+          winRate: parseFloat(winRate),
+          profit: totalProfit,
+          score: score
+        }
+      });
+
+      return {
+        success: true,
+        stats: {
+          bets: totalBets,
+          wins: totalWins,
+          winRate: winRate,
+          profit: totalProfit,
+          score: score
+        }
+      };
+
+    } catch (e) {
+      console.error("Squad Stats Error:", e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const searchUsers = (queryStr) => {
+
+    if (!queryStr || queryStr.length === 0) {
+      return users.filter(u => u.id !== user?.id).slice(0, 50);
+    }
+    const lower = queryStr.toLowerCase();
+    return users.filter(u =>
+      u.username && u.username.toLowerCase().includes(lower) && u.id !== user?.id
+    ).slice(0, 50); // increased limit for better UX
+  };
+
   const sendSystemNotification = async (title, message, targetGroup = 'all') => {
     if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
     try {
@@ -1707,11 +2505,13 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-      events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, toggleLikeComment, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendIdeaToAdmin, reviewIdea,
+      events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, toggleLikeComment, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendIdeaToAdmin, reviewIdea, replyToIdea,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db,
       isGuestMode, setIsGuestMode,
       notifications, markNotificationAsRead, clearAllNotifications, submitModConcern,
-      createParlay, placeParlayBet, addParlayComment, deleteParlay, sendSystemNotification
+      createParlay, placeParlayBet, addParlayComment, deleteParlay, sendSystemNotification,
+      squads, createSquad, joinSquad, leaveSquad, manageSquadRequest, kickMember, updateSquad, inviteUserToSquad, respondToSquadInvite, searchUsers, getSquadStats,
+      depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest
     }}>
       {children}
     </AppContext.Provider>

@@ -444,6 +444,19 @@ export default function Home() {
             return;
         }
 
+        const myBetsOnThisEvent = bets.filter(b => {
+            if (b.userId !== user.id) return false;
+            // Single bet on this event
+            if (b.eventId === selectedOutcome.eventId) return true;
+            // Parlay bet containing this event
+            if (b.legs && b.legs.some(leg => leg.eventId === selectedOutcome.eventId)) return true;
+            return false;
+        });
+        if (myBetsOnThisEvent.length >= 3) {
+            setError('Maximum of 3 bets allowed per event.');
+            return;
+        }
+
         setIsSubmitting(true);
 
         try {
@@ -1607,8 +1620,11 @@ export default function Home() {
 
                                     <p className="text-sm" style={{ marginBottom: '12px' }}>{selectedOutcome.eventTitle}</p>
 
-                                    <p className="text-sm" style={{ marginBottom: '8px', color: 'var(--primary)', fontWeight: 'bold' }}>
-                                        Your Balance: ${user.balance.toFixed(2)}
+                                    <p className="text-sm" style={{ marginBottom: '8px', color: 'var(--primary)', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
+                                        <span>Your Balance: ${user.balance.toFixed(2)}</span>
+                                        <span style={{ color: bets.filter(b => b.userId === user.id && (b.eventId === selectedOutcome.eventId || (b.legs && b.legs.some(l => l.eventId === selectedOutcome.eventId)))).length >= 3 ? 'var(--accent-loss)' : 'var(--text-muted)' }}>
+                                            Bets: {bets.filter(b => b.userId === user.id && (b.eventId === selectedOutcome.eventId || (b.legs && b.legs.some(l => l.eventId === selectedOutcome.eventId)))).length}/3
+                                        </span>
                                     </p>
 
                                     <div className="input-group">
