@@ -63,6 +63,7 @@ export default function Rules() {
                 </p>
             </div>
 
+
             <div className="card">
                 <h2>🔒 Fixed Odds Guarantee</h2>
                 <p style={{ lineHeight: '1.6', color: '#d1d5db' }}>
@@ -71,6 +72,48 @@ export default function Rules() {
                     Once the first bet has been placed on an event, the odds are <strong>LOCKED</strong>.
                     They will never change, ensuring fairness for early and late bettors alike.
                 </p>
+            </div>
+
+            <div className="card">
+                <h2>🧩 Parlays</h2>
+                <p style={{ lineHeight: '1.6', color: '#d1d5db', marginBottom: '16px' }}>
+                    <strong>Create your own multi-leg bets!</strong>
+                </p>
+                <ul style={{ paddingLeft: '20px', color: '#a1a1aa', lineHeight: '1.8' }}>
+                    <li>Combine <strong>2 to 5 outcomes</strong> into a single Parlay Card.</li>
+                    <li>Every selection in your parlay MUST win for the card to payout. If even one leg loses, the entire parlay is lost.</li>
+                    <li>The more legs you add, the higher the <strong>Total Multiplier</strong>. High risk, massive reward!</li>
+                    <li>You can name your parlay and share it with the community. Other users can comment on it and track its progress "On Fire" 🔥.</li>
+                </ul>
+            </div>
+
+            <div className="card">
+                <h2>🤝 Squads</h2>
+                <p style={{ lineHeight: '1.6', color: '#d1d5db', marginBottom: '16px' }}>
+                    <strong>Team up and compete together!</strong>
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
+                    <div>
+                        <h4 style={{ color: '#fff', fontSize: '14px', marginBottom: '4px' }}>Starting a Squad</h4>
+                        <p style={{ fontSize: '13px', color: '#a1a1aa' }}>
+                            Anyone can create a squad. As the leader, you approve member requests and manage the squad's settings.
+                        </p>
+                    </div>
+                    <div>
+                        <h4 style={{ color: '#fff', fontSize: '14px', marginBottom: '4px' }}>Squad Wallet</h4>
+                        <p style={{ fontSize: '13px', color: '#a1a1aa' }}>
+                            Squads have a shared wallet! Members can <strong>Deposit</strong> funds into the squad to fuel big bets.
+                            Only the Leader can withdraw funds back to individual members upon request.
+                        </p>
+                    </div>
+                    <div>
+                        <h4 style={{ color: '#fff', fontSize: '14px', marginBottom: '4px' }}>Squad Score & Rank</h4>
+                        <p style={{ fontSize: '13px', color: '#a1a1aa' }}>
+                            Your squad competes on a dedicated leaderboard. The <strong>Squad Score</strong> is based on total profit and win rate.
+                            Work together to climb to the #1 spot and earn the crown! 👑
+                        </p>
+                    </div>
+                </div>
             </div>
 
             <div className="card">
