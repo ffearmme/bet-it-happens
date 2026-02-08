@@ -686,7 +686,7 @@ export default function ParlayPage() {
                                 borderRadius: '6px',
                                 transition: 'transform 0.2s',
                             }}>
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, paddingRight: '12px' }}>
                                     <span style={{ color: labelColor, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         {icon} {leg.outcomeId === 'over' ? 'Over' : leg.outcomeId === 'under' ? 'Under' : leg.label}
                                     </span>
@@ -694,7 +694,7 @@ export default function ParlayPage() {
                                 </div>
 
                                 {status === 'pending' && (
-                                    <div style={{ fontSize: '10px', background: '#fbbf24', color: '#000', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                                    <div style={{ flexShrink: 0, fontSize: '10px', background: '#fbbf24', color: '#000', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
                                         Needs This
                                     </div>
                                 )}
