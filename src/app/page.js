@@ -2083,7 +2083,7 @@ export default function Home() {
                     onClick={() => setShowChangelog(true)}
                     style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', textDecoration: 'underline', fontSize: '11px' }}
                 >
-                    System V0.95
+                    System V0.97
                 </button>
             </div>
 
@@ -2103,8 +2103,17 @@ export default function Home() {
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                 <div>
-                                    <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '8px' }}>Version 0.95 <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>(Current)</span></h3>
+                                    <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '8px' }}>Version 0.97 <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>(Current)</span></h3>
                                     <ul style={{ paddingLeft: '20px', color: '#d4d4d8', fontSize: '14px', lineHeight: '1.6' }}>
+                                        <li><b>Squads:</b> Create or join squads to compete on the squad leaderboard! 🏆</li>
+                                        <li><b>Squad Transactions:</b> Deposit and withdraw funds from your squad wallet. 💰</li>
+                                        <li><b>Admin Tools:</b> Enhanced moderation for squad management. 🛡️</li>
+                                    </ul>
+                                </div>
+
+                                <div>
+                                    <h3 style={{ fontSize: '16px', color: '#a1a1aa', marginBottom: '8px' }}>Version 0.95</h3>
+                                    <ul style={{ paddingLeft: '20px', color: '#a1a1aa', fontSize: '14px', lineHeight: '1.6' }}>
                                         <li><b>Shared Parlays:</b> Create multi-leg parlay bets and share them with the community. 🚀</li>
                                         <li><b>Dynamic Categories:</b> Parlays are auto-grouped by category (e.g., Sports, Super Bowl) for easy browsing. 📂</li>
                                         <li><b>Admin Tools:</b> Security enhanced with better moderation for shared parlays. 🛡️</li>

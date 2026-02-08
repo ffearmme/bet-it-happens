@@ -54,36 +54,45 @@ export default function MyBets() {
         const isParlay = bet.type === 'parlay';
 
         return (
-            <div className="card" style={{ borderLeft: `4px solid ${statusColor}`, marginBottom: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontWeight: 600, fontSize: '16px' }}>
+            <div className="card" style={{
+                borderTop: `3px solid ${statusColor}`,
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                height: '100%',
+                fontSize: '12px',
+                background: 'var(--bg-card)'
+            }}>
+                <div style={{ marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <span style={{ fontWeight: 700, color: statusColor, fontSize: '10px', textTransform: 'uppercase' }}>{bet.status}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{new Date(bet.placedAt).toLocaleDateString()}</span>
+                    </div>
+
+                    <div style={{ fontWeight: 600, fontSize: '13px', lineHeight: '1.3', marginBottom: '8px', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', minHeight: '34px' }}>
                         {isParlay ? 'Parlay Ticket' : bet.eventTitle}
-                    </span>
-                    <span style={{ fontWeight: 700, color: statusColor }}>{bet.status.toUpperCase()}</span>
+                    </div>
+
+                    {isParlay ? (
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {bet.legs.length} Legs
+                        </div>
+                    ) : (
+                        <div style={{ fontSize: '12px' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>Pick:</span> <span style={{ fontWeight: 'bold', color: '#fff', marginLeft: '4px' }}>{bet.outcomeLabel}</span>
+                        </div>
+                    )}
                 </div>
 
-                {isParlay ? (
-                    <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px', marginBottom: '12px', fontSize: '13px' }}>
-                        <div style={{ marginBottom: '4px', color: 'var(--text-muted)' }}>{bet.legs.length} Legs:</div>
-                        {bet.legs.map((leg, idx) => (
-                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', paddingBottom: '4px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                <span style={{ color: '#ccc' }}>{leg.eventTitle}</span>
-                                <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{leg.label}</span>
-                            </div>
-                        ))}
+                <div style={{ paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Wager</div>
+                        <div style={{ fontWeight: 'bold' }}>${bet.amount.toFixed(0)}</div>
                     </div>
-                ) : (
-                    <div style={{ marginBottom: '12px', fontSize: '15px' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Your Pick:</span> <span style={{ fontWeight: 'bold', color: '#fff' }}>{bet.outcomeLabel}</span>
-                    </div>
-                )}
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: '14px' }}>
-                        <span className="text-sm">Wager:</span> ${bet.amount.toFixed(2)}
-                    </div>
-                    <div style={{ fontSize: '14px' }}>
-                        <span className="text-sm">Payout:</span> <span style={{ color: statusColor }}>${bet.potentialPayout.toFixed(2)}</span>
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{bet.status === 'won' ? 'Won' : 'Payout'}</div>
+                        <div style={{ fontWeight: 'bold', color: statusColor }}>${bet.potentialPayout.toFixed(0)}</div>
                     </div>
                 </div>
             </div>
@@ -151,15 +160,19 @@ export default function MyBets() {
                                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', boxShadow: '0 0 10px var(--primary)' }}></span>
                                 Active Bets
                             </h2>
-                            {activeBets.map(bet => <BetCard key={bet.id} bet={bet} />)}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px' }}>
+                                {activeBets.map(bet => <BetCard key={bet.id} bet={bet} />)}
+                            </div>
                         </div>
                     )}
 
                     {/* Completed Section */}
                     {completedBets.length > 0 && (
-                        <div style={{ opacity: 0.8 }}>
-                            <h2 style={{ fontSize: '18px', marginBottom: '12px', color: 'var(--text-muted)' }}>Completed History</h2>
-                            {completedBets.map(bet => <BetCard key={bet.id} bet={bet} />)}
+                        <div style={{ opacity: 0.9 }}>
+                            <h2 style={{ fontSize: '18px', marginBottom: '12px', color: 'var(--text-muted)' }}>History</h2>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px' }}>
+                                {completedBets.map(bet => <BetCard key={bet.id} bet={bet} />)}
+                            </div>
                         </div>
                     )}
                 </>
