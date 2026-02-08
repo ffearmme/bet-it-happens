@@ -1,11 +1,12 @@
 "use client";
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
 export default function MyBets() {
     const { user, bets, events } = useApp();
     const router = useRouter();
+    const [expandedBet, setExpandedBet] = useState(null);
 
     useEffect(() => {
         if (!user) {
@@ -54,16 +55,24 @@ export default function MyBets() {
         const isParlay = bet.type === 'parlay';
 
         return (
-            <div className="card" style={{
-                borderTop: `3px solid ${statusColor}`,
-                padding: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                height: '100%',
-                fontSize: '12px',
-                background: 'var(--bg-card)'
-            }}>
+            <div
+                className="card"
+                onClick={() => setExpandedBet(bet)}
+                style={{
+                    borderTop: `3px solid ${statusColor}`,
+                    padding: '12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    height: '100%',
+                    fontSize: '12px',
+                    background: 'var(--bg-card)',
+                    cursor: 'pointer',
+                    transition: 'transform 0.1s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.02)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+            >
                 <div style={{ marginBottom: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                         <span style={{ fontWeight: 700, color: statusColor, fontSize: '10px', textTransform: 'uppercase' }}>{bet.status}</span>
@@ -176,6 +185,68 @@ export default function MyBets() {
                         </div>
                     )}
                 </>
+            )}
+
+            {/* --- BET DETAILS MODAL --- */}
+            {expandedBet && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                    background: 'rgba(0,0,0,0.85)', zIndex: 1100,
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px'
+                }} onClick={() => setExpandedBet(null)}>
+                    <div className="card animate-fade" style={{ width: '100%', maxWidth: '400px', border: '1px solid var(--border)', maxHeight: '80vh', overflowY: 'auto', background: '#09090b' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+                            <h3 style={{ fontSize: '16px', margin: 0, color: 'var(--primary)' }}>Bet Details</h3>
+                            <button onClick={() => setExpandedBet(null)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '20px', cursor: 'pointer' }}>&times;</button>
+                        </div>
+
+                        <div style={{ marginBottom: '20px' }}>
+                            <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>Event</div>
+                            <div style={{ fontSize: '16px', fontWeight: 'bold', lineHeight: '1.3' }}>{expandedBet.type === 'parlay' ? 'Parlay Ticket' : expandedBet.eventTitle}</div>
+                            {(expandedBet.eventDescription || expandedBet.description) && <div style={{ fontSize: '12px', color: '#a1a1aa', marginTop: '4px' }}>{expandedBet.eventDescription || expandedBet.description}</div>}
+                        </div>
+
+                        {expandedBet.type === 'parlay' ? (
+                            <div style={{ marginBottom: '20px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '8px' }}>
+                                <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', color: '#ccc' }}>Legs ({expandedBet.legs.length}):</div>
+                                {expandedBet.legs.map((leg, idx) => (
+                                    <div key={idx} style={{ marginBottom: '8px', paddingBottom: '8px', borderBottom: idx < expandedBet.legs.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                                        <div style={{ fontSize: '13px', marginBottom: '2px' }}>{leg.eventTitle}</div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                                            <span style={{ color: 'var(--text-muted)' }}>Pick:</span>
+                                            <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{leg.label}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div style={{ marginBottom: '20px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '8px' }}>
+                                <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>Your Pick</div>
+                                <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--primary)' }}>{expandedBet.outcomeLabel}</div>
+                                <div style={{ fontSize: '12px', color: '#a1a1aa' }}>Odds: {expandedBet.odds.toFixed(2)}x</div>
+                            </div>
+                        )}
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                            <div style={{ background: 'var(--bg-input)', padding: '10px', borderRadius: '8px' }}>
+                                <div style={{ fontSize: '10px', color: '#888' }}>Wager</div>
+                                <div style={{ fontSize: '16px', fontWeight: 'bold' }}>${expandedBet.amount.toFixed(2)}</div>
+                            </div>
+                            <div style={{ background: 'var(--bg-input)', padding: '10px', borderRadius: '8px' }}>
+                                <div style={{ fontSize: '10px', color: '#888' }}>Potential Payout</div>
+                                <div style={{ fontSize: '16px', fontWeight: 'bold', color: expandedBet.status === 'won' ? '#22c55e' : expandedBet.status === 'lost' ? '#ef4444' : '#eab308' }}>
+                                    ${expandedBet.potentialPayout.toFixed(2)}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{ fontSize: '11px', color: '#666', textAlign: 'center' }}>
+                            Placed on {new Date(expandedBet.placedAt).toLocaleString()}
+                            <br />
+                            ID: {expandedBet.id}
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
