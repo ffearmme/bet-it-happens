@@ -974,3 +974,41 @@ h2 {
     margin-top: 4px;
   }
 }
+
+/* Notification Wrapper Position */
+.bell-wrapper {
+  position: relative;
+}
+
+.notification-popup {
+  position: absolute;
+  top: 40px;
+  right: -10px;
+  width: 320px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: #111;
+  border: 1px solid var(--border);
+  padding: 0;
+  z-index: 200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 768px) {
+  .bell-wrapper {
+    position: static;
+  }
+
+  .notification-popup {
+    position: absolute;
+    top: 100%;
+    /* Below the header */
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 350px;
+    margin-top: 10px;
+    /* Spacing */
+  }
+}

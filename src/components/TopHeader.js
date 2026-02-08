@@ -42,7 +42,7 @@ export default function TopHeader() {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                 {user && (
-                    <div style={{ position: 'relative' }} ref={notifRef}>
+                    <div className="bell-wrapper" ref={notifRef}>
                         <div
                             style={{ position: 'relative', cursor: 'pointer', padding: '6px', marginRight: '8px' }}
                             className={unreadCount > 0 ? "animate-ring" : ""}
@@ -65,10 +65,7 @@ export default function TopHeader() {
                         </div>
 
                         {showNotifs && (
-                            <div className="card animate-fade" style={{
-                                position: 'absolute', top: '40px', right: '-10px', width: '320px', maxHeight: '400px', overflowY: 'auto',
-                                background: '#111', border: '1px solid var(--border)', padding: '0', zIndex: 200, boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
-                            }}>
+                            <div className="card animate-fade notification-popup">
                                 <div style={{ padding: '12px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <span style={{ fontWeight: 'bold' }}>Notifications</span>
                                     <div style={{ display: 'flex', gap: '8px' }}>

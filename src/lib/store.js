@@ -2502,6 +2502,25 @@ export function AppProvider({ children }) {
     }
   };
 
+  const sendSquadMessage = async (squadId, text) => {
+    if (!user) return { success: false, error: 'Login required' };
+    if (!text.trim()) return { success: false, error: 'Message empty' };
+
+    try {
+      await addDoc(collection(db, 'squads', squadId, 'messages'), {
+        text: text.trim(),
+        senderId: user.id,
+        senderName: user.username,
+        timestamp: new Date().toISOString(),
+        isSystem: false
+      });
+      return { success: true };
+    } catch (e) {
+      console.error("Send Msg Error:", e);
+      return { success: false, error: e.message };
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
@@ -2511,7 +2530,7 @@ export function AppProvider({ children }) {
       notifications, markNotificationAsRead, clearAllNotifications, submitModConcern,
       createParlay, placeParlayBet, addParlayComment, deleteParlay, sendSystemNotification,
       squads, createSquad, joinSquad, leaveSquad, manageSquadRequest, kickMember, updateSquad, inviteUserToSquad, respondToSquadInvite, searchUsers, getSquadStats,
-      depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest
+      depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest, sendSquadMessage
     }}>
       {children}
     </AppContext.Provider>

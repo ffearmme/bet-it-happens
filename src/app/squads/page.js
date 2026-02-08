@@ -4,6 +4,8 @@ import { useApp } from '../../lib/store';
 import Navbar from '../../components/Navbar';
 import { Users, Shield, Wallet, Trophy, UserPlus, LogOut, Check, X, Plus, Search, Lock, Settings, Image as ImageIcon, ArrowUp, ArrowDown, Crown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { MessageCircle } from 'lucide-react';
 
 export default function SquadsPage() {
     const { user, squads, isLoaded, createSquad, joinSquad, leaveSquad, manageSquadRequest, kickMember, updateSquad, inviteUserToSquad, respondToSquadInvite, searchUsers, isGuestMode, getUserStats, getSquadStats, depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest } = useApp();
@@ -20,7 +22,8 @@ export default function SquadsPage() {
     const [squadStats, setSquadStats] = useState(null);
 
     const squadRanks = React.useMemo(() => {
-        const sorted = [...squads].sort((a, b) => (b.stats?.score || 0) - (a.stats?.score || 0));
+        const validSquads = squads.filter(s => (s.stats?.score || 0) > 0);
+        const sorted = [...validSquads].sort((a, b) => (b.stats?.score || 0) - (a.stats?.score || 0));
         const ranks = {};
         sorted.forEach((s, i) => {
             ranks[s.id] = i + 1;
@@ -42,6 +45,42 @@ export default function SquadsPage() {
     // Derived squad
     const mySquad = user?.squadId ? squads.find(s => s.id === user.squadId) : null;
     const isLeader = mySquad && mySquad.leaderId === user.id;
+
+    // Chat State
+    const [chatMessages, setChatMessages] = useState([]);
+    const [newMessage, setNewMessage] = useState('');
+    const { db, sendSquadMessage } = useApp(); // Destructure locally if needed, or update top destructuring
+
+    useEffect(() => {
+        if (!mySquad || activeTab !== 'overview') return;
+
+        const q = query(
+            collection(db, 'squads', mySquad.id, 'messages'),
+            orderBy('timestamp', 'desc'),
+            limit(50)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).reverse();
+            setChatMessages(msgs);
+        });
+
+        return () => unsubscribe();
+    }, [mySquad?.id, activeTab, db]);
+
+    const handleSendMessage = async (e) => {
+        e.preventDefault();
+        if (!newMessage.trim()) return;
+
+        const res = await sendSquadMessage(mySquad.id, newMessage);
+        if (res.success) {
+            setNewMessage('');
+        } else {
+            alert("Failed to send: " + res.error);
+        }
+    };
+
+
 
     const openDepositModal = () => {
         setTransactionAmount('');
@@ -927,13 +966,14 @@ export default function SquadsPage() {
                                 style={{
                                     padding: '10px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 'bold',
                                     textTransform: 'capitalize', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-                                    background: active ? 'var(--primary)' : 'transparent',
+                                    background: active ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
                                     color: active ? '#000' : 'var(--text-muted)',
-                                    display: 'flex', alignItems: 'center', gap: '8px'
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    transition: 'all 0.2s'
                                 }}
                             >
                                 {tab}
-                                {tab === 'requests' && (mySquad.requests?.length > 0) && (
+                                {tab === 'members' && isLeader && (mySquad.requests?.length > 0) && (
                                     <span style={{
                                         background: '#ef4444', color: '#fff', fontSize: '10px',
                                         padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold'
@@ -1047,10 +1087,66 @@ export default function SquadsPage() {
                                     </div>
                                 </div>
                             </div>
+
+                            <div className="card bet-card" style={{ padding: '0', overflow: 'hidden', height: '350px', display: 'flex', flexDirection: 'column', minWidth: '300px' }}>
+                                {/* Chat Header */}
+                                <div style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <MessageCircle size={16} style={{ color: 'var(--primary)' }} />
+                                    <h3 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', color: '#fff', margin: 0 }}>Squad Chat</h3>
+                                </div>
+                                {/* Messages */}
+                                <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column-reverse', gap: '12px', background: 'rgba(0,0,0,0.2)' }}>
+                                    {chatMessages.length === 0 ? (
+                                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: 'auto', marginBottom: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                            <MessageCircle size={48} style={{ opacity: 0.2, marginBottom: '16px' }} />
+                                            <p>No messages yet.</p>
+                                            <p style={{ fontSize: '12px' }}>Start the conversation!</p>
+                                        </div>
+                                    ) : (
+                                        chatMessages.map(msg => (
+                                            <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.senderId === user.id ? 'flex-end' : 'flex-start' }}>
+                                                <div style={{
+                                                    maxWidth: '85%',
+                                                    padding: '10px 14px',
+                                                    borderRadius: '16px',
+                                                    borderTopRightRadius: msg.senderId === user.id ? '4px' : '16px',
+                                                    borderTopLeftRadius: msg.senderId !== user.id ? '4px' : '16px',
+                                                    background: msg.senderId === user.id ? 'var(--primary)' : 'var(--bg-input)',
+                                                    color: msg.senderId === user.id ? '#000' : '#fff',
+                                                    fontSize: '14px',
+                                                    wordBreak: 'break-word',
+                                                    lineHeight: '1.4'
+                                                }}>
+                                                    {msg.text}
+                                                </div>
+                                                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px', padding: '0 4px', display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                                    <span style={{ fontWeight: 'bold' }}>{msg.senderName}</span>
+                                                    <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'var(--text-muted)' }}></span>
+                                                    <span>{msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</span>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                {/* Input Area */}
+                                <form onSubmit={handleSendMessage} style={{ padding: '12px', background: 'var(--bg-card)', borderTop: '1px solid var(--border)', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <input
+                                        className="input"
+                                        value={newMessage}
+                                        onChange={e => setNewMessage(e.target.value)}
+                                        placeholder="Type a message..."
+                                        style={{ flex: 1, margin: 0, borderRadius: '24px', padding: '12px 16px' }}
+                                    />
+                                    <button type="submit" className="btn btn-primary" style={{ width: 'auto', padding: '10px', borderRadius: '50%', aspectRatio: '1/1', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '44px' }} disabled={!newMessage.trim()}>
+                                        <ArrowUp size={20} />
+                                    </button>
+                                </form>
+                            </div>
                         </div>
                     )}
 
-                    {/* Members Tab */}
+
                     {activeTab === 'members' && (
                         <div className="card bet-card" style={{ padding: 0, overflow: 'hidden' }}>
                             {/* Requests Section (Moved here) */}
