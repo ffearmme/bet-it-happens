@@ -696,25 +696,24 @@ h2 {
   /* Compact Top Bar Navigation */
   .mod-sidebar {
     width: 100%;
-    height: 50px;
+    height: auto;
+    /* Allow height to grow for text */
     border-right: none;
     border-bottom: 1px solid #333;
-    padding: 0 12px;
+    padding: 8px 4px;
     flex-direction: row;
     align-items: center;
-    justify-content: flex-start;
-    /* Align start to allow scroll if needed */
+    justify-content: center;
     flex-wrap: nowrap;
-    gap: 12px;
-    overflow-x: auto;
+    gap: 0;
+    overflow-x: hidden;
+    /* Prevent horizontal scroll */
     background: #000;
   }
 
-  /* Hide the large title "Moderator" completely to save space, or just show the icon */
+  /* Hide the large title completely */
   .mod-title {
-    margin-bottom: 0;
-    font-size: 16px;
-    margin-right: 0;
+    display: none;
   }
 
   .mod-title-text {
@@ -723,27 +722,45 @@ h2 {
 
   .mod-nav-links {
     flex-direction: row;
-    gap: 4px;
+    gap: 2px;
     padding-bottom: 0;
     height: 100%;
     align-items: center;
+    width: 100%;
+    justify-content: space-evenly;
   }
 
   .mod-nav-btn {
     width: auto;
-    padding: 6px 10px;
+    flex: 1;
+    /* Distribute space equally */
+    padding: 6px 2px;
     white-space: nowrap;
     justify-content: center;
-    gap: 6px;
+    /* Stack Vertical */
+    flex-direction: column;
+    gap: 2px;
     background: transparent;
-    height: 36px;
+    height: auto;
+    min-width: 0;
+    /* Allow shrinking below content size */
   }
 
   .mod-nav-label {
-    display: none;
+    display: block;
+    font-size: 8px;
+    /* Slightly smaller */
+    text-transform: uppercase;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    line-height: 1;
+    margin-top: 2px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  /* Show active indicator more clearly since label is gone */
+  /* Show active indicator more clearly */
   .mod-nav-btn.active {
     background: rgba(34, 197, 94, 0.15);
     /* Green tint */
