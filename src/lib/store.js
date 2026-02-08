@@ -589,91 +589,123 @@ export function AppProvider({ children }) {
         settledAt: new Date().toISOString()
       });
 
-      // 2. Process Bets
+      // 2. Fetch Squads & Determine Ranks (for Boosts: #1 +15%, #2 +7%, #3 +3%)
+      const squadsSnap = await getDocs(query(collection(db, 'squads')));
+      const squadsList = squadsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      squadsList.sort((a, b) => (b.stats?.score || 0) - (a.stats?.score || 0));
+
+      const rank1Id = squadsList[0]?.id;
+      const rank2Id = squadsList[1]?.id;
+      const rank3Id = squadsList[2]?.id;
+
+      // 3. Get Bets
       const betsQ = query(collection(db, 'bets'), where('eventId', '==', eventId));
       const betsSnap = await getDocs(betsQ);
 
-      // Track user updates to aggregate them (prevent multiple writes to same doc in one batch)
-      const userUpdates = {}; // { userId: { balanceChange: 0, investedChange: 0, lastBetPercent: 0 } }
-      const usersToFetch = new Set();
+      // 4. Identify Users & Fetch Profiles (Need squadId for boost)
+      const userIds = new Set();
+      betsSnap.docs.forEach(d => {
+        if (d.data().status === 'pending') userIds.add(d.data().userId);
+      });
+
+      const userProfiles = {};
+      await Promise.all([...userIds].map(async (uid) => {
+        try {
+          const snap = await getDoc(doc(db, 'users', uid));
+          if (snap.exists()) userProfiles[uid] = snap.data();
+        } catch (e) {
+          console.error(`Failed to fetch user ${uid}`, e);
+        }
+      }));
+
+      // 5. Process Bets
+      // We aggregate updates per user to avoid multiple writes to same doc
+      const userUpdates = {}; // { userId: { balanceData: 0, investedData: 0, profitData: 0 } }
 
       for (const betDoc of betsSnap.docs) {
         const bet = betDoc.data();
         if (bet.status !== 'pending') continue;
 
         const isWinner = bet.outcomeId === winnerOutcomeId;
+        const user = userProfiles[bet.userId]; // Might be undefined
+
+        let boostMultiplier = 0;
+        let boostAmount = 0;
+        let finalPayout = 0;
+
+        if (isWinner) {
+          const rawProfit = bet.potentialPayout - bet.amount;
+          if (user && user.squadId) {
+            if (user.squadId === rank1Id) boostMultiplier = 0.15;
+            else if (user.squadId === rank2Id) boostMultiplier = 0.07;
+            else if (user.squadId === rank3Id) boostMultiplier = 0.03;
+          }
+          boostAmount = rawProfit * boostMultiplier;
+          finalPayout = bet.potentialPayout + boostAmount;
+        }
 
         // Queue Bet Update
         batch.update(betDoc.ref, {
           status: isWinner ? 'won' : 'lost',
+          payout: isWinner ? finalPayout : 0,
+          boostApplied: boostAmount > 0 ? boostAmount : 0,
           settledAt: new Date().toISOString()
         });
 
-        // Queue User Id for aggregation
-        usersToFetch.add(bet.userId);
+        // Add to User Aggregation
+        if (!userUpdates[bet.userId]) userUpdates[bet.userId] = { balanceData: 0, investedData: 0, profitData: 0 };
 
-        // Create Notification (One per bet is fine)
+        userUpdates[bet.userId].investedData -= bet.amount; // Release invested amount (always)
+
+        if (isWinner) {
+          userUpdates[bet.userId].balanceData += finalPayout;
+          // Profit for stats = (Payout - Initial Stake)
+          userUpdates[bet.userId].profitData += (finalPayout - bet.amount);
+        } else {
+          // Loss = -Stake
+          userUpdates[bet.userId].profitData -= bet.amount;
+        }
+
+        // Create Notification
         const notifRef = doc(collection(db, 'notifications'));
+        let msg = isWinner
+          ? `You won $${finalPayout.toFixed(2)} on ${bet.eventTitle} (${bet.outcomeLabel})`
+          : `You lost $${bet.amount.toFixed(2)} on ${bet.eventTitle} (${bet.outcomeLabel})`;
+
+        if (isWinner && boostAmount > 0) {
+          msg += ` (Includes Squad Boost!)`;
+        }
+
         batch.set(notifRef, {
           userId: bet.userId,
           type: 'result',
           eventId: eventId,
           title: isWinner ? 'You Won!' : 'Bet Lost',
-          message: isWinner
-            ? `You won $${(bet.potentialPayout).toFixed(2)} on ${bet.eventTitle} (${bet.outcomeLabel})`
-            : `You lost $${bet.amount.toFixed(2)} on ${bet.eventTitle} (${bet.outcomeLabel})`,
+          message: msg,
           read: false,
           createdAt: new Date().toISOString()
         });
       }
 
-      // 3. Process Aggregate User Updates
-      // We need to fetch current user data to calc net worth for percent change
-      // Note: If optimal, we could fetch only unique users.
-      for (const userId of usersToFetch) {
-        try {
-          const userRef = doc(db, 'users', userId);
-          const userSnap = await getDoc(userRef);
+      // 6. Apply User Updates
+      for (const uid of userIds) {
+        const updates = userUpdates[uid];
+        if (!updates) continue;
 
-          if (userSnap.exists()) {
-            const userData = userSnap.data();
-            const currentNetWorth = (userData.balance || 0) + (userData.invested || 0);
+        // Calculate percent change based on Net Worth BEFORE this batch
+        const user = userProfiles[uid];
+        const currentNetWorth = (user?.balance || 0) + (user?.invested || 0);
 
-            // Calculate Total Impact from all bets for this user on this event
-            let totalPayout = 0;
-            let totalInvestedRelease = 0; // Amount to remove from 'invested'
-            let netProfit = 0; // For percentage calc
+        const percentChange = currentNetWorth > 0
+          ? (updates.profitData / currentNetWorth) * 100
+          : 0;
 
-            // Re-scan bets for this user
-            for (const betDoc of betsSnap.docs) {
-              const bet = betDoc.data();
-              if (bet.userId !== userId || bet.status !== 'pending') continue;
-
-              const isWinner = bet.outcomeId === winnerOutcomeId;
-
-              totalInvestedRelease += bet.amount;
-
-              if (isWinner) {
-                totalPayout += bet.potentialPayout;
-                netProfit += (bet.potentialPayout - bet.amount);
-              } else {
-                netProfit -= bet.amount;
-              }
-            }
-
-            const percentChange = currentNetWorth > 0
-              ? (netProfit / currentNetWorth) * 100
-              : 0;
-
-            batch.update(userRef, {
-              balance: increment(totalPayout),
-              invested: increment(-totalInvestedRelease),
-              lastBetPercent: percentChange
-            });
-          }
-        } catch (err) {
-          console.error(`Error aggregating user ${userId}`, err);
-        }
+        const userRef = doc(db, 'users', uid);
+        batch.update(userRef, {
+          balance: increment(updates.balanceData),
+          invested: increment(updates.investedData),
+          lastBetPercent: percentChange
+        });
       }
 
       await batch.commit();

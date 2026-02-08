@@ -1400,7 +1400,23 @@ export default function SquadsPage() {
                         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
                             <Trophy size={48} style={{ color: '#eab308', margin: '0 auto 16px' }} />
                             <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>Squad Leaderboard</h2>
-                            <p style={{ color: 'var(--text-muted)' }}>Top squads by total score</p>
+                            <p style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>Top squads by total score</p>
+
+                            <div style={{
+                                display: 'inline-flex',
+                                gap: '12px',
+                                background: 'rgba(255, 255, 255, 0.05)',
+                                padding: '8px 16px',
+                                borderRadius: '20px',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                fontSize: '12px',
+                                flexWrap: 'wrap',
+                                justifyContent: 'center'
+                            }}>
+                                <span style={{ color: '#eab308', fontWeight: 'bold' }}>🥇 #1 Squad: +15% Boost</span>
+                                <span style={{ color: '#94a3b8', fontWeight: 'bold' }}>🥈 #2 Squad: +7% Boost</span>
+                                <span style={{ color: '#b45309', fontWeight: 'bold' }}>🥉 #3 Squad: +3% Boost</span>
+                            </div>
                         </div>
 
                         <div style={{ display: 'grid', gap: '12px' }}>
