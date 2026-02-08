@@ -1011,3 +1011,86 @@ h2 {
     /* Spacing */
   }
 }
+
+
+/* On Fire Carousel - Desktop Defaults */
+.on-fire-scroll-container {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 24px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.on-fire-scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+.on-fire-card-wrapper {
+  flex: 0 0 auto;
+  width: 350px;
+  scroll-snap-align: start;
+}
+
+.on-fire-spacer {
+  display: none;
+}
+
+/* Default state for desktop */
+.mobile-scroll-arrow {
+  display: none;
+}
+
+/* Mobile Overrides for On Fire Carousel */
+@media (max-width: 768px) {
+  .on-fire-scroll-container {
+    /* Robust Full Bleed using Viewport Width */
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+
+    /* Keep centering padding */
+    padding: 0 7.5vw 24px 7.5vw;
+  }
+
+  .on-fire-card-wrapper {
+    /* Force 85vw width even on larger phones to guarantee centering logic holds */
+    flex: 0 0 85vw;
+    width: 85vw;
+    max-width: none;
+    /* Remove max-width constraint on mobile to ensure centering works */
+    scroll-snap-align: center;
+  }
+
+  /* Remove complex margin calculations, rely on container padding */
+  .on-fire-card-wrapper:first-child {
+    margin-left: 0;
+  }
+
+  .on-fire-spacer {
+    display: none;
+    /* Spacer not needed with padding strategy */
+  }
+
+  .mobile-scroll-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    color: white;
+    font-size: 20px;
+    z-index: 20;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+}

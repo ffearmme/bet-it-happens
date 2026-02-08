@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useApp } from '../../lib/store';
 import { collection, query, orderBy, onSnapshot, where, limit } from 'firebase/firestore';
@@ -8,6 +8,17 @@ export default function ParlayPage() {
     const { user, events, db, createParlay, placeParlayBet, getUserStats, deleteParlay, bets, addParlayComment } = useApp();
     const [mode, setMode] = useState('active'); // 'active' | 'create'
     const [parlays, setParlays] = useState([]);
+    const scrollRef = useRef(null);
+
+    const scrollNext = () => {
+        if (scrollRef.current) {
+            // Scroll by 85vw (card width) + gap (approx)
+            // accurate enough for snap points to take over
+            const scrollAmount = window.innerWidth * 0.85;
+            scrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+        }
+    };
+
 
     // Create Mode State
     const [selectedLegs, setSelectedLegs] = useState([]);
@@ -817,7 +828,7 @@ export default function ParlayPage() {
 
             {/* MODE: ACTIVE PARLAYS */}
             {mode === 'active' && (
-                <div style={{ display: 'grid', gap: '16px', maxWidth: '100%', overflowX: 'hidden' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', maxWidth: '100%', overflowX: 'hidden' }}>
                     {parlays.length === 0 && (
                         <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                             No active parlays right now. Be the first to build one!
@@ -856,34 +867,25 @@ export default function ParlayPage() {
                             </div>
 
                             {openSections.onFire && (
-                                <div className="animate-fade" style={{
-                                    display: 'flex',
-                                    gap: '16px',
-                                    overflowX: 'auto',
-                                    margin: '0 -16px', // Break out of container padding for full bleed
-                                    padding: '0 16px 24px 16px', // Add internal padding to align first item
-                                    scrollSnapType: 'x mandatory',
-                                    scrollbarWidth: 'none', // Firefox
-                                    msOverflowStyle: 'none', // IE/Edge
-                                }}>
-                                    {/* Hide scrollbar for Chrome/Safari/Opera */}
-                                    <style jsx>{`
-                                        div::-webkit-scrollbar {
-                                            display: none;
-                                        }
-                                    `}</style>
-                                    {onFireParlays.map((parlay, idx) => (
-                                        <div key={parlay.id} style={{
-                                            flex: '0 0 85vw', // Use Viewport Width for consistent mobile feel
-                                            maxWidth: '350px',
-                                            scrollSnapAlign: 'center',
-                                            marginLeft: idx === 0 ? 'calc(50% - 42.5vw)' : 0 // Center the FIRST item perfectly
-                                        }}>
-                                            {renderOnFireCard(parlay)}
-                                        </div>
-                                    ))}
-                                    {/* Spacer to allow scrolling the last item into center view */}
-                                    <div style={{ flex: '0 0 calc(50% - 42.5vw - 16px)' }} />
+                                <div style={{ position: 'relative' }}>
+                                    <div className="animate-fade on-fire-scroll-container" ref={scrollRef}>
+                                        {onFireParlays.map((parlay) => (
+                                            <div key={parlay.id} className="on-fire-card-wrapper">
+                                                {renderOnFireCard(parlay)}
+                                            </div>
+                                        ))}
+                                        {/* Spacer to allow scrolling the last item into center view on mobile */}
+                                        <div className="on-fire-spacer" />
+                                    </div>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            scrollNext();
+                                        }}
+                                        className="mobile-scroll-arrow"
+                                    >
+                                        →
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -891,7 +893,7 @@ export default function ParlayPage() {
 
                     {/* 1. ACTIVE PARLAYS ("Heating Up") */}
                     {activeParlays.length > 0 && (
-                        <div style={{ marginBottom: '16px', border: '1px solid rgba(74, 222, 128, 0.3)', borderRadius: '12px', background: 'rgba(74, 222, 128, 0.05)', overflow: 'hidden', maxWidth: '100%' }}>
+                        <div style={{ marginBottom: '16px', border: '1px solid rgba(74, 222, 128, 0.3)', borderRadius: '12px', background: 'rgba(74, 222, 128, 0.05)', overflow: 'hidden', width: '100%', maxWidth: '100%' }}>
                             <div
                                 onClick={() => toggleSection('heatingUp')}
                                 style={{
@@ -919,7 +921,7 @@ export default function ParlayPage() {
 
                     {/* 2. UPCOMING PARLAYS */}
                     {upcomingParlays.length > 0 && (
-                        <div style={{ marginBottom: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.05)', overflow: 'hidden', maxWidth: '100%' }}>
+                        <div style={{ marginBottom: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.05)', overflow: 'hidden', width: '100%', maxWidth: '100%' }}>
                             <div
                                 onClick={() => toggleSection('upcoming')}
                                 style={{
@@ -947,7 +949,7 @@ export default function ParlayPage() {
 
                     {/* 3. LOST PARLAYS */}
                     {lostParlays.length > 0 && (
-                        <div style={{ marginBottom: '16px', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.05)', overflow: 'hidden', maxWidth: '100%' }}>
+                        <div style={{ marginBottom: '16px', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.05)', overflow: 'hidden', width: '100%', maxWidth: '100%' }}>
                             <div
                                 onClick={() => toggleSection('busted')}
                                 style={{
