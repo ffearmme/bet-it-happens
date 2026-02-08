@@ -388,18 +388,18 @@ export default function ParlayPage() {
                     </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', overflow: 'hidden', flexShrink: 0 }}>
                             {parlay.creatorProfilePic ? (
                                 <img src={parlay.creatorProfilePic} alt={parlay.creatorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
                                 parlay.creatorName[0].toUpperCase()
                             )}
                         </div>
-                        <div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
                             <div
                                 onClick={() => setViewingUser({ id: parlay.creatorId, username: parlay.creatorName })}
-                                style={{ fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline' }}
+                                style={{ fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                             >
                                 {parlay.creatorName}
                             </div>
@@ -817,7 +817,7 @@ export default function ParlayPage() {
 
             {/* MODE: ACTIVE PARLAYS */}
             {mode === 'active' && (
-                <div style={{ display: 'grid', gap: '16px' }}>
+                <div style={{ display: 'grid', gap: '16px', maxWidth: '100%', overflowX: 'hidden' }}>
                     {parlays.length === 0 && (
                         <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                             No active parlays right now. Be the first to build one!
@@ -860,7 +860,8 @@ export default function ParlayPage() {
                                     display: 'flex',
                                     gap: '16px',
                                     overflowX: 'auto',
-                                    paddingBottom: '24px',
+                                    margin: '0 -16px', // Break out of container padding for full bleed
+                                    padding: '0 16px 24px 16px', // Add internal padding to align first item
                                     scrollSnapType: 'x mandatory',
                                     scrollbarWidth: 'none', // Firefox
                                     msOverflowStyle: 'none', // IE/Edge
@@ -871,19 +872,18 @@ export default function ParlayPage() {
                                             display: none;
                                         }
                                     `}</style>
-                                    {onFireParlays.map(parlay => (
+                                    {onFireParlays.map((parlay, idx) => (
                                         <div key={parlay.id} style={{
-                                            flex: '0 0 95%',
+                                            flex: '0 0 85vw', // Use Viewport Width for consistent mobile feel
                                             maxWidth: '350px',
-                                            margin: '0 auto',
                                             scrollSnapAlign: 'center',
-                                            scrollSnapStop: 'always'
+                                            marginLeft: idx === 0 ? 'calc(50% - 42.5vw)' : 0 // Center the FIRST item perfectly
                                         }}>
                                             {renderOnFireCard(parlay)}
                                         </div>
                                     ))}
-                                    {/* Spacer for right padding visual balance */}
-                                    <div style={{ flex: '0 0 1px' }} />
+                                    {/* Spacer to allow scrolling the last item into center view */}
+                                    <div style={{ flex: '0 0 calc(50% - 42.5vw - 16px)' }} />
                                 </div>
                             )}
                         </div>
@@ -891,7 +891,7 @@ export default function ParlayPage() {
 
                     {/* 1. ACTIVE PARLAYS ("Heating Up") */}
                     {activeParlays.length > 0 && (
-                        <div style={{ marginBottom: '16px', border: '1px solid rgba(74, 222, 128, 0.3)', borderRadius: '12px', background: 'rgba(74, 222, 128, 0.05)', overflow: 'hidden' }}>
+                        <div style={{ marginBottom: '16px', border: '1px solid rgba(74, 222, 128, 0.3)', borderRadius: '12px', background: 'rgba(74, 222, 128, 0.05)', overflow: 'hidden', maxWidth: '100%' }}>
                             <div
                                 onClick={() => toggleSection('heatingUp')}
                                 style={{
@@ -919,7 +919,7 @@ export default function ParlayPage() {
 
                     {/* 2. UPCOMING PARLAYS */}
                     {upcomingParlays.length > 0 && (
-                        <div style={{ marginBottom: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.05)', overflow: 'hidden' }}>
+                        <div style={{ marginBottom: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.05)', overflow: 'hidden', maxWidth: '100%' }}>
                             <div
                                 onClick={() => toggleSection('upcoming')}
                                 style={{
@@ -947,7 +947,7 @@ export default function ParlayPage() {
 
                     {/* 3. LOST PARLAYS */}
                     {lostParlays.length > 0 && (
-                        <div style={{ marginBottom: '16px', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.05)', overflow: 'hidden' }}>
+                        <div style={{ marginBottom: '16px', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.05)', overflow: 'hidden', maxWidth: '100%' }}>
                             <div
                                 onClick={() => toggleSection('busted')}
                                 style={{
