@@ -1038,10 +1038,7 @@ h2 {
   display: none;
 }
 
-/* Default state for desktop */
-.mobile-scroll-arrow {
-  display: none;
-}
+
 
 /* Mobile Overrides for On Fire Carousel */
 @media (max-width: 768px) {
@@ -1074,23 +1071,5 @@ h2 {
     /* Spacer not needed with padding strategy */
   }
 
-  .mobile-scroll-arrow {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 40px;
-    height: 40px;
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    color: white;
-    font-size: 20px;
-    z-index: 20;
-    backdrop-filter: blur(4px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  }
+
 }

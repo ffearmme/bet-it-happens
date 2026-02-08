@@ -877,15 +877,6 @@ export default function ParlayPage() {
                                         {/* Spacer to allow scrolling the last item into center view on mobile */}
                                         <div className="on-fire-spacer" />
                                     </div>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            scrollNext();
-                                        }}
-                                        className="mobile-scroll-arrow"
-                                    >
-                                        →
-                                    </button>
                                 </div>
                             )}
                         </div>
