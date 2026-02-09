@@ -1,0 +1,561 @@
+"use client";
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useApp } from '../../lib/store';
+import { Wallet, TrendingUp, BarChart3, ArrowUpRight, ArrowDownRight, DollarSign, History, AlertCircle, ChevronDown, ChevronUp, LineChart } from 'lucide-react';
+
+export default function Portfolio() {
+    const { user, bets, events, isLoaded } = useApp();
+    const router = useRouter();
+    const [expandedBet, setExpandedBet] = useState(null);
+    const [showActiveBets, setShowActiveBets] = useState(false);
+    const [showSettledBets, setShowSettledBets] = useState(false);
+    const [historyFrame, setHistoryFrame] = useState('7d');
+
+    useEffect(() => {
+        if (isLoaded && !user) {
+            router.push('/');
+        }
+    }, [user, isLoaded, router]);
+
+    if (!isLoaded || !user) return null;
+
+    // --- LOGIC FROM MY BETS ---
+    const myBets = bets.filter(b => b.userId === user.id).sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
+    const activeBets = myBets.filter(b => b.status === 'pending');
+    const completedBets = myBets.filter(b => b.status !== 'pending');
+    const wonBets = myBets.filter(b => b.status === 'won');
+
+    // Stats Calculations
+    const winRate = completedBets.length > 0
+        ? ((wonBets.length / completedBets.length) * 100).toFixed(1)
+        : '0.0';
+
+    const biggestWin = wonBets.length > 0
+        ? Math.max(...wonBets.map(b => b.potentialPayout - b.amount))
+        : 0;
+
+    const totalNetProfit = completedBets.reduce((acc, bet) => {
+        const profit = bet.status === 'won' ? (bet.potentialPayout - bet.amount) : -bet.amount;
+        return acc + profit;
+    }, 0);
+
+    // --- LOGIC FROM WALLET ---
+    const netWorth = (user.balance || 0) + (user.invested || 0);
+
+    const BetCard = ({ bet }) => {
+        const isParlay = bet.type === 'parlay';
+        // Status color logic including won/lost/void
+        let statusColor = '#eab308'; // Default pending
+        if (bet.status === 'won') statusColor = '#22c55e';
+        if (bet.status === 'lost') statusColor = '#ef4444';
+        if (bet.status === 'void') statusColor = '#a1a1aa';
+
+        return (
+            <div
+                className="card"
+                onClick={() => setExpandedBet(bet)}
+                style={{
+                    padding: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    background: 'var(--bg-card)',
+                    cursor: 'pointer',
+                    transition: 'transform 0.1s',
+                    borderLeft: `4px solid ${statusColor}`,
+                    marginBottom: '0' // Handled by grid gap
+                }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+            >
+                <div style={{ marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <span style={{
+                            fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase',
+                            background: bet.status === 'pending' ? 'rgba(234, 179, 8, 0.1)' : bet.status === 'won' ? 'rgba(34, 197, 94, 0.1)' : bet.status === 'lost' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.1)',
+                            color: statusColor,
+                            padding: '2px 8px', borderRadius: '4px'
+                        }}>
+                            {bet.status === 'pending' ? (isParlay ? 'Parlay' : 'Single') : bet.status}
+                        </span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {new Date(bet.placedAt).toLocaleDateString()}
+                        </span>
+                    </div>
+
+                    <div style={{ fontWeight: 600, fontSize: '14px', lineHeight: '1.4', marginBottom: '4px', color: '#fff' }}>
+                        {isParlay ? `${bet.legs.length}-Leg Parlay Ticket` : bet.eventTitle}
+                    </div>
+
+                    {!isParlay && (
+                        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                            Pick: <span style={{ color: '#fff' }}>{bet.outcomeLabel}</span>
+                        </div>
+                    )}
+                </div>
+
+                <div style={{ paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Wager</div>
+                        <div style={{ fontWeight: 'bold', fontSize: '14px' }}>${bet.amount.toFixed(0)}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{bet.status === 'won' ? 'P.L' : 'Payout'}</div>
+                        <div style={{ fontWeight: 'bold', fontSize: '14px', color: bet.status === 'won' ? '#22c55e' : bet.status === 'lost' ? '#ef4444' : '#eab308' }}>
+                            {bet.status === 'won' ? `+$${(bet.potentialPayout - bet.amount).toFixed(0)}` : `$${bet.potentialPayout.toFixed(0)}`}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // --- HISTORY FILTERS & CHART DATA ---
+    const getFilteredHistory = () => {
+        const now = Date.now();
+        let cutoff = 0;
+        if (historyFrame === '24h') cutoff = now - 24 * 60 * 60 * 1000;
+        if (historyFrame === '7d') cutoff = now - 7 * 24 * 60 * 60 * 1000;
+        if (historyFrame === '30d') cutoff = now - 30 * 24 * 60 * 60 * 1000;
+
+        return completedBets.filter(b => {
+            // Use resolvedAt if available, else placedAt
+            const time = b.resolvedAt ? new Date(b.resolvedAt).getTime() : new Date(b.placedAt).getTime();
+            return time >= cutoff;
+        });
+    };
+
+    const filteredBets = getFilteredHistory();
+
+    const BalanceChart = () => {
+        // Simple balance reconstruction logic
+        // Start from current balance, work backwards through SORTED (newest to oldest) bets
+        // But for chart line display we need Oldest to Newest
+
+        // 1. Get ALL settled bets for accurate history reconstruction or just show relative change?
+        // Let's show relative change for the selected period to be safe, starting at 0 change?
+        // Or try to reconstruct actual balance if possible.
+        // Reconstructing actual balance requires knowing the starting balance of the period.
+        // Current Balance is known.
+        // We can walk back from Current Balance through ALL completed bets to find the balance at 'cutoff' time.
+
+        const allSorted = [...completedBets].sort((a, b) => {
+            const tA = a.resolvedAt ? new Date(a.resolvedAt).getTime() : new Date(a.placedAt).getTime();
+            const tB = b.resolvedAt ? new Date(b.resolvedAt).getTime() : new Date(b.placedAt).getTime();
+            return tB - tA; // Newest first
+        });
+
+        let simBalance = user.balance || 0;
+        const historyPoints = [];
+
+        // Add current point
+        historyPoints.push({ time: Date.now(), val: simBalance });
+
+        // Walk back
+        const now = Date.now();
+        let cutoff = 0;
+        if (historyFrame === '24h') cutoff = now - 24 * 60 * 60 * 1000;
+        if (historyFrame === '7d') cutoff = now - 7 * 24 * 60 * 60 * 1000;
+        if (historyFrame === '30d') cutoff = now - 30 * 24 * 60 * 60 * 1000;
+        if (historyFrame === 'all') cutoff = 0;
+
+        allSorted.forEach(bet => {
+            const t = bet.resolvedAt ? new Date(bet.resolvedAt).getTime() : new Date(bet.placedAt).getTime();
+            // Undo the bet effect
+            // If won: we gained (payout - wager). So prev balance was (curr - (payout - wager))
+            // If lost: we lost wager. So prev balance was (curr + wager)
+            // Wait, wager is deducted when placed. 
+            // So:
+            // Place Bet: Bal - Wager
+            // Resolve Win: Bal + Payout
+            // Resolve Loss: Bal + 0
+
+            // So to undo a resolution:
+            // If Win: Bal - Payout
+            // If Loss: Bal (no change on resolution)
+
+            // BUT this ignores the "Place Bet" event time.
+            // For a simple "Balance History" chart, usually we just track the resolved P&L impact?
+            // Let's approximate: 
+            // We will just plot the points we have within the cutoff.
+
+            let change = 0;
+            if (bet.status === 'won') change = bet.potentialPayout; // This amount was Added to balance
+            // If lost, 0 was added.
+
+            // Undo the ADDITION
+            simBalance -= change;
+
+            // But wait, we also need to account for the WAGER being deducted at placement time?
+            // Complex.
+            // Simplified View: Show "Net Profit" chart? No user asked for "Balance".
+            // Let's just plot the points we have within the cutoff.
+
+            if (t >= cutoff) {
+                historyPoints.push({ time: t, val: simBalance + change }); // Value before this resolution
+            }
+        });
+
+        // The above loop calculates the balance "before resolution". 
+        // We need to reverse to get chronological order
+        historyPoints.reverse();
+
+        if (historyPoints.length < 2) return (
+            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                Not enough data for chart
+            </div>
+        );
+
+        // Normalize
+        const minVal = Math.min(...historyPoints.map(p => p.val));
+        const maxVal = Math.max(...historyPoints.map(p => p.val));
+        const range = maxVal - minVal || 1;
+
+        const width = 100;
+        const height = 40;
+
+        const points = historyPoints.map((p, i) => {
+            const x = (i / (historyPoints.length - 1)) * width;
+            const y = height - ((p.val - minVal) / range) * height; // Invert Y
+            return `${x},${y}`;
+        }).join(' ');
+
+        return (
+            <div style={{ padding: '16px', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <h3 style={{ fontSize: '14px', margin: 0, color: 'var(--text-muted)' }}>Balance Trend</h3>
+                    <div style={{ fontSize: '12px', color: historyPoints[historyPoints.length - 1].val >= historyPoints[0].val ? '#22c55e' : '#ef4444' }}>
+                        {historyPoints[historyPoints.length - 1].val >= historyPoints[0].val ? '▲' : '▼'} {historyFrame}
+                    </div>
+                </div>
+                <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '80px', overflow: 'visible' }}>
+                    <polyline
+                        fill="none"
+                        stroke={historyPoints[historyPoints.length - 1].val >= historyPoints[0].val ? '#22c55e' : '#ef4444'}
+                        strokeWidth="2"
+                        points={points}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    />
+                </svg>
+            </div>
+        );
+    }
+
+    return (
+        <div className="container animate-fade">
+            <h1 style={{ marginTop: '20px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Wallet className="text-primary" size={32} />
+                Portfolio
+            </h1>
+
+            {/* --- TOP SECTION: WALLET & STATS --- */}
+            <div style={{ display: 'grid', gap: '16px', marginBottom: '32px' }}>
+
+                {/* 1. Main Wallet Card */}
+                <div className="card" style={{
+                    padding: '24px',
+                    background: 'linear-gradient(145deg, var(--bg-card) 0%, rgba(34,197,94,0.05) 100%)',
+                    border: '1px solid rgba(34, 197, 94, 0.2)'
+                }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+                        {/* Balance */}
+                        <div style={{ textAlign: 'center', width: '100%' }}>
+                            <div className="text-sm" style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', opacity: 0.8 }}>
+                                Available Balance
+                            </div>
+                            <div style={{ fontSize: '48px', fontWeight: '900', color: '#fff', letterSpacing: '-1.5px', lineHeight: '1' }}>
+                                ${user.balance.toFixed(2)}
+                            </div>
+                        </div>
+
+                        {/* Net Worth & Active Details */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '16px', textAlign: 'center' }}>
+                                <div className="text-sm" style={{ marginBottom: '6px', color: 'var(--text-muted)' }}>Net Worth</div>
+                                <div style={{ fontSize: '22px', fontWeight: 'bold', color: 'var(--primary)' }}>
+                                    ${netWorth.toFixed(2)}
+                                </div>
+                            </div>
+                            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '16px', textAlign: 'center' }}>
+                                <div className="text-sm" style={{ marginBottom: '6px', color: 'var(--text-muted)' }}>Active Bets</div>
+                                <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#fbbf24' }}>
+                                    ${(user.invested || 0).toFixed(2)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 2. Performance Stats Grid */}
+                {/* 2. Performance Stats Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
+
+                    {/* Win Rate */}
+                    <div className="card" style={{ padding: '16px', textAlign: 'center', marginBottom: 0 }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 'bold' }}>
+                            Win Rate
+                        </div>
+                        <div style={{ fontSize: '20px', fontWeight: '900', color: 'var(--primary)' }}>
+                            {winRate}%
+                        </div>
+                    </div>
+
+                    {/* Streak */}
+                    <div className="card" style={{ padding: '16px', textAlign: 'center', marginBottom: 0 }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 'bold' }}>
+                            Streak
+                        </div>
+                        <div style={{ fontSize: '20px', fontWeight: '900', color: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: '16px' }}>🔥</span> {user.longestStreak || 0}
+                        </div>
+                    </div>
+
+                    {/* Biggest Win */}
+                    <div className="card" style={{ padding: '16px', textAlign: 'center', marginBottom: 0 }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 'bold' }}>
+                            Best Win
+                        </div>
+                        <div style={{ fontSize: '20px', fontWeight: '900', color: '#22c55e' }}>
+                            ${biggestWin.toFixed(0)}
+                        </div>
+                    </div>
+
+                    {/* Net Profit */}
+                    <div className="card" style={{ padding: '16px', textAlign: 'center', marginBottom: 0 }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 'bold' }}>
+                            Profit
+                        </div>
+                        <div style={{ fontSize: '20px', fontWeight: '900', color: totalNetProfit >= 0 ? '#22c55e' : '#ef4444' }}>
+                            {totalNetProfit >= 0 ? '+' : ''}${totalNetProfit.toFixed(0)}
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            {/* --- MIDDLE SECTION: OPEN BETS --- */}
+            {/* --- MIDDLE SECTION: OPEN BETS (Collapsible) --- */}
+            {/* Time Filters - Moved Above Active Bets */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', overflowX: 'auto', paddingBottom: '4px' }}>
+                {['24h', '7d', '30d'].map(frame => (
+                    <button
+                        key={frame}
+                        onClick={() => setHistoryFrame(frame)}
+                        style={{
+                            padding: '6px 12px',
+                            borderRadius: '20px',
+                            border: '1px solid',
+                            borderColor: historyFrame === frame ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
+                            background: historyFrame === frame ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
+                            color: historyFrame === frame ? 'var(--primary)' : 'var(--text-muted)',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        {frame.toUpperCase()}
+                    </button>
+                ))}
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+                <div
+                    onClick={() => setShowActiveBets(!showActiveBets)}
+                    style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        padding: '12px 16px',
+                        background: 'var(--bg-card)',
+                        borderRadius: showActiveBets ? '12px 12px 0 0' : '12px',
+                        border: '1px solid var(--border)',
+                        marginBottom: showActiveBets ? '0' : '16px',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <AlertCircle size={20} className="text-primary" />
+                        <h2 style={{ fontSize: '16px', margin: 0 }}>Active Bets</h2>
+                        <span style={{ fontSize: '12px', background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: '12px', color: 'var(--text-muted)' }}>
+                            {activeBets.length}
+                        </span>
+                    </div>
+                    {showActiveBets ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </div>
+
+                {showActiveBets && (
+                    <div className="animate-fade" style={{
+                        background: 'rgba(0,0,0,0.2)',
+                        border: '1px solid var(--border)',
+                        borderTop: 'none',
+                        borderRadius: '0 0 12px 12px',
+                        padding: '16px'
+                    }}>
+                        {activeBets.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                                <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '14px' }}>No active bets.</p>
+                                <button onClick={() => router.push('/')} className="btn btn-primary" style={{ width: 'auto', margin: '12px auto 0', padding: '6px 16px', fontSize: '12px' }}>
+                                    Browse Lines
+                                </button>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                                {activeBets.map(bet => <BetCard key={bet.id} bet={bet} />)}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* --- BOTTOM SECTION: SETTLED HISTORY --- */}
+            <div style={{ marginBottom: '32px' }}>
+                {/* Time Filters - Moved Above */}
+
+
+                <div
+                    onClick={() => setShowSettledBets(!showSettledBets)}
+                    style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        padding: '12px 16px',
+                        background: 'var(--bg-card)',
+                        borderRadius: showSettledBets ? '12px 12px 0 0' : '12px',
+                        border: '1px solid var(--border)',
+                        marginBottom: showSettledBets ? '0' : '16px',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <History size={20} className="text-muted" />
+                        <h2 style={{ fontSize: '16px', margin: 0, color: 'var(--text-muted)' }}>Settled History</h2>
+                        <span style={{ fontSize: '12px', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: '12px', color: 'var(--text-muted)' }}>
+                            {completedBets.length}
+                        </span>
+                    </div>
+                    {showSettledBets ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </div>
+
+                {showSettledBets && (
+                    <div className="animate-fade" style={{
+                        background: 'rgba(0,0,0,0.2)',
+                        border: '1px solid var(--border)',
+                        borderTop: 'none',
+                        borderRadius: '0 0 12px 12px',
+                        padding: '16px'
+                    }}>
+                        {filteredBets.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '14px' }}>
+                                No settled bets in this period.
+                            </div>
+                        ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '8px' }}>
+                                {filteredBets.map(bet => <BetCard key={bet.id} bet={bet} />)}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* --- BALANCE CHART --- */}
+            <BalanceChart />
+
+
+            {/* --- BET DETAILS MODAL --- */}
+            {
+                expandedBet && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                        background: 'rgba(0,0,0,0.85)', zIndex: 1100,
+                        display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px'
+                    }} onClick={() => setExpandedBet(null)}>
+                        <div className="card animate-fade" style={{ width: '100%', maxWidth: '400px', border: '1px solid var(--border)', maxHeight: '80vh', overflowY: 'auto', background: '#09090b', position: 'relative' }} onClick={e => e.stopPropagation()}>
+                            <button
+                                onClick={() => setExpandedBet(null)}
+                                style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', color: '#666', cursor: 'pointer' }}
+                            >
+                                <ArrowDownRight size={24} style={{ transform: 'rotate(225deg)' }} /> {/* Close Iconish */}
+                            </button>
+
+                            <div style={{ paddingBottom: '16px', marginBottom: '16px', borderBottom: '1px solid var(--border)' }}>
+                                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#eab308', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '1px' }}>
+                                    Active Wager
+                                </div>
+                                <h3 style={{ fontSize: '20px', margin: 0, color: '#fff' }}>
+                                    {expandedBet.type === 'parlay' ? 'Parlay Ticket' : 'Single Bet'}
+                                </h3>
+                            </div>
+
+                            {/* Event Details */}
+                            <div style={{ marginBottom: '24px' }}>
+                                {!expandedBet.type === 'parlay' && (
+                                    <>
+                                        <div style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '4px' }}>Event</div>
+                                        <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#fff', marginBottom: '8px' }}>
+                                            {expandedBet.eventTitle}
+                                        </div>
+                                    </>
+                                )}
+
+                                {expandedBet.type === 'parlay' ? (
+                                    <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '12px', overflow: 'hidden' }}>
+                                        <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Legs ({expandedBet.legs.length})</span>
+                                            <span style={{ fontSize: '12px', color: 'var(--primary)' }}>Combined Odds: {expandedBet.odds.toFixed(2)}x</span>
+                                        </div>
+                                        <div style={{ padding: '8px' }}>
+                                            {expandedBet.legs.map((leg, idx) => (
+                                                <div key={idx} style={{ padding: '12px', borderRadius: '8px', marginBottom: '4px', background: idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                                                    <div style={{ fontSize: '13px', fontWeight: '500', color: '#e4e4e7', marginBottom: '4px' }}>
+                                                        {leg.eventTitle}
+                                                    </div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Pick</span>
+                                                        <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--primary)' }}>{leg.label}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={{ background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '12px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                            <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Selection</span>
+                                            <span style={{ fontWeight: 'bold', color: 'var(--primary)', fontSize: '14px' }}>{expandedBet.outcomeLabel}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Odds</span>
+                                            <span style={{ fontWeight: 'bold', color: '#fff', fontSize: '14px' }}>{expandedBet.odds.toFixed(2)}x</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Financials */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                <div style={{ background: 'var(--bg-input)', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>Risk Amount</div>
+                                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#fff' }}>${expandedBet.amount.toFixed(2)}</div>
+                                </div>
+                                <div style={{ background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.2)', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '11px', color: '#22c55e', textTransform: 'uppercase', marginBottom: '4px' }}>Potential Payout</div>
+                                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#22c55e' }}>${expandedBet.potentialPayout.toFixed(2)}</div>
+                                </div>
+                            </div>
+
+                            {/* <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                Bet ID: <span style={{ fontFamily: 'monospace' }}>{expandedBet.id}</span>
+                            </div> */}
+                        </div>
+                    </div>
+                )
+            }
+        </div >
+    );
+}

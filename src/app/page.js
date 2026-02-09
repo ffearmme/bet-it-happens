@@ -300,7 +300,7 @@ export default function Home() {
                                         className="input"
                                         placeholder="Enter code to get $500 bonus for friend"
                                         value={referralCode}
-                                        onChange={e => setReferralCode(e.target.value)}
+                                        onChange={e => setReferralCode(e.target.value.toUpperCase())}
                                     />
                                 </div>
                             </>

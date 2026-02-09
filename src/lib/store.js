@@ -387,7 +387,7 @@ export function AppProvider({ children }) {
       if (referralCode && referralCode.trim() !== '') {
         try {
           // Find the user who owns this code
-          const q = query(collection(db, 'users'), where('referralCode', '==', referralCode.trim()));
+          const q = query(collection(db, 'users'), where('referralCode', '==', referralCode.trim().toUpperCase()));
           const snapshot = await getDocs(q);
 
           if (!snapshot.empty) {
@@ -398,7 +398,6 @@ export function AppProvider({ children }) {
             await updateDoc(doc(db, 'users', referrerId), {
               balance: increment(500)
             });
-            referredBy = referrerId;
             referredBy = referrerId;
             console.log(`Referral successful! Credited $500 to ${referrerDoc.data().username}`);
 
