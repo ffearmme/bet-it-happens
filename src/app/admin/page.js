@@ -562,6 +562,13 @@ function AdminContent() {
                                                         <div style={{ fontSize: '11px', color: '#888' }}>x{o.odds}</div>
                                                     </button>
                                                 ))}
+
+                                                <button
+                                                    onClick={() => { if (confirm('Mark event as VOID? Bets will be refunded.')) resolveEvent(event.id, 'void'); }}
+                                                    style={{ padding: '12px', background: '#333', border: '1px solid #444', color: '#fff', borderRadius: '6px', cursor: 'pointer', textAlign: 'left', gridColumn: 'span 2' }}
+                                                >
+                                                    <div style={{ fontWeight: 'bold', color: '#aaa', textAlign: 'center' }}>🚫 VOID EVENT</div>
+                                                </button>
                                             </div>
                                         </div>
                                     ))}

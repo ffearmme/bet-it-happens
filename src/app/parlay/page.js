@@ -57,6 +57,7 @@ export default function ParlayPage() {
     // Profile Viewing State
     const [viewingUser, setViewingUser] = useState(null);
     const [viewingProfile, setViewingProfile] = useState(null);
+    const [selectedParlay, setSelectedParlay] = useState(null); // For detailed view of compact cards
 
     // Fetch User Stats when viewingUser changes
     useEffect(() => {
@@ -791,6 +792,7 @@ export default function ParlayPage() {
             <div
                 key={parlay.id}
                 className="card"
+                onClick={() => setSelectedParlay(parlay)}
                 style={{
                     borderTop: `3px solid ${color}`,
                     padding: '12px',
@@ -800,8 +802,12 @@ export default function ParlayPage() {
                     fontSize: '12px',
                     background: 'var(--bg-card)',
                     marginBottom: '0',
-                    opacity: isLost ? 0.8 : 1
+                    opacity: isLost ? 0.8 : 1,
+                    cursor: 'pointer',
+                    transition: 'transform 0.1s'
                 }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.02)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
             >
                 <div style={{ marginBottom: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
@@ -1405,7 +1411,73 @@ export default function ParlayPage() {
                     </div>
                 </div>
             )}
+
+            {/* SELECTED PARLAY DETAIL MODAL */}
+            {selectedParlay && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                    background: 'rgba(0,0,0,0.85)', zIndex: 1100,
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px'
+                }} onClick={() => setSelectedParlay(null)}>
+                    <div className="card animate-fade" style={{ width: '100%', maxWidth: '400px', border: '1px solid var(--border)', maxHeight: '80vh', overflowY: 'auto', background: '#09090b' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+                            <div>
+                                <h3 style={{ fontSize: '16px', margin: 0, color: 'var(--primary)' }}>Parlay Details</h3>
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{new Date(selectedParlay.createdAt).toLocaleString()}</div>
+                            </div>
+                            <button onClick={() => setSelectedParlay(null)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '20px', cursor: 'pointer' }}>&times;</button>
+                        </div>
+
+                        <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', overflow: 'hidden' }}>
+                                {selectedParlay.creatorProfilePic ? (
+                                    <img src={selectedParlay.creatorProfilePic} alt={selectedParlay.creatorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : (
+                                    selectedParlay.creatorName[0].toUpperCase()
+                                )}
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{selectedParlay.title || `${selectedParlay.creatorName}'s Parlay`}</div>
+                                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>by {selectedParlay.creatorName}</div>
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: '20px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '8px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', color: '#ccc' }}>Legs ({selectedParlay.legs.length}):</div>
+                            {selectedParlay.legs.map((leg, idx) => {
+                                const status = getLegStatus(leg);
+                                let icon = null;
+                                let color = '#fff';
+                                if (status === 'won') { icon = '✅'; color = '#86efac'; }
+                                else if (status === 'lost') { icon = '❌'; color = '#fca5a5'; }
+
+                                return (
+                                    <div key={idx} style={{ marginBottom: '8px', paddingBottom: '8px', borderBottom: idx < selectedParlay.legs.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                                        <div style={{ fontSize: '13px', marginBottom: '2px' }}>{leg.eventTitle}</div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                                            <span style={{ color: 'var(--text-muted)' }}>Pick:</span>
+                                            <span style={{ fontWeight: 'bold', color: color }}>
+                                                {leg.outcomeId === 'over' ? 'Over' : leg.outcomeId === 'under' ? 'Under' : leg.label} {icon}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', backgroundColor: 'var(--bg-input)', padding: '12px', borderRadius: '8px' }}>
+                            <div>
+                                <div style={{ fontSize: '10px', color: '#888' }}>Total Users Won</div>
+                                <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{selectedParlay.wagersCount || 0}</div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '10px', color: '#888' }}>Final Multiplier</div>
+                                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#fbbf24' }}>{selectedParlay.finalMultiplier.toFixed(2)}x</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 }
-

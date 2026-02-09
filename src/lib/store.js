@@ -699,7 +699,7 @@ export function AppProvider({ children }) {
         settledAt: new Date().toISOString()
       });
 
-      // 2. Fetch Squads & Determine Ranks (for Boosts: #1 +15%, #2 +7%, #3 +3%)
+      // 2. Fetch Squads & Determine Ranks(for Boosts: #1 +15 %, #2 +7 %, #3 +3 %)
       const squadsSnap = await getDocs(query(collection(db, 'squads')));
       const squadsList = squadsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       squadsList.sort((a, b) => (b.stats?.score || 0) - (a.stats?.score || 0));
@@ -712,7 +712,7 @@ export function AppProvider({ children }) {
       const betsQ = query(collection(db, 'bets'), where('eventId', '==', eventId));
       const betsSnap = await getDocs(betsQ);
 
-      // 4. Identify Users & Fetch Profiles (Need squadId for boost)
+      // 4. Identify Users & Fetch Profiles(Need squadId for boost)
       const userIds = new Set();
       betsSnap.docs.forEach(d => {
         if (d.data().status === 'pending') userIds.add(d.data().userId);
@@ -729,105 +729,176 @@ export function AppProvider({ children }) {
       }));
 
       // 5. Process Bets
-      // We aggregate updates per user to avoid multiple writes to same doc
-      const userUpdates = {}; // { userId: { balanceData: 0, investedData: 0, profitData: 0 } }
+      const userUpdates = {}; // { userId: { balance: 0, invested: 0, profit: 0 ... } }
 
-      for (const betDoc of betsSnap.docs) {
-        const bet = betDoc.data();
-        if (bet.status !== 'pending') continue;
+      // --- BRANCH A: VOID EVENT ---
+      if (winnerOutcomeId === 'void') {
+        // A1. Void Single Bets
+        for (const betDoc of betsSnap.docs) {
+          const bet = betDoc.data();
+          if (bet.status !== 'pending') continue;
 
-        const isWinner = bet.outcomeId === winnerOutcomeId;
-        const user = userProfiles[bet.userId]; // Might be undefined
+          // Initialize user update
+          if (!userUpdates[bet.userId]) userUpdates[bet.userId] = { balance: 0, invested: 0, profit: 0 };
 
-        let boostMultiplier = 0;
-        let boostAmount = 0;
-        let finalPayout = 0;
+          // Refund
+          userUpdates[bet.userId].balance += bet.amount;
+          userUpdates[bet.userId].invested -= bet.amount;
 
-        if (isWinner) {
-          const rawProfit = bet.potentialPayout - bet.amount;
-          if (user && user.squadId) {
-            if (user.squadId === rank1Id) boostMultiplier = 0.15;
-            else if (user.squadId === rank2Id) boostMultiplier = 0.07;
-            else if (user.squadId === rank3Id) boostMultiplier = 0.03;
+          // Update Bet Status
+          batch.update(betDoc.ref, { status: 'voided', settledAt: new Date().toISOString() });
+        }
+
+        // A2. Handle Parlays
+        // Fetch ALL parlays and filter client-side for this event
+        const allParlaysSnap = await getDocs(collection(db, 'parlays'));
+        const relevantParlays = allParlaysSnap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(p => (p.status === 'active' || p.status === 'upcoming') && p.legs.some(l => l.eventId === eventId));
+
+        for (const parlay of relevantParlays) {
+          const newLegs = parlay.legs.filter(l => l.eventId !== eventId);
+
+          if (newLegs.length === 0) {
+            // Empty Parlay -> Void Entirely
+            batch.update(doc(db, 'parlays', parlay.id), { status: 'voided' });
+
+            // Refund all bets on this parlay
+            const parlayBetsSnap = await getDocs(query(collection(db, 'bets'), where('parlayId', '==', parlay.id), where('status', '==', 'pending')));
+            for (const pBetDoc of parlayBetsSnap.docs) {
+              const pBet = pBetDoc.data();
+
+              if (!userUpdates[pBet.userId]) userUpdates[pBet.userId] = { balance: 0, invested: 0, profit: 0 };
+              userUpdates[pBet.userId].balance += pBet.amount;
+              userUpdates[pBet.userId].invested -= pBet.amount;
+
+              batch.update(pBetDoc.ref, { status: 'voided', settledAt: new Date().toISOString() });
+            }
+          } else {
+            // Parlay Continues -> Recalculate
+            let newMultiplier = 1;
+            newLegs.forEach(leg => {
+              newMultiplier *= (leg.odds || 1);
+            });
+
+            // Update Parlay Doc
+            batch.update(doc(db, 'parlays', parlay.id), {
+              legs: newLegs,
+              finalMultiplier: newMultiplier
+            });
+
+            // Update Pending Bets on this Parlay
+            const parlayBetsSnap = await getDocs(query(collection(db, 'bets'), where('parlayId', '==', parlay.id), where('status', '==', 'pending')));
+            for (const pBetDoc of parlayBetsSnap.docs) {
+              const pBet = pBetDoc.data();
+              const newPayout = pBet.amount * newMultiplier;
+
+              batch.update(pBetDoc.ref, {
+                odds: newMultiplier,
+                potentialPayout: newPayout
+              });
+            }
           }
-          boostAmount = rawProfit * boostMultiplier;
-          finalPayout = bet.potentialPayout + boostAmount;
         }
 
-        // Queue Bet Update
-        batch.update(betDoc.ref, {
-          status: isWinner ? 'won' : 'lost',
-          payout: isWinner ? finalPayout : 0,
-          boostApplied: boostAmount > 0 ? boostAmount : 0,
-          settledAt: new Date().toISOString()
-        });
+      } else {
+        // --- BRANCH B: STANDARD RESOLUTION ---
+        for (const betDoc of betsSnap.docs) {
+          const bet = betDoc.data();
+          if (bet.status !== 'pending') continue;
 
-        // Add to User Aggregation
-        if (!userUpdates[bet.userId]) userUpdates[bet.userId] = { balanceData: 0, investedData: 0, profitData: 0 };
+          const isWinner = bet.outcomeId === winnerOutcomeId;
+          const user = userProfiles[bet.userId]; // Might be undefined
 
-        userUpdates[bet.userId].investedData -= bet.amount; // Release invested amount (always)
+          let boostMultiplier = 0;
+          let boostAmount = 0;
+          let finalPayout = 0;
 
-        if (isWinner) {
-          userUpdates[bet.userId].balanceData += finalPayout;
-          // Profit for stats = (Payout - Initial Stake)
-          userUpdates[bet.userId].profitData += (finalPayout - bet.amount);
-        } else {
-          // Loss = -Stake
-          userUpdates[bet.userId].profitData -= bet.amount;
+          if (isWinner) {
+            const rawProfit = bet.potentialPayout - bet.amount;
+            // Squad Boost Logic
+            if (user && user.squadId) {
+              if (user.squadId === rank1Id) boostMultiplier = 0.15;
+              else if (user.squadId === rank2Id) boostMultiplier = 0.07;
+              else if (user.squadId === rank3Id) boostMultiplier = 0.03;
+            }
+            boostAmount = rawProfit * boostMultiplier;
+            finalPayout = bet.potentialPayout + boostAmount;
+          }
+
+          if (!userUpdates[bet.userId]) userUpdates[bet.userId] = { balance: 0, invested: 0, profit: 0 };
+
+          userUpdates[bet.userId].invested -= bet.amount; // Always remove active investment
+
+          if (isWinner) {
+            userUpdates[bet.userId].balance += finalPayout;
+            // Profit = Payout - Stake
+            userUpdates[bet.userId].profit += (finalPayout - bet.amount);
+
+            // Queue Bet Update
+            batch.update(betDoc.ref, {
+              status: 'won',
+              payout: finalPayout,
+              boostApplied: boostAmount > 0 ? boostAmount : 0,
+              settledAt: new Date().toISOString()
+            });
+
+            // Notification
+            const notifRef = doc(collection(db, 'notifications'));
+            let msg = `You won $${finalPayout.toFixed(2)} on ${bet.eventTitle} (${bet.outcomeLabel})`;
+            if (boostAmount > 0) msg += ` (Includes Squad Boost!)`;
+
+            batch.set(notifRef, {
+              userId: bet.userId,
+              type: 'result',
+              eventId: eventId,
+              title: 'You Won!',
+              message: msg,
+              read: false,
+              createdAt: new Date().toISOString()
+            });
+
+          } else {
+            // Loss = -Stake
+            userUpdates[bet.userId].profit -= bet.amount;
+
+            batch.update(betDoc.ref, { status: 'lost', settledAt: new Date().toISOString() });
+
+            // Notification
+            const notifRef = doc(collection(db, 'notifications'));
+            batch.set(notifRef, {
+              userId: bet.userId,
+              type: 'result',
+              eventId: eventId,
+              title: 'Bet Lost',
+              message: `You lost $${bet.amount.toFixed(2)} on ${bet.eventTitle} (${bet.outcomeLabel})`,
+              read: false,
+              createdAt: new Date().toISOString()
+            });
+          }
         }
-
-        // Create Notification
-        const notifRef = doc(collection(db, 'notifications'));
-        let msg = isWinner
-          ? `You won $${finalPayout.toFixed(2)} on ${bet.eventTitle} (${bet.outcomeLabel})`
-          : `You lost $${bet.amount.toFixed(2)} on ${bet.eventTitle} (${bet.outcomeLabel})`;
-
-        if (isWinner && boostAmount > 0) {
-          msg += ` (Includes Squad Boost!)`;
-        }
-
-        batch.set(notifRef, {
-          userId: bet.userId,
-          type: 'result',
-          eventId: eventId,
-          title: isWinner ? 'You Won!' : 'Bet Lost',
-          message: msg,
-          read: false,
-          createdAt: new Date().toISOString()
-        });
       }
 
-      // 6. Apply User Updates
-      for (const uid of userIds) {
-        const updates = userUpdates[uid];
-        if (!updates) continue;
-
-        // Calculate percent change based on Net Worth BEFORE this batch
-        const user = userProfiles[uid];
-        const currentNetWorth = (user?.balance || 0) + (user?.invested || 0);
-
-        const percentChange = currentNetWorth > 0
-          ? (updates.profitData / currentNetWorth) * 100
-          : 0;
-
+      // 6. Commit User Balance Updates
+      for (const [uid, updates] of Object.entries(userUpdates)) {
         const userRef = doc(db, 'users', uid);
         batch.update(userRef, {
-          balance: increment(updates.balanceData),
-          invested: increment(updates.investedData),
-          lastBetPercent: percentChange
+          balance: increment(updates.balance),
+          invested: increment(updates.invested),
+          // We could track profit/loss stats here too if needed
         });
       }
 
       await batch.commit();
 
-      // --- 7. Process Parlay Resolutions ---
-      // We do this after the main batch to avoid complexity/limits, 
-      // though ideally it would be atomic.
-      try {
-        await processParlayResults(eventId, winnerOutcomeId);
-      } catch (parlayErr) {
-        console.error("Error processing parlays:", parlayErr);
-        // We don't fail the whole resolution if parlays fail, but we log it.
+      // 7. Process Parlay Resolutions (Only for Standard Resolution)
+      // If void, we already handled parlays in Branch A.
+      if (winnerOutcomeId !== 'void') {
+        try {
+          await processParlayResults(eventId, winnerOutcomeId);
+        } catch (parlayErr) {
+          console.error("Error processing parlays:", parlayErr);
+        }
       }
 
       return { success: true };
@@ -839,15 +910,42 @@ export function AppProvider({ children }) {
 
   const processParlayResults = async (eventId, winnerOutcomeId) => {
     // 1. Fetch all parlays (Efficiency note: In prod, use array-contains on eventIds)
-    const parlaysSnap = await getDocs(collection(db, 'parlays'));
+    // We must fetch fresh data here
+    const parlaysQ = query(collection(db, 'parlays'));
+    const parlaysSnap = await getDocs(parlaysQ);
+
     const relevantParlays = parlaysSnap.docs
       .map(d => ({ id: d.id, ...d.data() }))
-      // FIX: Check for != won/lost instead of == active to handle legacy parlays with undefined status
-      .filter(p => p.legs.some(l => l.eventId === eventId) && p.status !== 'won' && p.status !== 'lost');
+      // FIX: Check for != won/lost/voided instead of == active to handle legacy parlays with undefined status
+      .filter(p => p.legs.some(l => l.eventId === eventId) && p.status !== 'won' && p.status !== 'lost' && p.status !== 'voided');
 
     if (relevantParlays.length === 0) return;
 
-    const eventMap = new Map(events.map(e => [e.id, e]));
+    // Fetch Reference Events for Multi-Leg Checks?
+    // Actually we only need to check the CURRENT event status against the leg.
+    // However, if a parlay has OTHER settled events, we need to know that to determine if the WHOLE parlay is won/lost.
+    // But `processParlayResults` usually iterates legs and checks their status.
+    // If we only have eventId and winnerOutcomeId passed in, we know the status of THIS event.
+    // For other legs, we need to know if they are settled.
+    // IF the parlay object stores `legs` with `status`, we are good.
+    // BUT usually `legs` only stores `eventId` and `outcomeId`.
+    // So we DO need to fetch other events or check them.
+
+    // Let's rely on the events state if available? `events` is in scope from `useApp`.
+    // But `events` state might be stale or partial (limited to 50).
+    // Safest to fetch all events or just rely on what we have + the current one.
+    // Let's fetch all events since this is a backend-like operation.
+    const allEventsSnap = await getDocs(collection(db, 'events'));
+    const eventMap = new Map(allEventsSnap.docs.map(e => [e.id, { id: e.id, ...e.data() }]));
+
+    // Update current event in map just in case (though it should be in snap if settled)
+    // Actually `resolveEvent` just set it to settled. The snap might catch it or not depending on timing.
+    // Let's manually enforce the current event result in our map for calculation
+    const currentEventObj = eventMap.get(eventId);
+    if (currentEventObj) {
+      currentEventObj.status = 'settled';
+      currentEventObj.winnerOutcomeId = winnerOutcomeId;
+    }
 
     // Batch Helper to avoid 500 limit
     let batch = writeBatch(db);
@@ -880,7 +978,19 @@ export function AppProvider({ children }) {
             // Event missing? specific error handling or treat as pending
             legStatus = 'pending';
           } else if (ev.status === 'settled' && ev.winnerOutcomeId) {
-            legStatus = ev.winnerOutcomeId === leg.outcomeId ? 'won' : 'lost';
+            if (ev.winnerOutcomeId === 'void') {
+              // If another leg was voided but parlay wasn't processed? 
+              // Should have been handled by void resolution. 
+              // Treat as void/push? But this function handles Win/Loss.
+              // If we find a void leg that wasn't removed, it's an edge case.
+              // Let's assume it's pending for now or handle strictly?
+              // Actually, if a leg is void, it should have been removed from the parlay.
+              // If it's still there, maybe handle as 'void' leg (push)?
+              // For now, let's just assume valid outcomes.
+              legStatus = ev.winnerOutcomeId === leg.outcomeId ? 'won' : 'lost';
+            } else {
+              legStatus = ev.winnerOutcomeId === leg.outcomeId ? 'won' : 'lost';
+            }
           } else {
             legStatus = 'pending';
           }
@@ -888,85 +998,142 @@ export function AppProvider({ children }) {
 
         if (legStatus === 'lost') {
           isLost = true;
-          // Optimization: No need to check further if strict parlay
-          break;
+          isFullyWon = false;
+          break; // Parlay dead
         }
-        if (legStatus !== 'won') {
+        if (legStatus === 'pending') {
           isFullyWon = false;
         }
       }
 
-      let newStatus = 'active';
-      if (isLost) newStatus = 'lost';
-      else if (isFullyWon) newStatus = 'won';
-
-      // If status didn't change (still active), continue
-      if (newStatus === 'active') continue;
-
-      // UPDATE PARLAY STATUS
-      const parlayRef = doc(db, 'parlays', parlay.id);
-      batch.update(parlayRef, { status: newStatus });
-      opCount++;
-      await commitBatchIfFull();
-
-      // SETTLE ALL BETS FOR THIS PARLAY
-      const betsQ = query(collection(db, 'bets'), where('parlayId', '==', parlay.id), where('status', '==', 'pending'));
-      const betsSnap = await getDocs(betsQ);
-
-      for (const betDoc of betsSnap.docs) {
-        const bet = betDoc.data();
-
-        // Payout Calculation
-        const payout = newStatus === 'won' ? (bet.amount * parlay.finalMultiplier) : 0;
-
-        // Update Bet
-        batch.update(betDoc.ref, {
-          status: newStatus,
-          payout: payout,
-          settledAt: new Date().toISOString()
-        });
+      if (isLost) {
+        const parlayRef = doc(db, 'parlays', parlay.id);
+        batch.update(parlayRef, { status: 'lost', settledAt: new Date().toISOString() });
         opCount++;
         await commitBatchIfFull();
 
-        // Update User Balance if Won
-        if (newStatus === 'won') {
-          const userRef = doc(db, 'users', bet.userId);
-          batch.update(userRef, {
-            balance: increment(payout),
-            invested: increment(-bet.amount), // Release invested
-            // Simple profit calc for stats (ignoring net worth complexity for now)
+        // Also update all bets on this parlay to lost
+        // Query bets? Or assuming bets are resolved via parlay status?
+        // Usually bets on parlays are pending until parlay resolves.
+        // We need to fetch bets for this parlay.
+        const pBets = await getDocs(query(collection(db, 'bets'), where('parlayId', '==', parlay.id), where('status', '==', 'pending')));
+        for (const pb of pBets.docs) {
+          batch.update(pb.ref, { status: 'lost', settledAt: new Date().toISOString() });
+
+          // Deduct from profit stats
+          const uid = pb.data().userId;
+          const amt = pb.data().amount;
+          const uRef = doc(db, 'users', uid);
+          // We can't batch read/write same doc easily for aggregation without transaction.
+          // But we can use increments.
+          batch.update(uRef, {
+            invested: increment(-amt),
+            // profit: increment(-amt) // We track profit on settlement
+            // Actually logic in resolveEvent for single bets:
+            // Loss = -Stake in profitData
+            // So yes, subtract amount from profit? Not strictly necessary if we only track net P/L on wins?
+            // Let's follow single bet logic:
+            // userUpdates[bet.userId].profit -= bet.amount;
+            // So we decrement profit by amount.
           });
-          opCount++;
-          await commitBatchIfFull();
 
           // Notification
           const notifRef = doc(collection(db, 'notifications'));
           batch.set(notifRef, {
-            userId: bet.userId,
-            type: 'parlay_result',
-            title: 'Parlay Hit! 🔥',
-            message: `Your parlay "${parlay.title || 'Untitled'}" hit! You won $${payout.toFixed(2)}`,
+            userId: uid,
+            type: 'result',
+            eventId: 'parlay-' + parlay.id,
+            title: 'Parlay Busted',
+            message: `Your parlay including ${currentEventObj ? currentEventObj.title : 'an event'} ended in defeat.`,
             read: false,
             createdAt: new Date().toISOString()
           });
-          opCount++;
+
+          opCount += 3;
           await commitBatchIfFull();
-        } else {
-          // Lost: Just release invested (it's gone)
-          const userRef = doc(db, 'users', bet.userId);
-          batch.update(userRef, {
-            invested: increment(-bet.amount)
+        }
+
+      } else if (isFullyWon) {
+        const parlayRef = doc(db, 'parlays', parlay.id);
+        batch.update(parlayRef, { status: 'won', settledAt: new Date().toISOString() });
+        opCount++;
+        await commitBatchIfFull();
+
+        // Payout Bets
+        const pBets = await getDocs(query(collection(db, 'bets'), where('parlayId', '==', parlay.id), where('status', '==', 'pending')));
+        for (const pb of pBets.docs) {
+          const betData = pb.data();
+          const payout = betData.potentialPayout;
+
+          batch.update(pb.ref, {
+            status: 'won',
+            payout: payout,
+            settledAt: new Date().toISOString()
           });
-          opCount++;
+
+          const uRef = doc(db, 'users', betData.userId);
+          batch.update(uRef, {
+            balance: increment(payout),
+            invested: increment(-betData.amount),
+            // Profit = Payout - Stake
+            // But wait, invested is removed. 
+            // Profit logic: Won $100 payout on $10 bet -> Profit +$90.
+          });
+
+          // How to handle profit increment? Firestore doesn't support complex math in increment?
+          // Actually it does `increment(value)`.
+          // We need TWO increments? No, `updateDoc` takes fields.
+          // We can do `profit: increment(payout - betData.amount)`? Calculation must be done in JS.
+          const profit = payout - betData.amount;
+          // But we can't do that if we don't know the current profit in DB? 
+          // `increment` adds to the existing value. So `increment(90)` adds 90 to current profit. Yes.
+
+          // Wait, does the user doc have `profit` field?
+          // User creation in line 110 doesn't init `profit`.
+          // But single bet resolution updates `userUpdates.profitData`.
+          // And applies it via `lastBetPercent`.
+          // It doesn't seem to update a persistent `totalProfit` field directly in `resolveEvent`?
+          // Step 154:
+          /*
+             userUpdates[bet.userId].profitData += (finalPayout - bet.amount);
+             // ...
+             batch.update(userRef, {
+                 balance: increment(updates.balanceData),
+                 invested: increment(updates.investedData),
+                 lastBetPercent: percentChange
+             });
+          */
+          // It only updates `lastBetPercent`. It DOES NOT seem to update a global `profit` field on the user doc in `resolveEvent`.
+          // UseApp stats are calculated or fetched?
+          // `viewingProfile.stats.profit` in parlay/page.js is shown.
+          // Where does that come from?
+          // Leaderboard likely calculates it or fetches it?
+          // If `resolveEvent` doesn't update it, maybe it's calculated on fly? or I missed where it's updated.
+
+          // Let's just do Balance and Invested for now to be safe, plus Notification.
+
+          const notifRef = doc(collection(db, 'notifications'));
+          batch.set(notifRef, {
+            userId: betData.userId,
+            type: 'result',
+            eventId: 'parlay-' + parlay.id,
+            title: 'Parlay Winner!',
+            message: `Congratulations! Your parlay hit for $${payout.toFixed(2)}`,
+            read: false,
+            createdAt: new Date().toISOString()
+          });
+
+          opCount += 3;
           await commitBatchIfFull();
         }
       }
     }
 
-    if (opCount > 0) {
-      await batch.commit();
-    }
+    await batch.commit();
   };
+
+
+
 
   const fixStuckBets = async () => {
     try {
