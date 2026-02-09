@@ -43,6 +43,10 @@ function AdminContent() {
     const [allBets, setAllBets] = useState([]);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingBets, setEditingBets] = useState([]);
+
+    // State for viewing bets in Completed tab
+    const [viewingBetsEventId, setViewingBetsEventId] = useState(null);
+    const [viewingBetsList, setViewingBetsList] = useState([]);
     const [expandedCategories, setExpandedCategories] = useState({});
 
     // State for Ideas
@@ -67,6 +71,20 @@ function AdminContent() {
             setEditingBets(list);
         });
     }, [editingId]);
+
+    // Fetch Bets for Completed Event View
+    useEffect(() => {
+        if (!viewingBetsEventId) {
+            setViewingBetsList([]);
+            return;
+        }
+        const q = query(collection(db, 'bets'), where('eventId', '==', viewingBetsEventId));
+        getDocs(q).then(snap => {
+            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            list.sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
+            setViewingBetsList(list);
+        });
+    }, [viewingBetsEventId]);
 
     // Fetch Global Bets
     useEffect(() => {
@@ -394,7 +412,7 @@ function AdminContent() {
                         <div>
                             {/* Sub Tabs */}
                             <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
-                                {['create', 'edit', 'resolve'].map(sub => (
+                                {['create', 'edit', 'resolve', 'completed'].map(sub => (
                                     <button
                                         key={sub}
                                         onClick={() => setEventSubTab(sub)}
@@ -570,6 +588,74 @@ function AdminContent() {
                                                     <div style={{ fontWeight: 'bold', color: '#aaa', textAlign: 'center' }}>🚫 VOID EVENT</div>
                                                 </button>
                                             </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {eventSubTab === 'completed' && (
+                                <div className="card">
+                                    <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>Completed Events</h2>
+                                    {events.filter(e => ['resolved', 'settled', 'completed'].includes(e.status)).sort((a, b) => new Date(b.settledAt || b.startAt) - new Date(a.settledAt || a.startAt)).map(event => (
+                                        <div key={event.id} style={{ padding: '16px', background: '#222', borderRadius: '8px', marginBottom: '16px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div>
+                                                    <h3 style={{ fontSize: '16px', color: event.status === 'voided' ? '#aaa' : '#fff' }}>
+                                                        {event.title}
+                                                        {event.status === 'voided' && <span style={{ color: '#ef4444', marginLeft: '8px' }}>(VOIDED)</span>}
+                                                    </h3>
+                                                    <div style={{ fontSize: '12px', color: '#888' }}>
+                                                        Ended: {new Date(event.settledAt || event.startAt).toLocaleString()}
+                                                    </div>
+                                                    {event.winnerOutcomeId && event.winnerOutcomeId !== 'void' && (
+                                                        <div style={{ marginTop: '4px', fontSize: '13px', color: 'var(--primary)' }}>
+                                                            Winner: {event.outcomes?.find(o => o.id === event.winnerOutcomeId)?.label || 'Unknown'}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    {(!event.winnerOutcomeId || event.winnerOutcomeId !== 'void') && (
+                                                        <button
+                                                            onClick={() => { if (confirm('Wait! Only do this if you need to Refund everyone. Mark event as VOID?')) resolveEvent(event.id, 'void'); }}
+                                                            style={{ padding: '6px 12px', background: '#333', color: '#ef4444', border: '1px solid #ef4444', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                                                        >
+                                                            VOID
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={() => setViewingBetsEventId(viewingBetsEventId === event.id ? null : event.id)}
+                                                        style={{ padding: '6px 12px', background: '#444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                    >
+                                                        {viewingBetsEventId === event.id ? 'Hide Bets' : 'View Bets'}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {viewingBetsEventId === event.id && (
+                                                <div style={{ marginTop: '12px', borderTop: '1px solid #333', paddingTop: '12px' }}>
+                                                    <h4 style={{ fontSize: '14px', marginBottom: '8px', color: '#ccc' }}>Bets ({viewingBetsList.length})</h4>
+                                                    {viewingBetsList.length === 0 ? (
+                                                        <div style={{ color: '#666', fontStyle: 'italic' }}>No bets found or loading...</div>
+                                                    ) : (
+                                                        <div style={{ display: 'grid', gap: '8px' }}>
+                                                            {viewingBetsList.map(bet => (
+                                                                <div key={bet.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', background: '#111', borderRadius: '4px' }}>
+                                                                    <div>
+                                                                        <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{bet.username}</div>
+                                                                        <div style={{ fontSize: '12px', color: '#aaa' }}>{bet.outcomeLabel} (${bet.amount.toFixed(2)})</div>
+                                                                    </div>
+                                                                    <div style={{ textAlign: 'right' }}>
+                                                                        <div style={{ fontWeight: 'bold', color: bet.status === 'won' ? 'var(--primary)' : bet.status === 'lost' ? '#ef4444' : '#888' }}>
+                                                                            {bet.status === 'won' ? `+$${(bet.payout || 0).toFixed(2)}` : bet.status === 'voided' ? 'Refunded' : `-$${bet.amount.toFixed(2)}`}
+                                                                        </div>
+                                                                        <div style={{ fontSize: '12px', color: '#666' }}>{bet.status}</div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>

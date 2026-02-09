@@ -733,70 +733,263 @@ export function AppProvider({ children }) {
 
       // --- BRANCH A: VOID EVENT ---
       if (winnerOutcomeId === 'void') {
-        // A1. Void Single Bets
+        // A1. Void Bets (Single) - Handle Pending AND Settled
         for (const betDoc of betsSnap.docs) {
           const bet = betDoc.data();
-          if (bet.status !== 'pending') continue;
+          // Skip if already voided to avoid double refund
+          if (bet.status === 'voided') continue;
 
-          // Initialize user update
           if (!userUpdates[bet.userId]) userUpdates[bet.userId] = { balance: 0, invested: 0, profit: 0 };
 
-          // Refund
-          userUpdates[bet.userId].balance += bet.amount;
-          userUpdates[bet.userId].invested -= bet.amount;
+          // Logic based on previous status
+          if (bet.status === 'won') {
+            // Reverse Win: Take back payout, return original stake? 
+            // Net effect: User has (Balance + Payout). We want (Balance + Stake).
+            // diff = Stake - Payout.
+            userUpdates[bet.userId].balance += (bet.amount - (bet.payout || 0));
+            // Invested was already cleared, so no change to invested.
+            // Profit was (Payout - Stake). We need to reverse it.
+            userUpdates[bet.userId].profit -= (bet.payout - bet.amount);
+          } else if (bet.status === 'lost') {
+            // Reverse Loss: Give back stake.
+            userUpdates[bet.userId].balance += bet.amount;
+            // Invested was already cleared.
+            // Profit was (-Stake). Reverse it.
+            userUpdates[bet.userId].profit += bet.amount;
+          } else {
+            // Pending
+            // Refund stake.
+            userUpdates[bet.userId].balance += bet.amount;
+            userUpdates[bet.userId].invested -= bet.amount; // Clear from invested
+          }
 
-          // Update Bet Status
-          batch.update(betDoc.ref, { status: 'voided', settledAt: new Date().toISOString() });
+          batch.update(betDoc.ref, { status: 'voided', settledAt: new Date().toISOString(), payout: 0, boostApplied: 0 });
         }
 
         // A2. Handle Parlays
         // Fetch ALL parlays and filter client-side for this event
         const allParlaysSnap = await getDocs(collection(db, 'parlays'));
+        // Include settled parlays to allow retroactive voiding
         const relevantParlays = allParlaysSnap.docs
           .map(d => ({ id: d.id, ...d.data() }))
-          .filter(p => (p.status === 'active' || p.status === 'upcoming') && p.legs.some(l => l.eventId === eventId));
+          .filter(p => p.legs.some(l => l.eventId === eventId));
 
         for (const parlay of relevantParlays) {
+          // If parlay previously voided, skip? Or re-process? 
+          // If already voided, no legs matter.
+          if (parlay.status === 'voided') continue;
+
+          const oldStatus = parlay.status;
           const newLegs = parlay.legs.filter(l => l.eventId !== eventId);
+
+          // Re-calculate Stats for new legs
+          let newMultiplier = 1;
+          newLegs.forEach(leg => { newMultiplier *= (leg.odds || 1); });
+
+          // Fetch bets for this parlay (Pending AND Settled)
+          const parlayBetsSnap = await getDocs(query(collection(db, 'bets'), where('parlayId', '==', parlay.id)));
 
           if (newLegs.length === 0) {
             // Empty Parlay -> Void Entirely
-            batch.update(doc(db, 'parlays', parlay.id), { status: 'voided' });
+            batch.update(doc(db, 'parlays', parlay.id), { status: 'voided', finalMultiplier: 1, legs: [] });
 
-            // Refund all bets on this parlay
-            const parlayBetsSnap = await getDocs(query(collection(db, 'bets'), where('parlayId', '==', parlay.id), where('status', '==', 'pending')));
             for (const pBetDoc of parlayBetsSnap.docs) {
               const pBet = pBetDoc.data();
+              if (pBet.status === 'voided') continue;
 
               if (!userUpdates[pBet.userId]) userUpdates[pBet.userId] = { balance: 0, invested: 0, profit: 0 };
-              userUpdates[pBet.userId].balance += pBet.amount;
-              userUpdates[pBet.userId].invested -= pBet.amount;
 
-              batch.update(pBetDoc.ref, { status: 'voided', settledAt: new Date().toISOString() });
+              // Refund Logic matching Single Bets
+              if (pBet.status === 'won') {
+                userUpdates[pBet.userId].balance += (pBet.amount - (pBet.payout || 0));
+                userUpdates[pBet.userId].profit -= ((pBet.payout || 0) - pBet.amount);
+              } else if (pBet.status === 'lost') {
+                userUpdates[pBet.userId].balance += pBet.amount;
+                userUpdates[pBet.userId].profit += pBet.amount;
+              } else {
+                userUpdates[pBet.userId].balance += pBet.amount;
+                userUpdates[pBet.userId].invested -= pBet.amount;
+              }
+
+              batch.update(pBetDoc.ref, { status: 'voided', settledAt: new Date().toISOString(), payout: 0 });
             }
           } else {
-            // Parlay Continues -> Recalculate
-            let newMultiplier = 1;
-            newLegs.forEach(leg => {
-              newMultiplier *= (leg.odds || 1);
-            });
+            // Parlay Continues (with reduced legs)
+            // We need to determine the NEW status of the parlay based on REMAINING legs.
+            // If it was 'won', it stays 'won' (unless legs missing?).
+            // If it was 'lost', it MIGHT become 'won' (if the voided leg was the loser).
+            // If 'active', stays 'active'.
 
-            // Update Parlay Doc
+            // We need to check status of remaining legs.
+            // Fetch events for remaining legs? Expensive loop.
+            // Optimization: We assume `resolveEvent` is called. 
+            // Rely on existing leg outcomes if possible? 
+            // Parlay objects don't store leg outcomes in standard structure usually.
+            // We have to check if remaining legs are winners.
+
+            // Let's simplified approach:
+            // 1. Update Parlay Docs with newMultiplier and Legs.
+            // 2. Determine New Status.
+            //    - Fetch all events for remaining legs.
+            const legEventsQ = query(collection(db, 'events'), where('id', 'in', newLegs.map(l => l.eventId).slice(0, 10))); // Limit 10 for 'in' query
+            // If specific limitations, just fetch all needed.
+            // Actually, let's just fetch them one by one or all events.
+            // Given standard usage, we can fetch all events (cached in state?) - No access to state here.
+            // Fetch relevant events.
+            let isLost = false;
+            let isFullyWon = true;
+
+            // We need to know the outcome of remaining legs.
+            // Since this is a backend function, we must fetch fresh data.
+            const evIds = newLegs.map(l => l.eventId);
+            const legEventsSnap = await getDocs(query(collection(db, 'events'), where('documentId', 'in', evIds.length > 0 ? evIds : ['dummy'])));
+            const legEventsMap = new Map(legEventsSnap.docs.map(d => [d.id, d.data()]));
+
+            for (const leg of newLegs) {
+              const ev = legEventsMap.get(leg.eventId);
+              if (!ev || ev.status !== 'settled') {
+                isFullyWon = false; // Pending leg exists
+              } else {
+                if (ev.winnerOutcomeId !== leg.outcomeId && ev.winnerOutcomeId !== 'void') {
+                  isLost = true; // Lost leg exists
+                }
+              }
+            }
+
+            let newStatus = 'active';
+            if (isLost) newStatus = 'lost';
+            else if (isFullyWon) newStatus = 'won';
+
             batch.update(doc(db, 'parlays', parlay.id), {
               legs: newLegs,
-              finalMultiplier: newMultiplier
+              finalMultiplier: newMultiplier,
+              status: newStatus
             });
 
-            // Update Pending Bets on this Parlay
-            const parlayBetsSnap = await getDocs(query(collection(db, 'bets'), where('parlayId', '==', parlay.id), where('status', '==', 'pending')));
+            // Process Bets adjustments
             for (const pBetDoc of parlayBetsSnap.docs) {
               const pBet = pBetDoc.data();
-              const newPayout = pBet.amount * newMultiplier;
+              if (pBet.status === 'voided') continue; // Should not happen for active/won/lost but safety check
+
+              if (!userUpdates[pBet.userId]) userUpdates[pBet.userId] = { balance: 0, invested: 0, profit: 0 };
+
+              const oldPayout = pBet.status === 'won' ? (pBet.payout || 0) : 0;
+              const newPotentialPayout = pBet.amount * newMultiplier;
+              const newRealPayout = newStatus === 'won' ? newPotentialPayout : 0;
+
+              // Balance Adjustment:
+              // We need to reverse old financial effect and apply new one.
+
+              // REVERSE OLD:
+              if (pBet.status === 'won') {
+                userUpdates[pBet.userId].balance -= oldPayout;
+                userUpdates[pBet.userId].profit -= (oldPayout - pBet.amount);
+                // Invested already cleared.
+              } else if (pBet.status === 'lost') {
+                // User lost amount. Give it back conceptually? 
+                // No, easier:
+                // Reverse loss: balance += 0 (lost money gone), but to 'undo' loss implies we are resetting.
+                // Actually:
+                // If prev Lost: Net was -Amount.
+                // If we reverse: Net should be 0. So we need to ADD Amount to balance.
+                // BUT we are transitioning to New State immediately.
+                // Let's do step-by-step:
+
+                // 1. Reset to "pre-bet" state (money in hand)
+                // Won: Balance -= Payout; Balance += Amount.
+                // Lost: Balance += Amount.
+                // Pending: Balance += Amount; Invested -= Amount.
+              } else { // Pending
+                userUpdates[pBet.userId].balance += pBet.amount;
+                userUpdates[pBet.userId].invested -= pBet.amount;
+              }
+
+              // 2. Apply "New State"
+              // Won: Balance -= Amount; Balance += NewPayout.
+              // Lost: Balance -= Amount.
+              // Pending: Balance -= Amount; Invested += Amount. (Wait, invested logic tricky).
+
+              // COMBINED LOGIC:
+              // ----------------------------------------------------------------
+              // CASE: Won -> Won (Odds Changed)
+              // Effect: Balance += (NewPayout - OldPayout).
+
+              // CASE: Won -> Active (Impossible? Only if voiding makes it pending? No, void implies settled.)
+              // Actually if we void a leg, other legs might be pending. YES.
+              // So Won -> Active IS possible if we are un-settling? 
+              // No, if it was Won, ALL legs were settled. Remaining legs must be settled too.
+
+              // CASE: Lost -> Won (The voided leg was the only loser)
+              // Effect: Balance += NewPayout. (Old payout was 0).
+
+              // CASE: Lost -> Active (Voided leg was loser, others pending)
+              // Effect: Balance += Amount (invested back), Invested += Amount.
+              // Net: Balance unchanged? No.
+              // Prev: Lost (Balance -Amount).
+              // New: Active (Balance -Amount, Invested +Amount).
+              // So we shouldn't change balance?
+              // Wait. If it was Lost, the money is GONE.
+              // If it becomes Active, the money is LOCKED.
+              // So Balance is same (low), but Invested increases? 
+              // No, if it was Lost, Invested was cleared.
+              // If Active, Invested should include it.
+              // Firestore 'invested' field track LOCKED funds.
+              // So yes: Invested += Amount.
+
+              // CASE: Lost -> Lost
+              // Effect: None.
+
+              // Let's apply this cleanly.
+
+              // Reset Step (Virtual):
+              let balanceChange = 0;
+              let investedChange = 0;
+              let profitChange = 0;
+
+              // Undo Old
+              if (pBet.status === 'won') {
+                balanceChange -= oldPayout;
+                profitChange -= (oldPayout - pBet.amount);
+                // invested no change
+                balanceChange += pBet.amount; // Return stake to "hand"
+              } else if (pBet.status === 'lost') {
+                balanceChange += pBet.amount; // Return stake to "hand"
+                profitChange += pBet.amount; // Reverse loss stats
+              } else { // pending
+                balanceChange += pBet.amount; // Return stake
+                investedChange -= pBet.amount; // Clear lock
+              }
+
+              // Apply New
+              if (newStatus === 'won') {
+                balanceChange -= pBet.amount; // Take stake
+                balanceChange += newRealPayout; // Give payout
+                profitChange += (newRealPayout - pBet.amount);
+              } else if (newStatus === 'lost') {
+                balanceChange -= pBet.amount; // Take stake (it's gone)
+                profitChange -= pBet.amount;
+              } else { // active or pending
+                balanceChange -= pBet.amount; // Take stake
+                investedChange += pBet.amount; // Lock it
+              }
+
+              userUpdates[pBet.userId].balance += balanceChange;
+              userUpdates[pBet.userId].invested += investedChange;
+              userUpdates[pBet.userId].profit += profitChange;
 
               batch.update(pBetDoc.ref, {
                 odds: newMultiplier,
-                potentialPayout: newPayout
+                potentialPayout: newPotentialPayout,
+                payout: newRealPayout,
+                status: newStatus,
+                settledAt: newStatus === 'active' ? null : new Date().toISOString()
               });
+
+              // If previously pending and now settled, settledAt updates.
+              // If previously settled and now active (rare), clear settledAt? (using null/deleteField might be needed if strictly typed, but null is fine/undefined)
+              if (newStatus === 'active') {
+                batch.update(pBetDoc.ref, { settledAt: deleteField() });
+              }
             }
           }
         }
