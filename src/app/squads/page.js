@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../lib/store';
 import Navbar from '../../components/Navbar';
 import { Users, Shield, Wallet, Trophy, UserPlus, LogOut, Check, X, Plus, Search, Lock, Settings, Image as ImageIcon, ArrowUp, ArrowDown, Crown } from 'lucide-react';
@@ -73,7 +73,11 @@ export default function SquadsPage() {
     // Chat State
     const [chatMessages, setChatMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
-    // const { db, sendSquadMessage } = useApp(); // Moved up
+    const chatEndRef = useRef(null);
+
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [chatMessages, activeTab]);
 
     useEffect(() => {
         if (!mySquad || activeTab !== 'overview') return;
@@ -1178,7 +1182,7 @@ export default function SquadsPage() {
                                     <h3 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', color: '#fff', margin: 0 }}>Squad Chat</h3>
                                 </div>
                                 {/* Messages */}
-                                <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column-reverse', gap: '12px', background: 'rgba(0,0,0,0.2)' }}>
+                                <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(0,0,0,0.2)' }}>
                                     {chatMessages.length === 0 ? (
                                         <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: 'auto', marginBottom: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                             <MessageCircle size={48} style={{ opacity: 0.2, marginBottom: '16px' }} />
@@ -1186,29 +1190,50 @@ export default function SquadsPage() {
                                             <p style={{ fontSize: '12px' }}>Start the conversation!</p>
                                         </div>
                                     ) : (
-                                        chatMessages.map(msg => (
-                                            <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.senderId === user.id ? 'flex-end' : 'flex-start' }}>
-                                                <div style={{
-                                                    maxWidth: '85%',
-                                                    padding: '10px 14px',
-                                                    borderRadius: '16px',
-                                                    borderTopRightRadius: msg.senderId === user.id ? '4px' : '16px',
-                                                    borderTopLeftRadius: msg.senderId !== user.id ? '4px' : '16px',
-                                                    background: msg.senderId === user.id ? 'var(--primary)' : 'var(--bg-input)',
-                                                    color: msg.senderId === user.id ? '#000' : '#fff',
-                                                    fontSize: '14px',
-                                                    wordBreak: 'break-word',
-                                                    lineHeight: '1.4'
-                                                }}>
-                                                    {msg.text}
-                                                </div>
-                                                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px', padding: '0 4px', display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                                    <span style={{ fontWeight: 'bold' }}>{msg.senderName}</span>
-                                                    <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'var(--text-muted)' }}></span>
-                                                    <span>{msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</span>
-                                                </div>
-                                            </div>
-                                        ))
+                                        <>
+                                            {chatMessages.map((msg, idx) => {
+                                                const nextMsg = chatMessages[idx + 1];
+                                                const currTime = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...';
+                                                const nextTime = nextMsg?.timestamp ? new Date(nextMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...';
+                                                const isGrouped = nextMsg && nextMsg.senderId === msg.senderId && nextTime === currTime;
+
+                                                return (
+                                                    <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.senderId === user.id ? 'flex-end' : 'flex-start' }}>
+                                                        <div style={{
+                                                            maxWidth: '85%',
+                                                            padding: '10px 14px',
+                                                            borderRadius: '16px',
+                                                            borderTopRightRadius: msg.senderId === user.id ? (isGrouped ? '4px' : '4px') : (isGrouped ? '4px' : '16px'), // Tweak corners if needed, but keeping simple for now
+                                                            borderBottomRightRadius: msg.senderId === user.id ? (isGrouped ? '4px' : '16px') : '16px',
+                                                            borderBottomLeftRadius: msg.senderId !== user.id ? (isGrouped ? '4px' : '16px') : '16px',
+                                                            // Actually, standard bubble logic:
+                                                            // Top corners usually rounded.
+                                                            // Grouped middle messages: Top and Bottom on 'connector side' are small?
+                                                            // Let's stick to the existing styling but just hide footer for now to minimize visual diffs unless requested.
+                                                            // Existing logic:
+                                                            borderTopRightRadius: msg.senderId === user.id ? '4px' : '16px',
+                                                            borderTopLeftRadius: msg.senderId !== user.id ? '4px' : '16px',
+
+                                                            background: msg.senderId === user.id ? 'var(--primary)' : 'var(--bg-input)',
+                                                            color: msg.senderId === user.id ? '#000' : '#fff',
+                                                            fontSize: '14px',
+                                                            wordBreak: 'break-word',
+                                                            lineHeight: '1.4'
+                                                        }}>
+                                                            {msg.text}
+                                                        </div>
+                                                        {!isGrouped && (
+                                                            <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px', padding: '0 4px', display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                                                <span style={{ fontWeight: 'bold' }}>{msg.senderName}</span>
+                                                                <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'var(--text-muted)' }}></span>
+                                                                <span>{currTime}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                            <div ref={chatEndRef} />
+                                        </>
                                     )}
                                 </div>
 
