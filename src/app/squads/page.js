@@ -4,11 +4,11 @@ import { useApp } from '../../lib/store';
 import Navbar from '../../components/Navbar';
 import { Users, Shield, Wallet, Trophy, UserPlus, LogOut, Check, X, Plus, Search, Lock, Settings, Image as ImageIcon, ArrowUp, ArrowDown, Crown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { MessageCircle } from 'lucide-react';
 
 export default function SquadsPage() {
-    const { user, squads, isLoaded, createSquad, joinSquad, leaveSquad, manageSquadRequest, kickMember, updateSquad, inviteUserToSquad, respondToSquadInvite, searchUsers, isGuestMode, getUserStats, getSquadStats, depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest } = useApp();
+    const { user, squads, isLoaded, createSquad, joinSquad, leaveSquad, manageSquadRequest, kickMember, updateSquad, inviteUserToSquad, respondToSquadInvite, searchUsers, isGuestMode, getUserStats, getSquadStats, depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest, db, sendSquadMessage } = useApp();
     const [activeTab, setActiveTab] = useState('overview');
     const [squadMode, setSquadMode] = useState('my_squad');
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -20,6 +20,30 @@ export default function SquadsPage() {
     const [viewingSquad, setViewingSquad] = useState(null);
     const [viewingProfile, setViewingProfile] = useState(null);
     const [squadStats, setSquadStats] = useState(null);
+    const [viewingSquadMembers, setViewingSquadMembers] = useState([]);
+
+    // Fetch members when viewing a squad
+    useEffect(() => {
+        if (!viewingSquad || !viewingSquad.members) {
+            setViewingSquadMembers([]);
+            return;
+        }
+
+        const fetchMembers = async () => {
+            try {
+                // Fetch first 20 members to avoid too many reads
+                const memberIds = viewingSquad.members.slice(0, 20);
+                const promises = memberIds.map(id => getDoc(doc(db, 'users', id)));
+                const docs = await Promise.all(promises);
+                const users = docs.map(d => d.exists() ? { id: d.id, ...d.data() } : null).filter(u => u);
+                setViewingSquadMembers(users);
+            } catch (e) {
+                console.error("Error fetching squad members:", e);
+            }
+        };
+
+        fetchMembers();
+    }, [viewingSquad, db]);
 
     const squadRanks = React.useMemo(() => {
         const validSquads = squads.filter(s => (s.stats?.score || 0) > 0);
@@ -49,7 +73,7 @@ export default function SquadsPage() {
     // Chat State
     const [chatMessages, setChatMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
-    const { db, sendSquadMessage } = useApp(); // Destructure locally if needed, or update top destructuring
+    // const { db, sendSquadMessage } = useApp(); // Moved up
 
     useEffect(() => {
         if (!mySquad || activeTab !== 'overview') return;
@@ -739,6 +763,7 @@ export default function SquadsPage() {
                 {[...squads].sort((a, b) => (b.stats?.score || 0) - (a.stats?.score || 0)).map((squad, idx) => (
                     <div
                         key={squad.id}
+                        onClick={() => setViewingSquad(squad)}
                         className="bet-card"
                         style={{
                             padding: '20px', cursor: 'pointer', display: 'flex', flexDirection: 'column',
@@ -1012,6 +1037,40 @@ export default function SquadsPage() {
                     {/* Overview Tab */}
                     {activeTab === 'overview' && (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+                            {/* Qualify for Leaderboard Banner */}
+                            {((squadStats?.bets || 0) < 50) && (
+                                <div style={{
+                                    gridColumn: '1 / -1',
+                                    padding: '24px',
+                                    borderRadius: '16px',
+                                    background: 'linear-gradient(90deg, rgba(234, 179, 8, 0.15), rgba(234, 179, 8, 0.05))',
+                                    border: '1px solid rgba(234, 179, 8, 0.3)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '20px',
+                                    marginBottom: '8px'
+                                }}>
+                                    <div style={{
+                                        width: '48px', height: '48px', borderRadius: '50%',
+                                        background: 'rgba(234, 179, 8, 0.2)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        flexShrink: 0
+                                    }}>
+                                        <Trophy size={24} style={{ color: '#eab308' }} />
+                                    </div>
+                                    <div>
+                                        <h4 style={{ fontSize: '18px', fontWeight: 'bold', color: '#eab308', marginBottom: '4px' }}>
+                                            Unlock Your Squad Rank
+                                        </h4>
+                                        <p style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.9)', lineHeight: 1.4 }}>
+                                            Your squad needs <span style={{ fontWeight: 'bold', color: '#fff' }}>50 total bets</span> to generate a Squad Score and appear on the leaderboard.
+                                            You're currently at <span style={{ fontWeight: 'bold', color: '#fff' }}>{squadStats?.bets || 0}/50</span>.
+                                            <br />
+                                            <span style={{ fontSize: '12px', opacity: 0.8 }}>Lock in {50 - (squadStats?.bets || 0)} more bets to qualify!</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                             <div className="card bet-card" style={{ padding: '0', overflow: 'hidden' }}>
                                 <div style={{ padding: '24px', background: 'linear-gradient(to bottom right, rgba(255,255,255,0.05), transparent)' }}>
                                     <h3 style={{ fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1083,6 +1142,8 @@ export default function SquadsPage() {
                                     )}
                                 </div>
                             </div>
+
+
 
                             <div className="card bet-card" style={{ padding: '24px' }}>
                                 <h3 style={{ fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1374,7 +1435,7 @@ export default function SquadsPage() {
 
 
                 </div>
-            </div>
+            </div >
         );
     }
 
@@ -1555,6 +1616,37 @@ export default function SquadsPage() {
                             <div style={{ textAlign: 'center' }}>
                                 <div style={{ fontWeight: 'bold', fontSize: '18px', color: '#eab308' }}>{viewingSquad.stats?.score || 0}</div>
                                 <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>SCORE</div>
+                            </div>
+                        </div>
+
+                        {/* Members List */}
+                        <div style={{ marginBottom: '24px', maxHeight: '200px', overflowY: 'auto', paddingRight: '4px' }}>
+                            <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '12px', position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 1 }}>MEMBERS PREVIEW</h3>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {viewingSquadMembers.length === 0 ? (
+                                    <div style={{ color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>Loading members...</div>
+                                ) : (
+                                    viewingSquadMembers.map(member => (
+                                        <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#333', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                {member.profilePic ? (
+                                                    <img src={member.profilePic} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                ) : (
+                                                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#ccc' }}>{member.username?.[0] || '?'}</span>
+                                                )}
+                                            </div>
+                                            <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#fff' }}>{member.username}</div>
+                                            {viewingSquad.leaderId === member.id && (
+                                                <Crown size={14} style={{ color: '#eab308', marginLeft: 'auto' }} />
+                                            )}
+                                        </div>
+                                    ))
+                                )}
+                                {viewingSquad.members.length > 20 && (
+                                    <div style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', padding: '8px' }}>
+                                        + {viewingSquad.members.length - 20} more
+                                    </div>
+                                )}
                             </div>
                         </div>
 

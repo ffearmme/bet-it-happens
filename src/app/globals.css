@@ -33,7 +33,8 @@ body {
   font-family: 'Inter', sans-serif;
   background-color: var(--bg-app);
   color: var(--text-main);
-  padding-bottom: calc(var(--nav-height) + 20px);
+  padding-bottom: 120px;
+  /* Increased to account for floating nav */
   overflow-x: hidden;
 }
 
@@ -155,18 +156,21 @@ h2 {
 /* Navigation */
 .bottom-nav {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: var(--nav-height);
+  bottom: 24px;
+  left: 16px;
+  right: 16px;
+  width: auto;
+  height: 72px;
   background: rgba(24, 24, 27, 0.95);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid var(--border);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
   display: flex;
   justify-content: space-around;
   align-items: center;
   z-index: 100;
-  padding: 0 16px;
+  padding: 0 12px;
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5);
 }
 
 .nav-item {
