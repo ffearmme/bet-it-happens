@@ -12,6 +12,34 @@ export default function Portfolio() {
     const [showSettledBets, setShowSettledBets] = useState(false);
     const [historyFrame, setHistoryFrame] = useState('7d');
 
+    // --- BET IDEA LOGIC ---
+    const [showIdeaModal, setShowIdeaModal] = useState(false);
+    const [ideaText, setIdeaText] = useState('');
+    const [ideaStatus, setIdeaStatus] = useState({ success: false, message: '' });
+    const { submitIdea } = useApp();
+
+    const handleIdeaSubmit = async (e) => {
+        e.preventDefault();
+        setIdeaStatus({ success: false, message: '' });
+
+        if (!ideaText.trim()) {
+            setIdeaStatus({ success: false, message: 'Please enter an idea.' });
+            return;
+        }
+
+        const res = await submitIdea(ideaText);
+        if (res.success) {
+            setIdeaStatus({ success: true, message: res.message || 'Idea submitted!' });
+            setIdeaText('');
+            setTimeout(() => {
+                setShowIdeaModal(false);
+                setIdeaStatus({ success: false, message: '' });
+            }, 2000);
+        } else {
+            setIdeaStatus({ success: false, message: res.error });
+        }
+    };
+
     useEffect(() => {
         if (isLoaded && !user) {
             router.push('/');
@@ -248,10 +276,35 @@ export default function Portfolio() {
 
     return (
         <div className="container animate-fade">
-            <h1 style={{ marginTop: '20px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <Wallet className="text-primary" size={32} />
-                Portfolio
-            </h1>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', marginBottom: '24px' }}>
+                <h1 style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: 0 }}>
+                    <Wallet className="text-primary" size={32} />
+                    Portfolio
+                </h1>
+                <button
+                    onClick={() => setShowIdeaModal(true)}
+                    className="btn"
+                    style={{
+                        background: 'linear-gradient(90deg, rgba(39, 39, 42, 1) 0%, rgba(34,197,94,0.1) 100%)',
+                        border: '1px solid var(--primary)',
+                        color: 'var(--primary)',
+                        fontSize: '11px',
+                        fontWeight: '800',
+                        padding: '4px 10px',
+                        width: 'auto',
+                        height: 'auto',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        boxShadow: '0 0 10px rgba(34, 197, 94, 0.2)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                    }}
+                >
+                    <span style={{ fontSize: '16px' }}>💡</span>
+                    <span>Bet Idea</span>
+                </button>
+            </div>
 
             {/* --- TOP SECTION: WALLET & STATS --- */}
             <div style={{ display: 'grid', gap: '16px', marginBottom: '32px' }}>
@@ -469,6 +522,162 @@ export default function Portfolio() {
             {/* --- BALANCE CHART --- */}
             <BalanceChart />
 
+
+            {/* --- BET IDEA MODAL --- */}
+            {showIdeaModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                    background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(5px)', zIndex: 9999,
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px'
+                }} onClick={() => setShowIdeaModal(false)}>
+                    <div
+                        className="animate-fade"
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                            width: '100%',
+                            maxWidth: '360px',
+                            background: '#09090b',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: '24px',
+                            padding: '32px',
+                            position: 'relative',
+                            boxShadow: '0 0 40px rgba(0,0,0,0.5), 0 0 100px rgba(34, 197, 94, 0.1)',
+                            overflow: 'hidden'
+                        }}
+                    >
+                        {/* Decorative Gradient Top */}
+                        <div style={{
+                            position: 'absolute', top: 0, left: 0, right: 0, height: '6px',
+                            background: 'linear-gradient(90deg, #22c55e, #16a34a, #22c55e)',
+                            boxShadow: '0 0 15px rgba(34, 197, 94, 0.5)'
+                        }} />
+
+                        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                            <div style={{
+                                width: '70px', height: '70px', margin: '0 auto 16px',
+                                background: 'rgba(34, 197, 94, 0.15)', borderRadius: '50%',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                border: '1px solid rgba(34, 197, 94, 0.3)',
+                                boxShadow: '0 0 20px rgba(34, 197, 94, 0.2)'
+                            }}>
+                                <span style={{ fontSize: '32px', filter: 'drop-shadow(0 0 5px rgba(34, 197, 94, 0.5))' }}>💡</span>
+                            </div>
+                            <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#fff', marginBottom: '8px', letterSpacing: '-0.5px' }}>
+                                Spark a Bet Idea
+                            </h2>
+                            <p style={{ color: '#a1a1aa', fontSize: '14px', lineHeight: '1.5', marginBottom: '8px' }}>
+                                Valid ideas earn approval.<br />
+                                <span style={{ color: '#22c55e', fontWeight: 'bold' }}>Earn $15.00</span> per submission.
+                            </p>
+                            <div style={{
+                                display: 'inline-block',
+                                padding: '4px 12px',
+                                background: 'rgba(255,255,255,0.05)',
+                                borderRadius: '12px',
+                                fontSize: '12px',
+                                color: '#a1a1aa',
+                                border: '1px solid rgba(255,255,255,0.1)'
+                            }}>
+                                Daily Limit: <span style={{ color: '#fff', fontWeight: 'bold' }}>
+                                    {(() => {
+                                        const today = new Date().toDateString();
+                                        const count = (user?.submissionData?.date === today) ? (user.submissionData.count || 0) : 0;
+                                        return count;
+                                    })()}/5
+                                </span>
+                            </div>
+                        </div>
+
+                        <form onSubmit={handleIdeaSubmit}>
+                            <div style={{ marginBottom: '20px', position: 'relative' }}>
+                                <textarea
+                                    className="input"
+                                    placeholder="e.g. Will users hit 10k by Friday?"
+                                    rows={4}
+                                    value={ideaText}
+                                    onChange={e => setIdeaText(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        background: 'rgba(255,255,255,0.03)',
+                                        border: '1px solid rgba(255,255,255,0.1)',
+                                        borderRadius: '16px',
+                                        padding: '16px',
+                                        color: '#fff',
+                                        fontSize: '15px',
+                                        marginBottom: '0',
+                                        resize: 'none',
+                                        outline: 'none',
+                                        transition: 'all 0.2s',
+                                        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)'
+                                    }}
+                                    onFocus={(e) => {
+                                        e.target.style.borderColor = '#22c55e';
+                                        e.target.style.background = 'rgba(255,255,255,0.05)';
+                                        e.target.style.boxShadow = '0 0 0 2px rgba(34, 197, 94, 0.2)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.target.style.borderColor = 'rgba(255,255,255,0.1)';
+                                        e.target.style.background = 'rgba(255,255,255,0.03)';
+                                        e.target.style.boxShadow = 'none';
+                                    }}
+                                />
+                                <div style={{
+                                    position: 'absolute', bottom: '12px', right: '12px',
+                                    fontSize: '11px', color: '#52525b', fontWeight: 'bold'
+                                }}>
+                                    {ideaText.length}/100
+                                </div>
+                            </div>
+
+                            {ideaStatus.message && (
+                                <div className="animate-fade" style={{
+                                    padding: '12px',
+                                    background: ideaStatus.success ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                    border: `1px solid ${ideaStatus.success ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
+                                    borderRadius: '12px',
+                                    marginBottom: '20px',
+                                    display: 'flex', alignItems: 'center', gap: '10px'
+                                }}>
+                                    <span style={{ fontSize: '18px' }}>{ideaStatus.success ? '✅' : '⚠️'}</span>
+                                    <p style={{
+                                        color: ideaStatus.success ? '#4ade80' : '#f87171',
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        margin: 0
+                                    }}>
+                                        {ideaStatus.message}
+                                    </p>
+                                </div>
+                            )}
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                <button type="button" className="btn btn-outline" onClick={() => setShowIdeaModal(false)}>Cancel</button>
+                                <button
+                                    type="submit"
+                                    style={{
+                                        background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                                        border: 'none',
+                                        color: '#000',
+                                        borderRadius: '12px',
+                                        padding: '14px',
+                                        fontSize: '14px',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 4px 15px rgba(34, 197, 94, 0.3)',
+                                        transition: 'transform 0.1s',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}
+                                    onMouseDown={e => e.target.style.transform = 'scale(0.98)'}
+                                    onMouseUp={e => e.target.style.transform = 'scale(1)'}
+                                >
+                                    Submit
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* --- BET DETAILS MODAL --- */}
             {

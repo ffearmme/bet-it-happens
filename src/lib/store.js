@@ -638,6 +638,8 @@ export function AppProvider({ children }) {
     }
   };
 
+
+
   const createEvent = async (eventData) => {
     try {
       await addDoc(collection(db, 'events'), {
@@ -1459,7 +1461,7 @@ export function AppProvider({ children }) {
     const qDup = query(collection(db, 'ideas'), where('userId', '==', user.id), where('text', '==', ideaText));
     const snapDup = await getDocs(qDup);
     if (!snapDup.empty) {
-      return { success: false, error: "You already suggested this! Hey switch it up." };
+      return { success: false, error: "You already suggested this! Switch it up." };
     }
 
     // Check Daily Limit (Client-side check based on local user data, ideally backend does this)
@@ -1484,14 +1486,10 @@ export function AppProvider({ children }) {
       });
 
       // 2. Update User (Reward + Submission Count)
-      // If date different, simple set. If same, increment.
-      // Firestore update is tricky with nested objects, so we set the whole object.
-      // We calculate new count locally to ensure sync with the check.
-
       const newCount = currentCount + 1;
 
       await updateDoc(doc(db, 'users', user.id), {
-        balance: increment(15), // Reward
+        balance: increment(15), // Reward $15
         submissionData: {
           date: today,
           count: newCount

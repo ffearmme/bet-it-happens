@@ -39,6 +39,69 @@ export default function Home() {
     const [showResolution, setShowResolution] = useState(false);
     const [expandedCompleted, setExpandedCompleted] = useState(false);
 
+    // Featured Bets Auto-Scroll
+    const featuredScrollRef = useRef(null);
+    const isFeaturedPaused = useRef(false);
+    const hasScrolledRef = useRef(false);
+
+    useEffect(() => {
+        const container = featuredScrollRef.current;
+        if (!container) return;
+
+        // Reset to 0 initially? Or wait for layout?
+        // Let's rely on the loop.
+
+        // Sub-pixel scrolling accumulator
+        let scrollAccumulator = 0;
+        const speed = 0.5; // Back to a reasonable base speed, but we'll use a timer or accumulator if we want it *really* slow visually.
+        // Actually, user wants it "a third of that speed" which was 0.08. 
+        // 0.08 pixels per frame is 4.8px per second. It's very slow.
+        // To handle sub-pixel rendering issues:
+
+        const targetSpeed = 0.2; // Let's bump it slightly up from 0.08 to ensure it keeps moving, but use accumulator.
+
+        let animationFrameId;
+
+        const scroll = () => {
+            if (container) {
+                const totalWidth = container.scrollWidth;
+                const singleSetWidth = totalWidth / 4;
+
+                // Initialize scroll position to the start of Set 2 (so user can scroll left)
+                if (!hasScrolledRef.current && singleSetWidth > 0 && activeEvents.length > 0) {
+                    container.scrollLeft = singleSetWidth;
+                    hasScrolledRef.current = true;
+                }
+
+                // Seamless Loop Logic (Bidirectional)
+                // Range: Used [Set 1 ... Set 2].
+                // If we hit 0 (start of Set 1), jump forward to Set 2 start (singleSetWidth).
+                // If we hit 2*Width (start of Set 3), jump back to Set 2 start (singleSetWidth).
+                if (Math.abs(container.scrollLeft) <= 1) {
+                    // Hit left edge -> jump to middle
+                    container.scrollLeft = singleSetWidth;
+                } else if (container.scrollLeft >= singleSetWidth * 2) {
+                    // Hit right edge of the "safe zone" -> jump back to middle
+                    // Use subtraction to maintain sub-pixel offsets if we were precise, but direct assignment is safer for big jumps.
+                    container.scrollLeft -= singleSetWidth;
+                }
+
+                // Auto Scroll (only if not paused)
+                if (!isFeaturedPaused.current) {
+                    scrollAccumulator += targetSpeed;
+                    if (scrollAccumulator >= 1) {
+                        const pixelsToScroll = Math.floor(scrollAccumulator);
+                        container.scrollLeft += pixelsToScroll;
+                        scrollAccumulator -= pixelsToScroll;
+                    }
+                }
+            }
+            animationFrameId = requestAnimationFrame(scroll);
+        };
+        animationFrameId = requestAnimationFrame(scroll);
+        return () => cancelAnimationFrame(animationFrameId);
+    }, [events, isLoaded]); // Re-run when events load to ensure ref is attached
+
     useEffect(() => {
         if (expandedEvent) setShowResolution(false);
     }, [expandedEvent]);
@@ -1073,7 +1136,7 @@ export default function Home() {
             {/* Earn CTA - Hidden for Guests */}
             {
                 user && (
-                    <Link href="/wallet" style={{ textDecoration: 'none' }}>
+                    <Link href="/portfolio" style={{ textDecoration: 'none' }}>
                         <div
                             className="card"
                             style={{ marginBottom: '24px', background: 'linear-gradient(90deg, rgba(39, 39, 42, 1) 0%, rgba(34,197,94,0.1) 100%)', border: '1px solid var(--primary)', cursor: 'pointer' }}
@@ -1100,83 +1163,106 @@ export default function Home() {
                             <span style={{ fontSize: '24px' }}>🔥</span>
                             Featured Bets
                         </h2>
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                            gap: '20px',
-                            marginBottom: '40px'
-                        }}>
-                            {activeEvents.filter(e => e.featured).slice(0, 3).map(event => (
-                                <div
-                                    key={event.id}
-                                    className="card"
-                                    onClick={() => setExpandedEvent(event)}
-                                    style={{
-                                        border: '1px solid #fbbf24',
-                                        background: 'linear-gradient(145deg, var(--bg-card), rgba(251, 191, 36, 0.05))',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        cursor: 'pointer',
-                                        transition: 'transform 0.2s'
-                                    }}
-                                >
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                                        <span className="badge" style={{ background: '#fbbf24', color: '#000', fontWeight: 'bold' }}>FEATURED</span>
-                                        <div style={{ textAlign: 'right' }}>
-                                            {event.deadline && (
-                                                <div className="text-sm" style={{ color: '#fbbf24', fontSize: '11px', fontWeight: 'bold' }}>
-                                                    {getTimeRemaining(event.deadline) !== "Closed" ? `⏰ Closes in: ${getTimeRemaining(event.deadline)}` : 'Closed'}
+                        <div
+                            ref={featuredScrollRef}
+                            onMouseEnter={() => isFeaturedPaused.current = true}
+                            onMouseLeave={() => isFeaturedPaused.current = false}
+                            onTouchStart={() => isFeaturedPaused.current = true}
+                            onTouchEnd={() => setTimeout(() => isFeaturedPaused.current = false, 2000)} // Resume after delay on mobile
+                            style={{
+                                display: 'flex',
+                                overflowX: 'auto',
+                                gap: '20px',
+                                paddingBottom: '16px',
+                                marginBottom: '24px',
+                                scrollbarWidth: 'none', // Firefox
+                                msOverflowStyle: 'none', // IE
+                                WebkitOverflowScrolling: 'touch', // Smooth mobile scroll
+                            }}
+                        >
+                            <style jsx>{`
+                                div::-webkit-scrollbar {
+                                    display: none;
+                                }
+                            `}</style>
+                            {/* Duplicate list 4 times for infinite scroll illusion */}
+                            {[...Array(4)].flatMap((_, i) =>
+                                activeEvents.filter(e => e.featured).map(event => (
+                                    <div
+                                        key={`${event.id}-${i}`} // Unique key
+                                        className="card"
+                                        onClick={() => setExpandedEvent(event)}
+                                        style={{
+                                            minWidth: '320px', // Fixed width for horizontal scroll
+                                            maxWidth: '320px',
+                                            flexShrink: 0,
+                                            border: '1px solid #fbbf24',
+                                            background: 'linear-gradient(145deg, var(--bg-card), rgba(251, 191, 36, 0.05))',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            cursor: 'pointer',
+                                            transition: 'transform 0.2s',
+                                            marginRight: '0' // Handled by gap
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                                            <span className="badge" style={{ background: '#fbbf24', color: '#000', fontWeight: 'bold' }}>FEATURED</span>
+                                            <div style={{ textAlign: 'right' }}>
+                                                {event.deadline && (
+                                                    <div className="text-sm" style={{ color: '#fbbf24', fontSize: '11px', fontWeight: 'bold' }}>
+                                                        {getTimeRemaining(event.deadline) !== "Closed" ? `⏰ Closes in: ${getTimeRemaining(event.deadline)}` : 'Closed'}
+                                                    </div>
+                                                )}
+                                                <div className="text-sm" style={{ color: '#fbbf24', opacity: 0.8, fontSize: '10px' }}>
+                                                    Resolves: {new Date(event.startAt).toLocaleDateString()}
                                                 </div>
-                                            )}
-                                            <div className="text-sm" style={{ color: '#fbbf24', opacity: 0.8, fontSize: '10px' }}>
-                                                Resolves: {new Date(event.startAt).toLocaleDateString()}
                                             </div>
                                         </div>
-                                    </div>
-                                    <h3 style={{ fontSize: '18px', marginBottom: '8px', color: '#fbbf24', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</h3>
-                                    <p className="text-sm" style={{ marginBottom: '16px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{event.description}</p>
-                                    {event.createdBy && (
-                                        <p style={{ fontSize: '10px', color: '#fbbf24', fontStyle: 'italic', marginBottom: '8px' }}>
-                                            Created by {event.createdBy}
-                                        </p>
-                                    )}
+                                        <h3 style={{ fontSize: '18px', marginBottom: '8px', color: '#fbbf24', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</h3>
+                                        <p className="text-sm" style={{ marginBottom: '16px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{event.description}</p>
+                                        {event.createdBy && (
+                                            <p style={{ fontSize: '10px', color: '#fbbf24', fontStyle: 'italic', marginBottom: '8px' }}>
+                                                Created by {event.createdBy}
+                                            </p>
+                                        )}
 
-                                    <div style={{ marginTop: 'auto', textAlign: 'center', color: '#fbbf24', fontSize: '12px' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '6px' }}>
-                                            {event.outcomes.map(o => (
-                                                <span key={o.id} style={{ background: 'rgba(251, 191, 36, 0.2)', padding: '2px 8px', borderRadius: '4px' }}>
-                                                    {o.label}: x{o.odds.toFixed(2)}
+                                        <div style={{ marginTop: 'auto', textAlign: 'center', color: '#fbbf24', fontSize: '12px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '6px' }}>
+                                                {event.outcomes.map(o => (
+                                                    <span key={o.id} style={{ background: 'rgba(251, 191, 36, 0.2)', padding: '2px 8px', borderRadius: '4px' }}>
+                                                        {o.label}: x{o.odds.toFixed(2)}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {event.lastComment && (
+                                            <div style={{ marginTop: '8px', padding: '6px', background: 'rgba(251, 191, 36, 0.1)', borderRadius: '4px', textAlign: 'left', fontSize: '11px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                                <span style={{ fontWeight: 'bold' }}>{event.lastComment.username}:</span>
+                                                <span style={{ color: '#fbbf24', fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px' }}>
+                                                    "{event.lastComment.text}"
                                                 </span>
-                                            ))}
+                                            </div>
+                                        )}
+
+                                        <div style={{
+                                            marginTop: '12px',
+                                            paddingTop: '8px',
+                                            borderTop: '1px dashed rgba(251, 191, 36, 0.3)',
+                                            textAlign: 'center',
+                                            color: '#fbbf24',
+                                            fontSize: '11px',
+                                            fontWeight: 'bold',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '6px'
+                                        }}>
+                                            <span>👉 Click to Bet & View Trash Talk</span>
                                         </div>
                                     </div>
-
-                                    {event.lastComment && (
-                                        <div style={{ marginTop: '8px', padding: '6px', background: 'rgba(251, 191, 36, 0.1)', borderRadius: '4px', textAlign: 'left', fontSize: '11px', display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                            <span style={{ fontWeight: 'bold' }}>{event.lastComment.username}:</span>
-                                            <span style={{ color: '#fbbf24', fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px' }}>
-                                                "{event.lastComment.text}"
-                                            </span>
-                                        </div>
-                                    )}
-
-                                    <div style={{
-                                        marginTop: '12px',
-                                        paddingTop: '8px',
-                                        borderTop: '1px dashed rgba(251, 191, 36, 0.3)',
-                                        textAlign: 'center',
-                                        color: '#fbbf24',
-                                        fontSize: '11px',
-                                        fontWeight: 'bold',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '6px'
-                                    }}>
-                                        <span>👉 Click to Bet & View Trash Talk</span>
-                                    </div>
-                                </div>
-                            ))}
+                                ))
+                            )}
                         </div>
                     </div>
                 )
@@ -1269,7 +1355,7 @@ export default function Home() {
                     const categories = ['The Boys', 'The Fam', 'Sports', 'Video Games', 'Local/Community', 'Weather', 'Tech', 'Pop Culture', 'Other'];
                     categories.forEach(c => grouped[c] = []);
 
-                    activeEvents.filter(e => !e.featured && e.category !== 'Super Bowl').forEach(e => {
+                    activeEvents.filter(e => e.category !== 'Super Bowl').forEach(e => {
                         const cat = e.category || 'Sports';
                         // If event has a category we don't track explicitly, dump it in 'Other' or create it?
                         // For now, if it matches one of our private groups, it will be caught.
