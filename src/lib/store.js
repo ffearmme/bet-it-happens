@@ -261,6 +261,116 @@ export function AppProvider({ children }) {
     return () => unsub();
   }, [user?.id]);
 
+  // --- 5. Manual Parlay Calculation (For retroactive fixes) ---
+  const calculateParlays = async () => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+
+    try {
+      // FIX: Query ALL parlays and filter client side to catch those with undefined status (legacy)
+      // const parlaysQ = query(collection(db, 'parlays'), where('status', '==', 'active'));
+      const parlaysQ = query(collection(db, 'parlays'));
+      const parlaysSnap = await getDocs(parlaysQ);
+
+      // Fetch all events for lookup
+      // Ideally we only fetch events in the parlays, but simpler to fetch active/recent events or just all for this admin tool
+      // Let's fetch all events since this is an admin tool
+      const eventsSnap = await getDocs(collection(db, 'events'));
+      const eventMap = new Map(eventsSnap.docs.map(d => [d.id, d.data()]));
+
+      const batch = writeBatch(db);
+      let updatesCount = 0;
+      let pCount = 0;
+
+      for (const parlayDoc of parlaysSnap.docs) {
+        const parlay = { id: parlayDoc.id, ...parlayDoc.data() };
+
+        // Skip already settled
+        if (parlay.status === 'won' || parlay.status === 'lost') continue;
+
+        let isLost = false;
+        let isFullyWon = true;
+
+        for (const leg of parlay.legs) {
+          const event = eventMap.get(leg.eventId);
+          let legStatus = 'pending';
+
+          if (!event) {
+            // removing leg? or keeping pending
+            legStatus = 'pending';
+          } else if (event.status === 'settled' && event.winnerOutcomeId) {
+            legStatus = event.winnerOutcomeId === leg.outcomeId ? 'won' : 'lost';
+          } else {
+            legStatus = 'pending';
+          }
+
+          if (legStatus === 'lost') {
+            isLost = true;
+            break;
+          }
+          if (legStatus !== 'won') {
+            isFullyWon = false;
+          }
+        }
+
+        let newStatus = 'active';
+        if (isLost) newStatus = 'lost';
+        else if (isFullyWon) newStatus = 'won';
+
+        if (newStatus === 'active') continue;
+
+        // Found a change!
+        pCount++;
+        batch.update(parlayDoc.ref, { status: newStatus });
+        updatesCount++;
+
+        // Settle Bets
+        const betsQ = query(collection(db, 'bets'), where('parlayId', '==', parlay.id), where('status', '==', 'pending'));
+        const betsSnap = await getDocs(betsQ);
+
+        for (const betDoc of betsSnap.docs) {
+          const bet = betDoc.data();
+          const payout = newStatus === 'won' ? (bet.amount * parlay.finalMultiplier) : 0;
+
+          batch.update(betDoc.ref, {
+            status: newStatus,
+            payout: payout,
+            settledAt: new Date().toISOString()
+          });
+          updatesCount++;
+
+          if (newStatus === 'won') {
+            const userRef = doc(db, 'users', bet.userId);
+            batch.update(userRef, {
+              balance: increment(payout),
+              invested: increment(-bet.amount)
+            });
+            updatesCount++;
+          } else {
+            const userRef = doc(db, 'users', bet.userId);
+            batch.update(userRef, {
+              invested: increment(-bet.amount)
+            });
+            updatesCount++;
+          }
+
+          // Chunk commit
+          if (updatesCount >= 450) {
+            await batch.commit();
+            updatesCount = 0;
+          }
+        }
+      }
+
+      if (updatesCount > 0) {
+        await batch.commit();
+      }
+      return { success: true, message: `Processed ${pCount} parlays.` };
+
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
   // --- Actions ---
 
   const signup = async (email, username, password, referralCode) => {
@@ -709,10 +819,152 @@ export function AppProvider({ children }) {
       }
 
       await batch.commit();
+
+      // --- 7. Process Parlay Resolutions ---
+      // We do this after the main batch to avoid complexity/limits, 
+      // though ideally it would be atomic.
+      try {
+        await processParlayResults(eventId, winnerOutcomeId);
+      } catch (parlayErr) {
+        console.error("Error processing parlays:", parlayErr);
+        // We don't fail the whole resolution if parlays fail, but we log it.
+      }
+
       return { success: true };
     } catch (e) {
       console.error("Resolve Event Error:", e);
       return { success: false, error: e.message };
+    }
+  };
+
+  const processParlayResults = async (eventId, winnerOutcomeId) => {
+    // 1. Fetch all parlays (Efficiency note: In prod, use array-contains on eventIds)
+    const parlaysSnap = await getDocs(collection(db, 'parlays'));
+    const relevantParlays = parlaysSnap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      // FIX: Check for != won/lost instead of == active to handle legacy parlays with undefined status
+      .filter(p => p.legs.some(l => l.eventId === eventId) && p.status !== 'won' && p.status !== 'lost');
+
+    if (relevantParlays.length === 0) return;
+
+    const eventMap = new Map(events.map(e => [e.id, e]));
+
+    // Batch Helper to avoid 500 limit
+    let batch = writeBatch(db);
+    let opCount = 0;
+    const commitThreshold = 450;
+
+    const commitBatchIfFull = async () => {
+      if (opCount >= commitThreshold) {
+        await batch.commit();
+        batch = writeBatch(db);
+        opCount = 0;
+      }
+    };
+
+    for (const parlay of relevantParlays) {
+      let isLost = false;
+      let isFullyWon = true;
+
+      // Check all legs
+      for (const leg of parlay.legs) {
+        let legStatus = 'pending';
+
+        if (leg.eventId === eventId) {
+          // This is the event being resolved right now
+          legStatus = leg.outcomeId === winnerOutcomeId ? 'won' : 'lost';
+        } else {
+          // Check other events
+          const ev = eventMap.get(leg.eventId);
+          if (!ev) {
+            // Event missing? specific error handling or treat as pending
+            legStatus = 'pending';
+          } else if (ev.status === 'settled' && ev.winnerOutcomeId) {
+            legStatus = ev.winnerOutcomeId === leg.outcomeId ? 'won' : 'lost';
+          } else {
+            legStatus = 'pending';
+          }
+        }
+
+        if (legStatus === 'lost') {
+          isLost = true;
+          // Optimization: No need to check further if strict parlay
+          break;
+        }
+        if (legStatus !== 'won') {
+          isFullyWon = false;
+        }
+      }
+
+      let newStatus = 'active';
+      if (isLost) newStatus = 'lost';
+      else if (isFullyWon) newStatus = 'won';
+
+      // If status didn't change (still active), continue
+      if (newStatus === 'active') continue;
+
+      // UPDATE PARLAY STATUS
+      const parlayRef = doc(db, 'parlays', parlay.id);
+      batch.update(parlayRef, { status: newStatus });
+      opCount++;
+      await commitBatchIfFull();
+
+      // SETTLE ALL BETS FOR THIS PARLAY
+      const betsQ = query(collection(db, 'bets'), where('parlayId', '==', parlay.id), where('status', '==', 'pending'));
+      const betsSnap = await getDocs(betsQ);
+
+      for (const betDoc of betsSnap.docs) {
+        const bet = betDoc.data();
+
+        // Payout Calculation
+        const payout = newStatus === 'won' ? (bet.amount * parlay.finalMultiplier) : 0;
+
+        // Update Bet
+        batch.update(betDoc.ref, {
+          status: newStatus,
+          payout: payout,
+          settledAt: new Date().toISOString()
+        });
+        opCount++;
+        await commitBatchIfFull();
+
+        // Update User Balance if Won
+        if (newStatus === 'won') {
+          const userRef = doc(db, 'users', bet.userId);
+          batch.update(userRef, {
+            balance: increment(payout),
+            invested: increment(-bet.amount), // Release invested
+            // Simple profit calc for stats (ignoring net worth complexity for now)
+          });
+          opCount++;
+          await commitBatchIfFull();
+
+          // Notification
+          const notifRef = doc(collection(db, 'notifications'));
+          batch.set(notifRef, {
+            userId: bet.userId,
+            type: 'parlay_result',
+            title: 'Parlay Hit! 🔥',
+            message: `Your parlay "${parlay.title || 'Untitled'}" hit! You won $${payout.toFixed(2)}`,
+            read: false,
+            createdAt: new Date().toISOString()
+          });
+          opCount++;
+          await commitBatchIfFull();
+        } else {
+          // Lost: Just release invested (it's gone)
+          const userRef = doc(db, 'users', bet.userId);
+          batch.update(userRef, {
+            invested: increment(-bet.amount)
+          });
+          opCount++;
+          await commitBatchIfFull();
+        }
+      }
+    }
+
+    if (opCount > 0) {
+      await batch.commit();
     }
   };
 
@@ -1598,6 +1850,7 @@ export function AppProvider({ children }) {
         legs,
         baseMultiplier,
         finalMultiplier,
+        status: 'active',
         createdAt: new Date().toISOString(),
         wagersCount: 0,
         totalPool: 0
@@ -2560,7 +2813,7 @@ export function AppProvider({ children }) {
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db,
       isGuestMode, setIsGuestMode,
       notifications, markNotificationAsRead, clearAllNotifications, submitModConcern,
-      createParlay, placeParlayBet, addParlayComment, deleteParlay, sendSystemNotification,
+      createParlay, placeParlayBet, addParlayComment, calculateParlays, deleteParlay, sendSystemNotification,
       squads, createSquad, joinSquad, leaveSquad, manageSquadRequest, kickMember, updateSquad, inviteUserToSquad, respondToSquadInvite, searchUsers, getSquadStats,
       depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest, sendSquadMessage
     }}>

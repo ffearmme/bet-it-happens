@@ -187,28 +187,30 @@ export default function Leaderboard() {
                                             }}>MOD ✓</span>
                                         )}
                                     </div>
-                                    <p style={{ fontSize: '0.7em', color: 'var(--text-secondary)' }}>
-                                        {tab === 'all' ? 'Net Worth' : 'Weekly Profit'}
-                                    </p>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <p style={{ fontSize: '0.7em', color: 'var(--text-secondary)', margin: 0 }}>
+                                            {tab === 'all' ? 'Net Worth' : 'Weekly Profit'}
+                                        </p>
+                                        {(() => {
+                                            const todayStr = new Date().toDateString();
+                                            const yesterday = new Date();
+                                            yesterday.setDate(yesterday.getDate() - 1);
+                                            const yesterdayStr = yesterday.toDateString();
+
+                                            const isStreakValid = player.lastBetDate === todayStr || player.lastBetDate === yesterdayStr;
+
+                                            if (player.currentStreak > 1 && isStreakValid) {
+                                                return (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }} title="Current Betting Streak">
+                                                        <span style={{ fontSize: '14px' }}>🔥</span>
+                                                        <span style={{ fontWeight: 'bold', color: '#f59e0b', fontSize: '12px' }}>{player.currentStreak}</span>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
+                                    </div>
                                 </div>
-                                {(() => {
-                                    const todayStr = new Date().toDateString();
-                                    const yesterday = new Date();
-                                    yesterday.setDate(yesterday.getDate() - 1);
-                                    const yesterdayStr = yesterday.toDateString();
-
-                                    const isStreakValid = player.lastBetDate === todayStr || player.lastBetDate === yesterdayStr;
-
-                                    if (player.currentStreak > 1 && isStreakValid) {
-                                        return (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '12px', flexShrink: 0 }} title="Current Betting Streak">
-                                                <span style={{ fontSize: '16px' }}>🔥</span>
-                                                <span style={{ fontWeight: 'bold', color: '#f59e0b', fontSize: '14px' }}>{player.currentStreak}</span>
-                                            </div>
-                                        );
-                                    }
-                                    return null;
-                                })()}
                             </div>
                             <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                                 <p style={{ fontWeight: 'bold', color: tab === 'all' ? '#4ade80' : (player.profit >= 0 ? '#4ade80' : '#ef4444'), fontSize: '1.1em', margin: 0 }}>

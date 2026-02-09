@@ -39,6 +39,8 @@ export default function ParlayPage() {
         onFire: true, // Auto-open this exciting category? Or start closed? Let's auto-open for excitement.
         heatingUp: false,
         upcoming: false,
+        hallOfFame: false, // 5+ Legs
+        successful: false, // <5 Legs
         busted: false
     });
 
@@ -360,6 +362,8 @@ export default function ParlayPage() {
     const upcomingParlays = [];
     const activeParlays = []; // 1+ won, others pending
     const onFireParlays = []; // All won except 1 pending
+    const hallOfFameParlays = []; // All won (5+ legs)
+    const successfulParlays = []; // All won (<5 legs)
     const lostParlays = [];
 
     parlays.forEach(p => {
@@ -378,8 +382,14 @@ export default function ParlayPage() {
             lostParlays.push(p);
         } else if (legsWon > 0) {
             // It has started winning.
-            // Check if it's "On Fire" (Meaning only 1 leg left)
-            if (legsPending === 1 && legsWon === (p.legs.length - 1)) {
+            if (legsPending === 0 && legsWon === p.legs.length) {
+                if (p.legs.length >= 5) {
+                    hallOfFameParlays.push(p);
+                } else {
+                    successfulParlays.push(p);
+                }
+            } else if (legsPending === 1 && legsWon === (p.legs.length - 1)) {
+                // Check if it's "On Fire" (Meaning only 1 leg left)
                 onFireParlays.push(p);
             } else {
                 activeParlays.push(p);
@@ -772,6 +782,69 @@ export default function ParlayPage() {
         </div>
     );
 
+    const renderCompactParlayCard = (parlay, variant = 'won') => {
+        const isLost = variant === 'lost';
+        const color = isLost ? '#ef4444' : '#fbbf24';
+        const statusText = isLost ? 'BUSTED' : 'WINNER';
+
+        return (
+            <div
+                key={parlay.id}
+                className="card"
+                style={{
+                    borderTop: `3px solid ${color}`,
+                    padding: '12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    fontSize: '12px',
+                    background: 'var(--bg-card)',
+                    marginBottom: '0',
+                    opacity: isLost ? 0.8 : 1
+                }}
+            >
+                <div style={{ marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <span style={{ fontWeight: 700, color: color, fontSize: '10px', textTransform: 'uppercase' }}>{statusText}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{new Date(parlay.createdAt).toLocaleDateString()}</span>
+                    </div>
+
+                    <div style={{ fontWeight: 600, fontSize: '13px', lineHeight: '1.3', marginBottom: '8px', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', minHeight: '34px' }}>
+                        {parlay.title || `${parlay.creatorName}'s Parlay`}
+                    </div>
+
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        {parlay.legs.length} Legs • <span style={{ color: '#fff' }}>{parlay.wagersCount || 0} Following</span>
+                    </div>
+                </div>
+
+                <div style={{ paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Creator</div>
+                        <div style={{ fontWeight: 'bold' }}>{parlay.creatorName}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Multiplier</div>
+                        <div style={{ fontWeight: 'bold', color: color }}>{parlay.finalMultiplier.toFixed(2)}x</div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const handleRecalculate = async () => {
+        if (!confirm("Recalculate all active parlays? This forces payouts for confirmed wins.")) return;
+        setIsSubmitting(true);
+        const res = await calculateParlays();
+        if (res.success) {
+            setSuccess(res.message);
+            setTimeout(() => setSuccess(''), 3000);
+        } else {
+            setError(res.error);
+        }
+        setIsSubmitting(false);
+    };
+
     return (
         <div className="container animate-fade" style={{ paddingBottom: '100px' }}>
             <header style={{ marginBottom: '24px', textAlign: 'center' }}>
@@ -938,7 +1011,62 @@ export default function ParlayPage() {
                         </div>
                     )}
 
-                    {/* 3. LOST PARLAYS */}
+                    {/* 3. HALL OF FAME (5+ LEGS WON) */}
+                    {hallOfFameParlays.length > 0 && (
+                        <div style={{ marginBottom: '16px', border: '1px solid rgba(251, 191, 36, 0.3)', borderRadius: '12px', background: 'rgba(251, 191, 36, 0.05)', overflow: 'hidden', width: '100%', maxWidth: '100%' }}>
+                            <div
+                                onClick={() => toggleSection('hallOfFame')}
+                                style={{
+                                    padding: '16px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    background: 'rgba(251, 191, 36, 0.1)'
+                                }}
+                            >
+                                <h2 style={{ fontSize: '18px', color: '#fbbf24', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    🏆 Hall of Fame <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontWeight: 'normal' }}>({hallOfFameParlays.length})</span>
+                                </h2>
+                                <span style={{ color: '#fbbf24', fontSize: '12px' }}>{openSections.hallOfFame ? '▼' : '►'}</span>
+                            </div>
+
+                            {openSections.hallOfFame && (
+                                <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px' }} className="animate-fade">
+                                    {hallOfFameParlays.map(parlay => renderCompactParlayCard(parlay))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* 4. SUCCESSFUL PARLAYS (<5 LEGS WON) */}
+                    {successfulParlays.length > 0 && (
+                        <div style={{ marginBottom: '16px', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '12px', background: 'rgba(34, 197, 94, 0.05)', overflow: 'hidden', width: '100%', maxWidth: '100%' }}>
+                            <div
+                                onClick={() => toggleSection('successful')}
+                                style={{
+                                    padding: '16px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    background: 'rgba(34, 197, 94, 0.1)'
+                                }}
+                            >
+                                <h2 style={{ fontSize: '18px', color: '#22c55e', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    ✅ Winning Tickets <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', fontWeight: 'normal' }}>({successfulParlays.length})</span>
+                                </h2>
+                                <span style={{ color: '#22c55e', fontSize: '12px' }}>{openSections.successful ? '▼' : '►'}</span>
+                            </div>
+
+                            {openSections.successful && (
+                                <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px' }} className="animate-fade">
+                                    {successfulParlays.map(parlay => renderCompactParlayCard(parlay))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {/* 5. LOST PARLAYS */}
                     {lostParlays.length > 0 && (
                         <div style={{ marginBottom: '16px', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.05)', overflow: 'hidden', width: '100%', maxWidth: '100%' }}>
                             <div
@@ -959,8 +1087,8 @@ export default function ParlayPage() {
                             </div>
 
                             {openSections.busted && (
-                                <div style={{ padding: '16px', display: 'grid', gap: '16px', opacity: 0.75 }} className="animate-fade">
-                                    {lostParlays.map(parlay => renderParlayCard(parlay))}
+                                <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px' }} className="animate-fade">
+                                    {lostParlays.map(parlay => renderCompactParlayCard(parlay, 'lost'))}
                                 </div>
                             )}
                         </div>
