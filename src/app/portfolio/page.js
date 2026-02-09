@@ -27,8 +27,10 @@ export default function Portfolio() {
     const wonBets = myBets.filter(b => b.status === 'won');
 
     // Stats Calculations
-    const winRate = completedBets.length > 0
-        ? ((wonBets.length / completedBets.length) * 100).toFixed(1)
+    // Stats Calculations
+    const settledBetsForStats = myBets.filter(b => b.status === 'won' || b.status === 'lost');
+    const winRate = settledBetsForStats.length > 0
+        ? ((wonBets.length / settledBetsForStats.length) * 100).toFixed(1)
         : '0.0';
 
     const biggestWin = wonBets.length > 0
@@ -36,8 +38,9 @@ export default function Portfolio() {
         : 0;
 
     const totalNetProfit = completedBets.reduce((acc, bet) => {
-        const profit = bet.status === 'won' ? (bet.potentialPayout - bet.amount) : -bet.amount;
-        return acc + profit;
+        if (bet.status === 'won') return acc + (bet.potentialPayout - bet.amount);
+        if (bet.status === 'lost') return acc - bet.amount;
+        return acc;
     }, 0);
 
     // --- LOGIC FROM WALLET ---
