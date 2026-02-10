@@ -309,6 +309,14 @@ function AdminContent() {
                                                         <span style={{ fontSize: '11px', color: '#666' }}>By {idea.username} • {new Date(idea.submittedAt).toLocaleDateString()}</span>
                                                         {idea.adminReply && <div style={{ fontSize: '11px', color: '#10b981', marginTop: '2px' }}>↩ Replied: "{idea.adminReply}"</div>}
                                                     </div>
+                                                    <span className={`mod-status-badge ${idea.status || 'pending'}`}
+                                                        style={{
+                                                            marginLeft: '8px',
+                                                            background: !idea.status || idea.status === 'pending' ? '#333' : undefined,
+                                                            color: !idea.status || idea.status === 'pending' ? '#888' : undefined
+                                                        }}>
+                                                        {idea.status ? idea.status.toUpperCase() : 'PENDING'}
+                                                    </span>
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
                                                     <button

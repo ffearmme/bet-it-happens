@@ -1048,7 +1048,7 @@ export function AppProvider({ children }) {
       // If void, we already handled parlays in Branch A.
       if (winnerOutcomeId !== 'void') {
         try {
-          await processParlayResults(eventId, winnerOutcomeId);
+          await processParlayResults(eventId, winnerOutcomeId, rank1Id, rank2Id, rank3Id);
         } catch (parlayErr) {
           console.error("Error processing parlays:", parlayErr);
         }
@@ -1061,7 +1061,7 @@ export function AppProvider({ children }) {
     }
   };
 
-  const processParlayResults = async (eventId, winnerOutcomeId) => {
+  const processParlayResults = async (eventId, winnerOutcomeId, rank1Id, rank2Id, rank3Id) => {
     // 1. Fetch all parlays (Efficiency note: In prod, use array-contains on eventIds)
     // We must fetch fresh data here
     const parlaysQ = query(collection(db, 'parlays'));
@@ -1216,11 +1216,31 @@ export function AppProvider({ children }) {
         const pBets = await getDocs(query(collection(db, 'bets'), where('parlayId', '==', parlay.id), where('status', '==', 'pending')));
         for (const pb of pBets.docs) {
           const betData = pb.data();
-          const payout = betData.potentialPayout;
+
+          let boostMultiplier = 0;
+          let boostAmount = 0;
+
+          // Fetch User for Boost Logic
+          try {
+            const uSnap = await getDoc(doc(db, 'users', betData.userId));
+            if (uSnap.exists()) {
+              const uData = uSnap.data();
+              if (uData.squadId) {
+                if (uData.squadId === rank1Id) boostMultiplier = 0.15;
+                else if (uData.squadId === rank2Id) boostMultiplier = 0.07;
+                else if (uData.squadId === rank3Id) boostMultiplier = 0.03;
+              }
+            }
+          } catch (err) { console.error("Error checking user squad boost:", err); }
+
+          const rawProfit = betData.potentialPayout - betData.amount;
+          boostAmount = rawProfit * boostMultiplier;
+          const payout = betData.potentialPayout + boostAmount;
 
           batch.update(pb.ref, {
             status: 'won',
             payout: payout,
+            boostApplied: boostAmount > 0 ? boostAmount : 0,
             settledAt: new Date().toISOString()
           });
 
@@ -1228,39 +1248,18 @@ export function AppProvider({ children }) {
           batch.update(uRef, {
             balance: increment(payout),
             invested: increment(-betData.amount),
-            // Profit = Payout - Stake
-            // But wait, invested is removed. 
-            // Profit logic: Won $100 payout on $10 bet -> Profit +$90.
           });
 
-          // How to handle profit increment? Firestore doesn't support complex math in increment?
-          // Actually it does `increment(value)`.
-          // We need TWO increments? No, `updateDoc` takes fields.
-          // We can do `profit: increment(payout - betData.amount)`? Calculation must be done in JS.
-          const profit = payout - betData.amount;
-          // But we can't do that if we don't know the current profit in DB? 
-          // `increment` adds to the existing value. So `increment(90)` adds 90 to current profit. Yes.
-
-          // Wait, does the user doc have `profit` field?
-          // User creation in line 110 doesn't init `profit`.
-          // But single bet resolution updates `userUpdates.profitData`.
-          // And applies it via `lastBetPercent`.
-          // It doesn't seem to update a persistent `totalProfit` field directly in `resolveEvent`?
-          // UseApp stats are calculated or fetched?
-          // `viewingProfile.stats.profit` in parlay/page.js is shown.
-          // Where does that come from?
-          // Leaderboard likely calculates it or fetches it?
-          // If `resolveEvent` doesn't update it, maybe it's calculated on fly? or I missed where it's updated.
-
-          // Let's just do Balance and Invested for now to be safe, plus Notification.
-
           const notifRef = doc(collection(db, 'notifications'));
+          let msg = `Congratulations! Your parlay hit for $${payout.toFixed(2)}`;
+          if (boostAmount > 0) msg += ` (Includes Squad Boost!)`;
+
           batch.set(notifRef, {
             userId: betData.userId,
             type: 'result',
             eventId: 'parlay-' + parlay.id,
             title: 'Parlay Winner!',
-            message: `Congratulations! Your parlay hit for $${payout.toFixed(2)}`,
+            message: msg,
             read: false,
             createdAt: new Date().toISOString()
           });
@@ -2012,13 +2011,53 @@ export function AppProvider({ children }) {
     if (!user || (!user.groups?.includes('Moderator') && user.role !== 'admin')) return { success: false, error: 'Unauthorized' };
     try {
       const ideaRef = doc(db, 'ideas', ideaId);
+
+      // Fetch idea to get text for notification
+      const ideaSnap = await getDoc(ideaRef);
+      const ideaText = ideaSnap.exists() ? ideaSnap.data().text : 'Unknown Idea';
+
       await updateDoc(ideaRef, {
         status: status, // 'approved' or 'denied'
         reviewedBy: user.username,
         reviewedAt: new Date().toISOString()
       });
+
+      // Notify Admins
+      const adminsQ = query(collection(db, 'users'), where('role', '==', 'admin'));
+      const adminsSnap = await getDocs(adminsQ);
+
+      if (!adminsSnap.empty) {
+        const batch = writeBatch(db);
+        const icon = status === 'approved' ? '✅' : '❌';
+        const title = `Mod ${status === 'approved' ? 'Approved' : 'Denied'} Idea`;
+
+        adminsSnap.forEach(adminDoc => {
+          // Verify we aren't notifying ourselves if we are also an admin (optional, but good UX)
+          if (adminDoc.id === user.id) return; // Skip self-notification? Actually maybe admin wants to see it too. Let's keep it for record.
+
+          const notifRef = doc(collection(db, 'notifications'));
+          batch.set(notifRef, {
+            userId: adminDoc.id,
+            type: 'mod_review',
+            title: title,
+            message: `${icon} ${user.username} ${status} idea: "${ideaText}"`,
+            read: false,
+            relatedIdeaId: ideaId,
+            createdAt: new Date().toISOString()
+          });
+        });
+
+        // Only commit if we have updates
+        // (If there are other admins besides me)
+        // If I am the only admin and I am the mod, I probably don't need a notification? 
+        // User request: "notifies the admin". 
+        // Let's just commit whatever is in the batch.
+        await batch.commit();
+      }
+
       return { success: true };
     } catch (e) {
+      console.error(e); // Helpful for debugging
       return { success: false, error: e.message };
     }
   };
@@ -3100,6 +3139,7 @@ export function AppProvider({ children }) {
     if (!text.trim()) return { success: false, error: 'Message empty' };
 
     try {
+      // 1. Add Message
       await addDoc(collection(db, 'squads', squadId, 'messages'), {
         text: text.trim(),
         senderId: user.id,
@@ -3107,6 +3147,49 @@ export function AppProvider({ children }) {
         timestamp: new Date().toISOString(),
         isSystem: false
       });
+
+      // 2. Notify Members (Async - don't block return)
+      // Fetch squad to get members list
+      // Creating an Immediately Invoked Async Function Expression (IIFE) or just running a promise chain without await
+      // to keep UI responsive. However, in this simple app, we can just await it briefly or run it.
+      (async () => {
+        try {
+          const squadRef = doc(db, 'squads', squadId);
+          const squadSnap = await getDoc(squadRef);
+          if (!squadSnap.exists()) return;
+
+          const squadData = squadSnap.data();
+          const members = squadData.members || [];
+
+          const batch = writeBatch(db);
+          let notificationCount = 0;
+
+          members.forEach(memberId => {
+            // Don't notify self
+            if (memberId === user.id) return;
+
+            const notifRef = doc(collection(db, 'notifications'));
+            batch.set(notifRef, {
+              userId: memberId,
+              type: 'squad_chat',
+              title: `New Message in ${squadData.name || 'Squad'}`,
+              message: `${user.username}: ${text.length > 50 ? text.substring(0, 50) + '...' : text}`,
+              read: false,
+              squadId: squadId,
+              createdAt: new Date().toISOString(),
+              relatedId: squadId // Link to open squad?
+            });
+            notificationCount++;
+          });
+
+          if (notificationCount > 0) {
+            await batch.commit();
+          }
+        } catch (err) {
+          console.error("Error sending squad chat notifications:", err);
+        }
+      })();
+
       return { success: true };
     } catch (e) {
       console.error("Send Msg Error:", e);

@@ -319,7 +319,13 @@ export default function SquadsPage() {
 
         const res = await joinSquad(squadId);
         if (res.success) {
-            if (res.status === 'requested') alert("Request sent!");
+            if (res.status === 'requested') {
+                alert("Request sent!");
+            } else {
+                // Successfully joined - Redirect to My Squad page
+                setViewingSquad(null);
+                setSquadMode('my_squad');
+            }
         } else {
             alert(res.error);
         }
