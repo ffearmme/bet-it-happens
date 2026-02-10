@@ -499,7 +499,13 @@ export default function ParlayPage() {
             </div>
             <div style={{ padding: '12px', background: 'rgba(0,0,0,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    <span style={{ color: '#fff', fontWeight: 'bold' }}>{parlay.wagersCount || 0}</span> Tailing
+                    <div><span style={{ color: '#fff', fontWeight: 'bold' }}>{parlay.wagersCount || 0}</span> Tailing</div>
+                    {user && user.id === parlay.creatorId && (parlay.tailedBy || []).length > 0 && (
+                        <div style={{ color: '#fbbf24', fontSize: '11px', marginTop: '4px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: '12px' }}>🚀</span>
+                            <span>Boost: +{Math.min((parlay.tailedBy || []).length * 0.5, 5).toFixed(1)}x</span>
+                        </div>
+                    )}
                 </div>
                 {/* Tailing Button Logic */}
                 {(() => {
@@ -655,9 +661,17 @@ export default function ParlayPage() {
 
                 {/* Social Proof */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px', background: 'rgba(0,0,0,0.3)', padding: '8px 12px', borderRadius: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '14px' }}>👥</span>
-                        <span style={{ color: '#e5e7eb', fontSize: '13px' }}><b>{parlay.wagersCount || 0}</b> Tailing</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '14px' }}>👥</span>
+                            <span style={{ color: '#e5e7eb', fontSize: '13px' }}><b>{parlay.wagersCount || 0}</b> Tailing</span>
+                        </div>
+                        {user && user.id === parlay.creatorId && (parlay.tailedBy || []).length > 0 && (
+                            <div style={{ color: '#fbbf24', fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', paddingLeft: '2px' }}>
+                                <span style={{ fontSize: '10px' }}>🚀</span>
+                                <span>Boost: +{Math.min((parlay.tailedBy || []).length * 0.5, 5).toFixed(1)}x</span>
+                            </div>
+                        )}
                     </div>
                     <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.2)' }}></div>
                     <div style={{ fontSize: '13px', color: '#fca5a5', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>

@@ -1245,14 +1245,48 @@ export function AppProvider({ children }) {
           });
 
           const uRef = doc(db, 'users', betData.userId);
+
+          // Check for Tail Boost (Creator Only)
+          let tailBoostAmount = 0;
+          if (betData.userId === parlay.creatorId) {
+            const uniqueTails = (parlay.tailedBy || []).length;
+            // Boost: 0.5x per unique tail, capped at 5x multiplier boost (so 500% increase max)
+            // Does "capped at 5x" mean the Multiplier is 5x total or added?
+            // "tail boost is capped at 5x". 
+            // If multiplier is 0.5 per tail. 10 tails = 5.0x boost.
+            // Let's assume max boost multiplier is 5.0.
+            const boostMult = Math.min(uniqueTails * 0.5, 5);
+
+            if (boostMult > 0) {
+              // Apply to Profit? Or Payout? Usually Boosts are on Profit or Payout.
+              // Let's apply to Profit for typical boost behavior, or Payout implies "Tail Boost".
+              // Prompt: "creator of the parlay gets a tail boost of 0.5x... tail boost only effects the creators payout"
+              // Let's add (Profit * boostMult) to the payout.
+              const profit = betData.potentialPayout - betData.amount;
+              tailBoostAmount = profit * boostMult;
+            }
+          }
+
+          const totalPayout = payout + tailBoostAmount;
+
           batch.update(uRef, {
-            balance: increment(payout),
+            balance: increment(totalPayout),
             invested: increment(-betData.amount),
           });
 
+          // Update bet with final details
+          batch.update(pb.ref, {
+            status: 'won',
+            payout: totalPayout,
+            boostApplied: boostAmount > 0 ? boostAmount : 0, // Squad Boost
+            tailBoostApplied: tailBoostAmount > 0 ? tailBoostAmount : 0, // Tail Boost
+            settledAt: new Date().toISOString()
+          });
+
           const notifRef = doc(collection(db, 'notifications'));
-          let msg = `Congratulations! Your parlay hit for $${payout.toFixed(2)}`;
+          let msg = `Congratulations! Your parlay hit for $${totalPayout.toFixed(2)}`;
           if (boostAmount > 0) msg += ` (Includes Squad Boost!)`;
+          if (tailBoostAmount > 0) msg += ` (Includes Tail Boost!)`;
 
           batch.set(notifRef, {
             userId: betData.userId,
@@ -2286,11 +2320,40 @@ export function AppProvider({ children }) {
         outcomeLabel: `${parlay.legs.length} Legs`
       });
 
+      // Check if parlay has started (Locked Boost Logic)
+      // We must fetch leg events to be sure about start time
+      let boostLocked = false;
+      const legEventSnaps = await Promise.all(parlay.legs.map(l => getDoc(doc(db, 'events', l.eventId))));
+      const now = new Date();
+
+      for (const snap of legEventSnaps) {
+        if (snap.exists()) {
+          const e = snap.data();
+          let start;
+          if (e.startAt && e.startAt.seconds) start = new Date(e.startAt.seconds * 1000);
+          else if (e.startAt) start = new Date(e.startAt);
+
+          if (start && start < now) {
+            boostLocked = true;
+            break;
+          }
+        }
+      }
+
       // Update Parlay Stats
-      await updateDoc(parlayRef, {
+      // Only count unique tails if not creator and not locked
+      const isCreator = user.id === parlay.creatorId;
+
+      const parlayUpdate = {
         wagersCount: increment(1),
         totalPool: increment(amount)
-      });
+      };
+
+      if (!isCreator && !boostLocked) {
+        parlayUpdate.tailedBy = arrayUnion(user.id);
+      }
+
+      await updateDoc(parlayRef, parlayUpdate);
 
       return { success: true, streakType, newStreak };
     } catch (e) {
