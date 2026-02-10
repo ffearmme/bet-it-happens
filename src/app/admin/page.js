@@ -301,7 +301,7 @@ function AdminContent() {
 
                                     <div className="card">
                                         <h2 style={{ fontSize: '18px', marginBottom: '16px', borderBottom: '1px solid #333', paddingBottom: '8px' }}>💬 Recent Bet Ideas</h2>
-                                        {ideas.slice(0, 5).map(idea => (
+                                        {ideas.filter(idea => idea.status !== 'deleted').slice(0, 5).map(idea => (
                                             <div key={idea.id} style={{ marginBottom: '12px', borderBottom: '1px solid #333', paddingBottom: '8px' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                                     <div>
@@ -778,10 +778,10 @@ function AdminContent() {
 
                             {/* Filter Tabs */}
                             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', borderBottom: '1px solid #333', paddingBottom: '8px' }}>
-                                {['pending', 'approved', 'denied', 'all'].map(status => {
+                                {['pending', 'approved', 'denied', 'reviewed', 'deleted', 'all'].map(status => {
                                     const count = ideas.filter(i => {
                                         const s = i.status || 'pending';
-                                        if (status === 'all') return true;
+                                        if (status === 'all') return s !== 'deleted';
                                         return s === status;
                                     }).length;
 
@@ -810,7 +810,7 @@ function AdminContent() {
                             {ideas
                                 .filter(idea => {
                                     const status = idea.status || 'pending'; // Default to pending
-                                    if (ideaFilter === 'all') return true;
+                                    if (ideaFilter === 'all') return status !== 'deleted';
                                     return status === ideaFilter;
                                 })
                                 .map(idea => (

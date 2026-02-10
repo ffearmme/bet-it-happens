@@ -37,8 +37,9 @@ function ModContent() {
 
     // Filter Ideas based on search
     const filteredIdeas = (ideas || []).filter(i =>
-        i.text.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        i.username.toLowerCase().includes(searchQuery.toLowerCase())
+        i.status !== 'deleted' &&
+        (i.text.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            i.username.toLowerCase().includes(searchQuery.toLowerCase()))
     );
 
     const pendingIdeasCount = (ideas || []).filter(i => !i.status || i.status === 'pending').length;

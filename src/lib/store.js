@@ -1516,7 +1516,7 @@ export function AppProvider({ children }) {
   const deleteIdea = async (ideaId) => {
     if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
     try {
-      await deleteDoc(doc(db, 'ideas', ideaId));
+      await updateDoc(doc(db, 'ideas', ideaId), { status: 'deleted' });
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };
