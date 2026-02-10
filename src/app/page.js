@@ -44,6 +44,12 @@ export default function Home() {
     const isFeaturedPaused = useRef(false);
     const hasScrolledRef = useRef(false);
 
+    // Drag State
+    const isMouseDownRef = useRef(false);
+    const startXRef = useRef(0);
+    const scrollLeftRef = useRef(0);
+    const dragDistanceRef = useRef(0);
+
     useEffect(() => {
         const container = featuredScrollRef.current;
         if (!container) return;
@@ -1165,10 +1171,38 @@ export default function Home() {
                         </h2>
                         <div
                             ref={featuredScrollRef}
-                            onMouseEnter={() => isFeaturedPaused.current = true}
-                            onMouseLeave={() => isFeaturedPaused.current = false}
+                            // Pause on interaction (Touch/Click), NOT hover
                             onTouchStart={() => isFeaturedPaused.current = true}
-                            onTouchEnd={() => setTimeout(() => isFeaturedPaused.current = false, 2000)} // Resume after delay on mobile
+                            onTouchEnd={() => setTimeout(() => isFeaturedPaused.current = false, 2000)}
+
+                            // Mouse Drag Logic
+                            onMouseDown={(e) => {
+                                isFeaturedPaused.current = true;
+                                isMouseDownRef.current = true;
+                                startXRef.current = e.pageX - featuredScrollRef.current.offsetLeft;
+                                scrollLeftRef.current = featuredScrollRef.current.scrollLeft;
+                                featuredScrollRef.current.style.cursor = 'grabbing';
+                                dragDistanceRef.current = 0; // Reset drag distance
+                            }}
+                            onMouseLeave={() => {
+                                isFeaturedPaused.current = false;
+                                isMouseDownRef.current = false;
+                                if (featuredScrollRef.current) featuredScrollRef.current.style.cursor = 'grab';
+                            }}
+                            onMouseUp={() => {
+                                isFeaturedPaused.current = false;
+                                isMouseDownRef.current = false;
+                                if (featuredScrollRef.current) featuredScrollRef.current.style.cursor = 'grab';
+                            }}
+                            onMouseMove={(e) => {
+                                if (!isMouseDownRef.current) return;
+                                e.preventDefault();
+                                const x = e.pageX - featuredScrollRef.current.offsetLeft;
+                                const walk = (x - startXRef.current) * 1.5; // Multiplier for scroll speed
+                                featuredScrollRef.current.scrollLeft = scrollLeftRef.current - walk;
+                                dragDistanceRef.current += Math.abs(walk); // Track total movement
+                            }}
+
                             style={{
                                 display: 'flex',
                                 overflowX: 'auto',
@@ -1178,6 +1212,7 @@ export default function Home() {
                                 scrollbarWidth: 'none', // Firefox
                                 msOverflowStyle: 'none', // IE
                                 WebkitOverflowScrolling: 'touch', // Smooth mobile scroll
+                                cursor: 'grab', // Indicate draggable
                             }}
                         >
                             <style jsx>{`
@@ -1191,7 +1226,14 @@ export default function Home() {
                                     <div
                                         key={`${event.id}-${i}`} // Unique key
                                         className="card"
-                                        onClick={() => setExpandedEvent(event)}
+                                        onClick={(e) => {
+                                            // Provide a small buffer (e.g. 5px) to allow sloppy clicks, but prevent drags
+                                            if (dragDistanceRef.current > 5) {
+                                                e.stopPropagation();
+                                                return;
+                                            }
+                                            setExpandedEvent(event);
+                                        }}
                                         style={{
                                             minWidth: '320px', // Fixed width for horizontal scroll
                                             maxWidth: '320px',
