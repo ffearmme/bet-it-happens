@@ -756,7 +756,16 @@ function AdminContent() {
                                                 <div style={{ display: 'flex', gap: '4px' }}>
                                                     {u.id !== user.id && (
                                                         <button
-                                                            onClick={() => { if (confirm('Delete user?')) deleteUser(u.id); }}
+                                                            onClick={async () => {
+                                                                if (confirm('Delete user? This action cannot be undone.')) {
+                                                                    const res = await deleteUser(u.id);
+                                                                    if (res.success) {
+                                                                        alert('User deleted successfully.');
+                                                                    } else {
+                                                                        alert('Error deleting user: ' + res.error);
+                                                                    }
+                                                                }
+                                                            }}
                                                             style={{ padding: '4px 8px', background: '#333', color: '#ef4444', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}
                                                         >
                                                             Delete

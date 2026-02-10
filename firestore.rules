@@ -24,8 +24,11 @@ service cloud.firestore {
     // USERS
     match /users/{userId} {
       allow read: if true;
+      
+      // Create: user themselves or admin
       allow create: if request.auth != null && (request.auth.uid == userId || isAdmin());
-      // Explicitly allow users to delete their own doc
+      
+      // Delete: Explicitly allow admins and the user themselves
       allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
       
       allow update: if request.auth != null && (
@@ -48,7 +51,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
       allow update: if isAdmin();
-      // Allow users to delete their own bets
+      // Allow users to delete their own bets AND admins
       allow delete: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
     }
     
@@ -56,7 +59,7 @@ service cloud.firestore {
     match /comments/{commentId} {
       allow read: if true;
       allow create: if request.auth != null;
-      // Allow users to delete their own comments
+      // Allow users to delete their own comments AND admins
       allow delete: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
       
       // Allow auth users to update 'likes' (for fire emoji)
@@ -68,7 +71,7 @@ service cloud.firestore {
     
     // NOTIFICATIONS
     match /notifications/{notificationId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read: if (request.auth != null && resource.data.userId == request.auth.uid) || isAdmin();
       allow create: if isAdmin() || (request.auth != null && (
         request.resource.data.type == 'referral' || 
         request.resource.data.type == 'referral_claim' || 
@@ -84,7 +87,7 @@ service cloud.firestore {
         resource.data.userId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'claimed', 'message'])
       );
-      // Allow users to delete their own notifications
+      // Allow users to delete their own notifications AND admins
       allow delete: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
     }
 
@@ -92,7 +95,7 @@ service cloud.firestore {
     match /ideas/{ideaId} {
       allow read: if true;
       allow create: if request.auth != null;
-      // Allow users to delete their own ideas
+      // Allow users to delete their own ideas AND admins
       allow delete: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
       allow update: if isAdmin() || (
         request.auth != null && 
@@ -109,8 +112,8 @@ service cloud.firestore {
          isAdmin() ||
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wagersCount', 'totalPool', 'lastComment'])
       );
-      // Allow users to delete their own parlays
-      allow delete: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
+      // Allow users to delete their own parlays AND admins
+      allow delete: if isAdmin() || (request.auth != null && resource.data.creatorId == request.auth.uid);
     }
 
     // SQUADS
@@ -129,6 +132,8 @@ service cloud.firestore {
       match /messages/{messageId} {
           allow read: if request.auth != null;
           allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid;
+          // Add Admin delete capability for messages too, just in case
+          allow delete: if isAdmin();
       }
     }
 
@@ -136,7 +141,7 @@ service cloud.firestore {
     match /transactions/{transId} {
       allow read: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if request.auth != null;
-      // Allow users to delete their own transactions
+      // Allow users to delete their own transactions AND admins
       allow delete: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
     }
 
