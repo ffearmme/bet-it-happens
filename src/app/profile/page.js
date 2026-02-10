@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '../../lib/store';
+import { collection, addDoc } from 'firebase/firestore'; // Import needed for inline testing if we kept it here, but we moved to component.
+import ReferralDebugger from '../../components/ReferralDebugger'; // Import the new component
 
 export default function Profile() {
     const { user, updateUser, logout, deleteAccount, demoteSelf, isLoaded, getUserStats } = useApp();
@@ -278,6 +280,7 @@ export default function Profile() {
                 <div style={{ marginTop: '40px', paddingTop: '24px', borderTop: '1px solid #dc2626' }}>
                     <h3 style={{ color: '#ef4444', fontSize: '18px', marginBottom: '16px' }}>Danger Zone</h3>
 
+                    {/* ... other Danger Zone content ... */}
                     {user.role === 'admin' && (
                         <div style={{ marginBottom: '16px' }}>
                             <p className="text-sm" style={{ marginBottom: '8px' }}>You are currently an Admin.</p>
@@ -322,6 +325,9 @@ export default function Profile() {
                         </button>
                     </div>
                 </div>
+
+                {/* --- REFERRAL DEBUGGER --- */}
+                {user.role === 'admin' && <ReferralDebugger />}
             </div>
         </div>
     );

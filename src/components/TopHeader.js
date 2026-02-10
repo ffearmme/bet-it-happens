@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { useApp } from '../lib/store';
 
 export default function TopHeader() {
-    const { user, isGuestMode, setIsGuestMode, notifications, markNotificationAsRead, clearAllNotifications } = useApp();
+    const { user, isGuestMode, setIsGuestMode, notifications, markNotificationAsRead, clearAllNotifications, claimReferralReward } = useApp();
     const [showNotifs, setShowNotifs] = useState(false);
+    const [claimingId, setClaimingId] = useState(null);
     const notifRef = useRef(null);
 
     const unreadCount = notifications ? notifications.filter(n => !n.read).length : 0;
@@ -131,6 +132,26 @@ export default function TopHeader() {
                                                     <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
                                                         {new Date(n.createdAt).toLocaleDateString()} {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                     </div>
+                                                    {n.type === 'referral_claim' && !n.claimed && (
+                                                        <button
+                                                            style={{
+                                                                marginTop: '8px', width: '100%',
+                                                                background: claimingId === n.id ? '#666' : 'linear-gradient(90deg, #10b981, #059669)',
+                                                                border: 'none', borderRadius: '6px',
+                                                                color: '#fff', fontSize: '12px', fontWeight: 'bold',
+                                                                padding: '6px', cursor: claimingId === n.id ? 'default' : 'pointer'
+                                                            }}
+                                                            onClick={async (e) => {
+                                                                e.stopPropagation();
+                                                                if (claimingId) return;
+                                                                setClaimingId(n.id);
+                                                                await claimReferralReward(n.id, n.amount || 500);
+                                                                setClaimingId(null);
+                                                            }}
+                                                        >
+                                                            {claimingId === n.id ? 'Claiming...' : `Claim $${n.amount || 500}`}
+                                                        </button>
+                                                    )}
                                                 </div>
                                             );
                                         })

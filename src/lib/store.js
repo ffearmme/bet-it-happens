@@ -394,22 +394,19 @@ export function AppProvider({ children }) {
             const referrerDoc = snapshot.docs[0];
             const referrerId = referrerDoc.id;
 
-            // Credit $500 to referrer
-            await updateDoc(doc(db, 'users', referrerId), {
-              balance: increment(500)
-            });
-            referredBy = referrerId;
-            console.log(`Referral successful! Credited $500 to ${referrerDoc.data().username}`);
-
-            // Notify Referrer
-            addDoc(collection(db, 'notifications'), {
+            // Notify Referrer with Claimable Reward
+            console.log(`Creating referral notification for ${referrerId}`);
+            await addDoc(collection(db, 'notifications'), {
               userId: referrerId,
-              type: 'referral',
-              title: 'New Referral!',
-              message: `Someone signed up using your code! You earned $500.`,
+              type: 'referral_claim',
+              title: 'New Referral Reward!',
+              message: `Someone signed up using your code! Claim your $500 reward.`,
+              amount: 500,
               read: false,
+              claimed: false,
               createdAt: new Date().toISOString()
             });
+            console.log("Referral notification created successfully.");
           }
         } catch (err) {
           console.error("Error processing referral:", err);
@@ -688,6 +685,30 @@ export function AppProvider({ children }) {
     } catch (e) { console.error(e); }
   };
 
+  const claimReferralReward = async (notificationId, amount) => {
+    if (!user) return;
+    try {
+      // 1. Update Balance (User updates OWN balance - allowed)
+      const userRef = doc(db, 'users', user.id);
+      await updateDoc(userRef, {
+        balance: increment(amount)
+      });
+
+      // 2. Mark Notification as Claimed
+      const notifRef = doc(db, 'notifications', notificationId);
+      await updateDoc(notifRef, {
+        claimed: true,
+        read: true,
+        message: `Reward claimed! You earned $${amount}.`
+      });
+
+      return { success: true };
+    } catch (e) {
+      console.error("Claim failed", e);
+      return { success: false, error: e.message };
+    }
+  };
+
   const resolveEvent = async (eventId, winnerOutcomeId) => {
     try {
       const batch = writeBatch(db);
@@ -882,72 +903,6 @@ export function AppProvider({ children }) {
               // We need to reverse old financial effect and apply new one.
 
               // REVERSE OLD:
-              if (pBet.status === 'won') {
-                userUpdates[pBet.userId].balance -= oldPayout;
-                userUpdates[pBet.userId].profit -= (oldPayout - pBet.amount);
-                // Invested already cleared.
-              } else if (pBet.status === 'lost') {
-                // User lost amount. Give it back conceptually? 
-                // No, easier:
-                // Reverse loss: balance += 0 (lost money gone), but to 'undo' loss implies we are resetting.
-                // Actually:
-                // If prev Lost: Net was -Amount.
-                // If we reverse: Net should be 0. So we need to ADD Amount to balance.
-                // BUT we are transitioning to New State immediately.
-                // Let's do step-by-step:
-
-                // 1. Reset to "pre-bet" state (money in hand)
-                // Won: Balance -= Payout; Balance += Amount.
-                // Lost: Balance += Amount.
-                // Pending: Balance += Amount; Invested -= Amount.
-              } else { // Pending
-                userUpdates[pBet.userId].balance += pBet.amount;
-                userUpdates[pBet.userId].invested -= pBet.amount;
-              }
-
-              // 2. Apply "New State"
-              // Won: Balance -= Amount; Balance += NewPayout.
-              // Lost: Balance -= Amount.
-              // Pending: Balance -= Amount; Invested += Amount. (Wait, invested logic tricky).
-
-              // COMBINED LOGIC:
-              // ----------------------------------------------------------------
-              // CASE: Won -> Won (Odds Changed)
-              // Effect: Balance += (NewPayout - OldPayout).
-
-              // CASE: Won -> Active (Impossible? Only if voiding makes it pending? No, void implies settled.)
-              // Actually if we void a leg, other legs might be pending. YES.
-              // So Won -> Active IS possible if we are un-settling? 
-              // No, if it was Won, ALL legs were settled. Remaining legs must be settled too.
-
-              // CASE: Lost -> Won (The voided leg was the only loser)
-              // Effect: Balance += NewPayout. (Old payout was 0).
-
-              // CASE: Lost -> Active (Voided leg was loser, others pending)
-              // Effect: Balance += Amount (invested back), Invested += Amount.
-              // Net: Balance unchanged? No.
-              // Prev: Lost (Balance -Amount).
-              // New: Active (Balance -Amount, Invested +Amount).
-              // So we shouldn't change balance?
-              // Wait. If it was Lost, the money is GONE.
-              // If it becomes Active, the money is LOCKED.
-              // So Balance is same (low), but Invested increases? 
-              // No, if it was Lost, Invested was cleared.
-              // If Active, Invested should include it.
-              // Firestore 'invested' field track LOCKED funds.
-              // So yes: Invested += Amount.
-
-              // CASE: Lost -> Lost
-              // Effect: None.
-
-              // Let's apply this cleanly.
-
-              // Reset Step (Virtual):
-              let balanceChange = 0;
-              let investedChange = 0;
-              let profitChange = 0;
-
-              // Undo Old
               if (pBet.status === 'won') {
                 balanceChange -= oldPayout;
                 profitChange -= (oldPayout - pBet.amount);
@@ -1287,17 +1242,6 @@ export function AppProvider({ children }) {
           // But single bet resolution updates `userUpdates.profitData`.
           // And applies it via `lastBetPercent`.
           // It doesn't seem to update a persistent `totalProfit` field directly in `resolveEvent`?
-          // Step 154:
-          /*
-             userUpdates[bet.userId].profitData += (finalPayout - bet.amount);
-             // ...
-             batch.update(userRef, {
-                 balance: increment(updates.balanceData),
-                 invested: increment(updates.investedData),
-                 lastBetPercent: percentChange
-             });
-          */
-          // It only updates `lastBetPercent`. It DOES NOT seem to update a global `profit` field on the user doc in `resolveEvent`.
           // UseApp stats are calculated or fetched?
           // `viewingProfile.stats.profit` in parlay/page.js is shown.
           // Where does that come from?
@@ -3172,7 +3116,7 @@ export function AppProvider({ children }) {
       events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, toggleLikeComment, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendIdeaToAdmin, reviewIdea, replyToIdea,
       bets, placeBet, isLoaded, isFirebase: true, users, ideas, db,
       isGuestMode, setIsGuestMode,
-      notifications, markNotificationAsRead, clearAllNotifications, submitModConcern,
+      notifications, markNotificationAsRead, clearAllNotifications, submitModConcern, claimReferralReward,
       createParlay, placeParlayBet, addParlayComment, calculateParlays, deleteParlay, sendSystemNotification,
       squads, createSquad, joinSquad, leaveSquad, manageSquadRequest, kickMember, updateSquad, inviteUserToSquad, respondToSquadInvite, searchUsers, getSquadStats,
       depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest, sendSquadMessage

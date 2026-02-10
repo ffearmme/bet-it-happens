@@ -71,6 +71,7 @@ service cloud.firestore {
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
       allow create: if isAdmin() || (request.auth != null && (
         request.resource.data.type == 'referral' || 
+        request.resource.data.type == 'referral_claim' || 
         request.resource.data.type == 'squad_invite' || 
         request.resource.data.type == 'squad_join' || 
         request.resource.data.type == 'squad_promotion' || 
@@ -81,7 +82,7 @@ service cloud.firestore {
       allow update: if isAdmin() || (
         request.auth != null && 
         resource.data.userId == request.auth.uid &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'claimed', 'message'])
       );
       // Allow users to delete their own notifications
       allow delete: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
