@@ -170,13 +170,13 @@ export default function Profile() {
                                 onClick={() => {
                                     const shareData = {
                                         title: 'Bet It Happens',
-                                        text: `Join me on Bet It Happens! Use my code ${user.referralCode} to get started with $500 free play money!`,
+                                        text: `Join me on Bet It Happens! Use my code ${user.referralCode} to get started with $1000 free play money!`,
                                         url: 'https://betithappens.com'
                                     };
                                     if (navigator.share) {
                                         navigator.share(shareData).catch(console.error);
                                     } else {
-                                        navigator.clipboard.writeText(`Join me on Bet It Happens! Use code ${user.referralCode}`).then(() => alert('Copied to clipboard!'));
+                                        navigator.clipboard.writeText(`Join me on Bet It Happens! Use code ${user.referralCode} for $1000 start!`).then(() => alert('Copied to clipboard!'));
                                     }
                                 }}
                             >
@@ -188,9 +188,10 @@ export default function Profile() {
                             <button
                                 style={{ padding: '8px 12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px' }}
                                 onClick={(e) => {
+                                    const btn = e.currentTarget;
                                     navigator.clipboard.writeText(user.referralCode);
-                                    e.currentTarget.innerText = 'Copied!';
-                                    setTimeout(() => e.target.innerText = 'Copy', 2000);
+                                    btn.innerText = 'Copied!';
+                                    setTimeout(() => btn.innerText = 'Copy', 2000);
                                 }}
                             >
                                 Copy

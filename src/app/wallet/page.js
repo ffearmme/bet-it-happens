@@ -114,13 +114,13 @@ export default function Wallet() {
                         onClick={() => {
                             const shareData = {
                                 title: 'Bet It Happens',
-                                text: `Join me on Bet It Happens! Use my code ${user.referralCode} to get started with $500 free play money!`,
+                                text: `Join me on Bet It Happens! Use my code ${user.referralCode} to get started with $1000 free play money!`,
                                 url: 'https://betithappens.com'
                             };
                             if (navigator.share) {
                                 navigator.share(shareData).catch(console.error);
                             } else {
-                                navigator.clipboard.writeText(`Join me on Bet It Happens! Use code ${user.referralCode}`).then(() => alert('Copied to clipboard!'));
+                                navigator.clipboard.writeText(`Join me on Bet It Happens! Use code ${user.referralCode} for $1000 start!`).then(() => alert('Copied to clipboard!'));
                             }
                         }}
                     >
@@ -132,18 +132,15 @@ export default function Wallet() {
                     <button
                         className="btn"
                         style={{ width: 'auto', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.1)' }}
-                        onClick={() => {
+                        onClick={(e) => {
                             navigator.clipboard.writeText(user.referralCode).then(() => {
-                                const btn = document.getElementById('copy-btn-text');
-                                if (btn) {
-                                    const orig = btn.innerText;
-                                    btn.innerText = 'Copied!';
-                                    setTimeout(() => btn.innerText = orig, 2000);
-                                }
+                                const originalText = e.currentTarget.innerText;
+                                e.currentTarget.innerText = 'Copied!';
+                                setTimeout(() => e.target.innerText = 'Copy', 2000);
                             });
                         }}
                     >
-                        <span id="copy-btn-text">Copy</span>
+                        Copy
                     </button>
                 </div>
                 <p style={{ fontSize: '12px', color: '#71717a', marginTop: '12px', fontStyle: 'italic' }}>

@@ -407,6 +407,10 @@ export function AppProvider({ children }) {
               createdAt: new Date().toISOString()
             });
             console.log("Referral notification created successfully.");
+
+            // LINK THE REFERRAL
+            referredBy = referrerId;
+
           }
         } catch (err) {
           console.error("Error processing referral:", err);
