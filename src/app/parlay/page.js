@@ -1114,6 +1114,10 @@ export default function ParlayPage() {
                             <h2 style={{ marginBottom: '16px' }}>Place Bet</h2>
                             <div style={{ marginBottom: '16px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
+                                    <span style={{ color: 'var(--text-muted)' }}>Available Balance</span>
+                                    <span style={{ color: '#fff', fontWeight: 'bold' }}>${(user?.balance || 0).toFixed(2)}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
                                     <span>Multiplier</span>
                                     <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{bettingParlay.finalMultiplier.toFixed(2)}x</span>
                                 </div>
