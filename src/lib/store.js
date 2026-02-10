@@ -2079,6 +2079,8 @@ export function AppProvider({ children }) {
     if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
     if (!replyMessage.trim()) return { success: false, error: 'Message empty' };
 
+    console.log("replyToIdea running with message:", replyMessage);
+
     try {
       const ideaRef = doc(db, 'ideas', ideaId);
       const ideaSnap = await getDoc(ideaRef);
@@ -2096,11 +2098,12 @@ export function AppProvider({ children }) {
 
       // 2. Notify the User (if userId exists)
       if (ideaData.userId) {
+        const safeTitle = ideaData.text.length > 50 ? ideaData.text.substring(0, 50) + '...' : ideaData.text;
         await addDoc(collection(db, 'notifications'), {
           userId: ideaData.userId,
           type: 'admin_reply',
-          title: 'Admin Replied to your Idea',
-          message: `Admin says: "${replyMessage}"`,
+          title: `New Response to ${safeTitle}!`,
+          message: replyMessage,
           read: false,
           createdAt: new Date().toISOString(),
           relatedIdeaId: ideaId

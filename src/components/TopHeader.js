@@ -113,24 +113,27 @@ export default function TopHeader() {
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                                     {notifications && notifications.length > 0 ? (
-                                        notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(n => (
-                                            <div
-                                                key={n.id}
-                                                onClick={() => markNotificationAsRead(n.id)}
-                                                style={{
-                                                    padding: '12px', borderBottom: '1px solid #222',
-                                                    background: n.read ? 'transparent' : 'rgba(255,255,255,0.05)',
-                                                    cursor: 'pointer', transition: 'background 0.2s'
-                                                }}
-                                                className="hover:bg-white/5"
-                                            >
-                                                <div style={{ fontSize: '13px', fontWeight: n.read ? 'normal' : 'bold', color: '#fff', marginBottom: '4px' }}>{n.title}</div>
-                                                <div style={{ fontSize: '12px', color: '#ccc' }}>{n.message}</div>
-                                                <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
-                                                    {new Date(n.createdAt).toLocaleDateString()} {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(n => {
+                                            if (n.type === 'admin_reply') console.log("Rendering Admin Reply Notification:", n);
+                                            return (
+                                                <div
+                                                    key={n.id}
+                                                    onClick={() => markNotificationAsRead(n.id)}
+                                                    style={{
+                                                        padding: '12px', borderBottom: '1px solid #222',
+                                                        background: n.read ? 'transparent' : 'rgba(255,255,255,0.05)',
+                                                        cursor: 'pointer', transition: 'background 0.2s'
+                                                    }}
+                                                    className="hover:bg-white/5"
+                                                >
+                                                    <div style={{ fontSize: '13px', fontWeight: n.read ? 'normal' : 'bold', color: '#fff', marginBottom: '4px' }}>{n.title}</div>
+                                                    <div style={{ fontSize: '12px', color: '#ccc', whiteSpace: 'pre-wrap' }}>{n.message}</div>
+                                                    <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                                                        {new Date(n.createdAt).toLocaleDateString()} {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))
+                                            );
+                                        })
                                     ) : (
                                         <div style={{ padding: '24px', textAlign: 'center', color: '#666', fontSize: '13px' }}>No notifications</div>
                                     )}

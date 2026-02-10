@@ -73,10 +73,12 @@ export default function SquadsPage() {
     // Chat State
     const [chatMessages, setChatMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
-    const chatEndRef = useRef(null);
+    const chatContainerRef = useRef(null);
 
     useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
     }, [chatMessages, activeTab]);
 
     useEffect(() => {
@@ -1182,7 +1184,7 @@ export default function SquadsPage() {
                                     <h3 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', color: '#fff', margin: 0 }}>Squad Chat</h3>
                                 </div>
                                 {/* Messages */}
-                                <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(0,0,0,0.2)' }}>
+                                <div ref={chatContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(0,0,0,0.2)' }}>
                                     {chatMessages.length === 0 ? (
                                         <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: 'auto', marginBottom: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                             <MessageCircle size={48} style={{ opacity: 0.2, marginBottom: '16px' }} />
@@ -1232,7 +1234,7 @@ export default function SquadsPage() {
                                                     </div>
                                                 );
                                             })}
-                                            <div ref={chatEndRef} />
+
                                         </>
                                     )}
                                 </div>

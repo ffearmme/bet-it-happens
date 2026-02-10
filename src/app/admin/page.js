@@ -862,6 +862,7 @@ function AdminContent() {
                                                     <button onClick={() => setOpenReplyId(null)} style={{ padding: '6px 12px', background: 'transparent', color: '#888', border: 'none', cursor: 'pointer', fontSize: '12px' }}>Cancel</button>
                                                     <button
                                                         onClick={async () => {
+                                                            console.log("Sending reply. Content:", replyText);
                                                             const res = await replyToIdea(idea.id, replyText);
                                                             if (res.success) {
                                                                 setOpenReplyId(null);
