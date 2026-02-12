@@ -302,20 +302,7 @@ export default function ParlayPage() {
             return;
         }
 
-        // Check Max Limits (3 bets per event)
-        for (const leg of bettingParlay.legs) {
-            const count = bets.filter(b => {
-                if (b.userId !== user.id) return false;
-                if (b.eventId === leg.eventId) return true;
-                if (b.legs && b.legs.some(l => l.eventId === leg.eventId)) return true;
-                return false;
-            }).length;
 
-            if (count >= 3) {
-                setError(`Limit reached (3 max) for event: ${leg.eventTitle}`);
-                return;
-            }
-        }
         if (!wager || parseFloat(wager) <= 0) {
             setError("Enter a valid wager");
             return;
