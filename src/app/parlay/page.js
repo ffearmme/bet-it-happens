@@ -324,9 +324,8 @@ export default function ParlayPage() {
         const res = await placeParlayBet(bettingParlay.id, parseFloat(wager));
         if (res.success) {
             setSuccess("Bet Placed on Parlay!");
-            setBettingParlay(null);
             setWager('');
-            setTimeout(() => setSuccess(''), 3000);
+            // Do NOT close immediately. Let the success modal switch show.
         } else {
             setError(res.error);
         }
@@ -1141,41 +1140,62 @@ export default function ParlayPage() {
                         position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
                         background: 'rgba(0,0,0,0.85)', zIndex: 9999,
                         display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px'
-                    }} onClick={() => setBettingParlay(null)}>
-                        <div className="card" style={{ width: '100%', maxWidth: '350px', border: '1px solid var(--primary)' }} onClick={e => e.stopPropagation()}>
-                            <h2 style={{ marginBottom: '16px' }}>Place Bet</h2>
-                            <div style={{ marginBottom: '16px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
-                                    <span style={{ color: 'var(--text-muted)' }}>Available Balance</span>
-                                    <span style={{ color: '#fff', fontWeight: 'bold' }}>${(user?.balance || 0).toFixed(2)}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
-                                    <span>Multiplier</span>
-                                    <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{bettingParlay.finalMultiplier.toFixed(2)}x</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
-                                    <span>Your Wager</span>
-                                    <input
-                                        type="number"
-                                        className="input"
-                                        style={{ width: '100px', padding: '4px 8px' }}
-                                        value={wager}
-                                        onChange={e => setWager(e.target.value)}
-                                        placeholder="$"
-                                        autoFocus
-                                    />
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', fontSize: '14px', borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
-                                    <span>Potential Payout</span>
-                                    <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>
-                                        ${((parseFloat(wager) || 0) * bettingParlay.finalMultiplier).toFixed(2)}
-                                    </span>
-                                </div>
+                    }} onClick={() => { if (!success) setBettingParlay(null); }}>
+                        {success ? (
+                            <div className="card animate-fade" style={{ width: '100%', maxWidth: '350px', border: '1px solid #22c55e', textAlign: 'center', padding: '32px' }} onClick={e => e.stopPropagation()}>
+                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
+                                <h2 style={{ fontSize: '24px', color: '#22c55e', marginBottom: '8px' }}>Bet Placed!</h2>
+                                <p style={{ color: '#dcfce7', marginBottom: '24px' }}>
+                                    Good luck! You are now tailing this parlay.
+                                </p>
+                                <button
+                                    className="btn btn-primary"
+                                    style={{ background: '#22c55e', color: '#000', width: '100%', fontWeight: 'bold' }}
+                                    onClick={() => {
+                                        setSuccess('');
+                                        setBettingParlay(null);
+                                    }}
+                                >
+                                    Awesome
+                                </button>
                             </div>
-                            <button className="btn btn-primary" onClick={handlePlaceBet} disabled={isSubmitting}>
-                                {isSubmitting ? 'Placing...' : 'Confirm Bet'}
-                            </button>
-                        </div>
+                        ) : (
+                            <div className="card" style={{ width: '100%', maxWidth: '350px', border: '1px solid var(--primary)' }} onClick={e => e.stopPropagation()}>
+                                <h2 style={{ marginBottom: '16px' }}>Place Bet</h2>
+                                {error && <div style={{ background: 'rgba(239,68,68,0.2)', color: '#fca5a5', padding: '8px', borderRadius: '4px', fontSize: '12px', marginBottom: '12px' }}>{error}</div>}
+                                <div style={{ marginBottom: '16px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
+                                        <span style={{ color: 'var(--text-muted)' }}>Available Balance</span>
+                                        <span style={{ color: '#fff', fontWeight: 'bold' }}>${(user?.balance || 0).toFixed(2)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
+                                        <span>Multiplier</span>
+                                        <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{bettingParlay.finalMultiplier.toFixed(2)}x</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
+                                        <span>Your Wager</span>
+                                        <input
+                                            type="number"
+                                            className="input"
+                                            style={{ width: '100px', padding: '4px 8px' }}
+                                            value={wager}
+                                            onChange={e => setWager(e.target.value)}
+                                            placeholder="$"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', fontSize: '14px', borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
+                                        <span>Potential Payout</span>
+                                        <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>
+                                            ${((parseFloat(wager) || 0) * bettingParlay.finalMultiplier).toFixed(2)}
+                                        </span>
+                                    </div>
+                                </div>
+                                <button className="btn btn-primary" onClick={handlePlaceBet} disabled={isSubmitting}>
+                                    {isSubmitting ? 'Placing...' : 'Confirm Bet'}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )
             }
