@@ -64,7 +64,8 @@ export default function Home() {
         // 0.08 pixels per frame is 4.8px per second. It's very slow.
         // To handle sub-pixel rendering issues:
 
-        const targetSpeed = 0.6; // Increased speed as requested (0.2 -> 0.6)
+        const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+        const targetSpeed = isMobile ? 1.5 : 0.6; // Speed up strictly for mobile users
 
         let animationFrameId;
 

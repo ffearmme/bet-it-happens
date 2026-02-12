@@ -1,8 +1,215 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '../../lib/store';
 import { Wallet, TrendingUp, BarChart3, ArrowUpRight, ArrowDownRight, DollarSign, History, AlertCircle, ChevronDown, ChevronUp, LineChart } from 'lucide-react';
+
+
+const BalanceChart = ({ historyFrame, completedBets, currentBalance }) => {
+    const [hoverData, setHoverData] = useState(null);
+    const containerRef = useRef(null);
+
+    const historyPoints = useMemo(() => {
+        const allSorted = [...(completedBets || [])].sort((a, b) => {
+            const tA = a.resolvedAt ? new Date(a.resolvedAt).getTime() : new Date(a.placedAt).getTime();
+            const tB = b.resolvedAt ? new Date(b.resolvedAt).getTime() : new Date(b.placedAt).getTime();
+            return tB - tA; // Newest first
+        });
+
+        let simBalance = currentBalance || 0;
+        const points = [];
+
+        // Add current point
+        points.push({ time: Date.now(), val: simBalance });
+
+        // Walk back
+        const now = Date.now();
+        let cutoff = 0;
+        if (historyFrame === '24h') cutoff = now - 24 * 60 * 60 * 1000;
+        if (historyFrame === '7d') cutoff = now - 7 * 24 * 60 * 60 * 1000;
+        if (historyFrame === '30d') cutoff = now - 30 * 24 * 60 * 60 * 1000;
+        if (historyFrame === 'all') cutoff = 0;
+
+        allSorted.forEach(bet => {
+            const t = bet.resolvedAt ? new Date(bet.resolvedAt).getTime() : new Date(bet.placedAt).getTime();
+            let change = 0;
+            if (bet.status === 'won') change = bet.potentialPayout;
+            simBalance -= change;
+
+            if (t >= cutoff) {
+                points.push({ time: t, val: simBalance + change });
+            }
+        });
+
+        points.reverse();
+        return points;
+    }, [completedBets, historyFrame, currentBalance]);
+
+    const handleInteraction = (clientX) => {
+        if (!containerRef.current || historyPoints.length < 2) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        // Calculate relative X
+        const x = clientX - rect.left;
+        const width = rect.width;
+
+        // Clamp x
+        const clampedX = Math.max(0, Math.min(x, width));
+
+        // Find index (map 0..width to 0..indices)
+        const totalPoints = historyPoints.length;
+        if (totalPoints < 2) return;
+
+        const index = Math.round((clampedX / width) * (totalPoints - 1));
+        const safeIndex = Math.max(0, Math.min(index, totalPoints - 1));
+
+        const point = historyPoints[safeIndex];
+        // Calculate safeY based on safeIndex to map it correctly
+        const minVal = Math.min(...historyPoints.map(p => p.val));
+        const maxVal = Math.max(...historyPoints.map(p => p.val));
+        const range = maxVal - minVal || 1;
+        const svgHeight = 40;
+        const y = svgHeight - ((point.val - minVal) / range) * svgHeight;
+
+        setHoverData({
+            point: point,
+            x: (safeIndex / (totalPoints - 1)) * 100, // % position for SVG
+            y: y // SVG coordinate
+        });
+    };
+
+    const handleTouch = (e) => {
+        const touch = e.touches[0];
+        handleInteraction(touch.clientX);
+    };
+
+    if (historyPoints.length < 2) return (
+        <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+            Not enough data for chart
+        </div>
+    );
+
+    const minVal = Math.min(...historyPoints.map(p => p.val));
+    const maxVal = Math.max(...historyPoints.map(p => p.val));
+    const range = maxVal - minVal || 1;
+
+    const width = 100;
+    const height = 40;
+
+    const pointsStr = historyPoints.map((p, i) => {
+        const x = (i / (historyPoints.length - 1)) * width;
+        const y = height - ((p.val - minVal) / range) * height;
+        return `${x},${y}`;
+    }).join(' ');
+
+    const isProfit = historyPoints[historyPoints.length - 1].val >= historyPoints[0].val;
+    const chartColor = isProfit ? '#22c55e' : '#ef4444';
+
+    return (
+        <div style={{ padding: '16px', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <h3 style={{ fontSize: '14px', margin: 0, color: 'var(--text-muted)' }}>Balance Trend</h3>
+                <div style={{ fontSize: '12px', color: chartColor, fontWeight: 'bold' }}>
+                    {hoverData ? (
+                        `$${hoverData.point.val.toFixed(2)}`
+                    ) : (
+                        `${isProfit ? '▲' : '▼'} ${historyFrame}`
+                    )}
+                </div>
+            </div>
+
+            <div
+                ref={containerRef}
+                style={{
+                    position: 'relative',
+                    height: '80px',
+                    touchAction: 'none',
+                    cursor: 'crosshair'
+                }}
+                onMouseMove={(e) => handleInteraction(e.clientX)}
+                onMouseLeave={() => setHoverData(null)}
+                onTouchStart={(e) => handleTouch(e)}
+                onTouchMove={(e) => handleTouch(e)}
+                onTouchEnd={() => setHoverData(null)}
+            >
+                <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+                    <polyline
+                        fill="none"
+                        stroke={chartColor}
+                        strokeWidth="2"
+                        points={pointsStr}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{ opacity: hoverData ? 0.3 : 1, transition: 'opacity 0.2s' }}
+                    />
+
+                    {/* Hover Line */}
+                    {hoverData && (
+                        <line
+                            x1={hoverData.x}
+                            y1="0"
+                            x2={hoverData.x}
+                            y2={height}
+                            stroke="rgba(255,255,255,0.5)"
+                            strokeWidth="0.5"
+                            strokeDasharray="2"
+                        />
+                    )}
+
+                    {/* Hover Dot */}
+                    {hoverData && (
+                        <circle
+                            cx={hoverData.x}
+                            cy={hoverData.y}
+                            r="2"
+                            fill="#fff"
+                            stroke={chartColor}
+                            strokeWidth="1"
+                        />
+                    )}
+                </svg>
+
+                {/* Floating Tooltip positioned relative to container */}
+                {hoverData && (
+                    <div style={{
+                        position: 'absolute',
+                        left: `${hoverData.x}%`,
+                        top: '-35px',
+                        transform: 'translateX(-50%)',
+                        background: 'rgba(23, 23, 23, 0.95)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        padding: '6px 10px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        pointerEvents: 'none',
+                        whiteSpace: 'nowrap',
+                        zIndex: 10,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center'
+                    }}>
+                        <div style={{ fontWeight: 'bold', color: '#fff' }}>${hoverData.point.val.toFixed(2)}</div>
+                        <div style={{ color: '#a1a1aa', fontSize: '10px' }}>
+                            {new Date(hoverData.point.time).toLocaleTimeString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                        {/* Triangle pointer */}
+                        <div style={{
+                            position: 'absolute',
+                            bottom: '-4px',
+                            left: '50%',
+                            transform: 'translateX(-50%) rotate(45deg)',
+                            width: '8px',
+                            height: '8px',
+                            background: 'rgba(23, 23, 23, 0.95)',
+                            borderRight: '1px solid rgba(255,255,255,0.1)',
+                            borderBottom: '1px solid rgba(255,255,255,0.1)'
+                        }} />
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
 export default function Portfolio() {
     const { user, bets, events, isLoaded } = useApp();
@@ -49,7 +256,7 @@ export default function Portfolio() {
     if (!isLoaded || !user) return null;
 
     // --- LOGIC FROM MY BETS ---
-    const myBets = bets.filter(b => b.userId === user.id).sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
+    const myBets = (bets || []).filter(b => b.userId === user.id).sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
     const activeBets = myBets.filter(b => b.status === 'pending');
     const completedBets = myBets.filter(b => b.status !== 'pending');
     const wonBets = myBets.filter(b => b.status === 'won');
@@ -159,120 +366,7 @@ export default function Portfolio() {
 
     const filteredBets = getFilteredHistory();
 
-    const BalanceChart = () => {
-        // Simple balance reconstruction logic
-        // Start from current balance, work backwards through SORTED (newest to oldest) bets
-        // But for chart line display we need Oldest to Newest
 
-        // 1. Get ALL settled bets for accurate history reconstruction or just show relative change?
-        // Let's show relative change for the selected period to be safe, starting at 0 change?
-        // Or try to reconstruct actual balance if possible.
-        // Reconstructing actual balance requires knowing the starting balance of the period.
-        // Current Balance is known.
-        // We can walk back from Current Balance through ALL completed bets to find the balance at 'cutoff' time.
-
-        const allSorted = [...completedBets].sort((a, b) => {
-            const tA = a.resolvedAt ? new Date(a.resolvedAt).getTime() : new Date(a.placedAt).getTime();
-            const tB = b.resolvedAt ? new Date(b.resolvedAt).getTime() : new Date(b.placedAt).getTime();
-            return tB - tA; // Newest first
-        });
-
-        let simBalance = user.balance || 0;
-        const historyPoints = [];
-
-        // Add current point
-        historyPoints.push({ time: Date.now(), val: simBalance });
-
-        // Walk back
-        const now = Date.now();
-        let cutoff = 0;
-        if (historyFrame === '24h') cutoff = now - 24 * 60 * 60 * 1000;
-        if (historyFrame === '7d') cutoff = now - 7 * 24 * 60 * 60 * 1000;
-        if (historyFrame === '30d') cutoff = now - 30 * 24 * 60 * 60 * 1000;
-        if (historyFrame === 'all') cutoff = 0;
-
-        allSorted.forEach(bet => {
-            const t = bet.resolvedAt ? new Date(bet.resolvedAt).getTime() : new Date(bet.placedAt).getTime();
-            // Undo the bet effect
-            // If won: we gained (payout - wager). So prev balance was (curr - (payout - wager))
-            // If lost: we lost wager. So prev balance was (curr + wager)
-            // Wait, wager is deducted when placed. 
-            // So:
-            // Place Bet: Bal - Wager
-            // Resolve Win: Bal + Payout
-            // Resolve Loss: Bal + 0
-
-            // So to undo a resolution:
-            // If Win: Bal - Payout
-            // If Loss: Bal (no change on resolution)
-
-            // BUT this ignores the "Place Bet" event time.
-            // For a simple "Balance History" chart, usually we just track the resolved P&L impact?
-            // Let's approximate: 
-            // We will just plot the points we have within the cutoff.
-
-            let change = 0;
-            if (bet.status === 'won') change = bet.potentialPayout; // This amount was Added to balance
-            // If lost, 0 was added.
-
-            // Undo the ADDITION
-            simBalance -= change;
-
-            // But wait, we also need to account for the WAGER being deducted at placement time?
-            // Complex.
-            // Simplified View: Show "Net Profit" chart? No user asked for "Balance".
-            // Let's just plot the points we have within the cutoff.
-
-            if (t >= cutoff) {
-                historyPoints.push({ time: t, val: simBalance + change }); // Value before this resolution
-            }
-        });
-
-        // The above loop calculates the balance "before resolution". 
-        // We need to reverse to get chronological order
-        historyPoints.reverse();
-
-        if (historyPoints.length < 2) return (
-            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
-                Not enough data for chart
-            </div>
-        );
-
-        // Normalize
-        const minVal = Math.min(...historyPoints.map(p => p.val));
-        const maxVal = Math.max(...historyPoints.map(p => p.val));
-        const range = maxVal - minVal || 1;
-
-        const width = 100;
-        const height = 40;
-
-        const points = historyPoints.map((p, i) => {
-            const x = (i / (historyPoints.length - 1)) * width;
-            const y = height - ((p.val - minVal) / range) * height; // Invert Y
-            return `${x},${y}`;
-        }).join(' ');
-
-        return (
-            <div style={{ padding: '16px', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                    <h3 style={{ fontSize: '14px', margin: 0, color: 'var(--text-muted)' }}>Balance Trend</h3>
-                    <div style={{ fontSize: '12px', color: historyPoints[historyPoints.length - 1].val >= historyPoints[0].val ? '#22c55e' : '#ef4444' }}>
-                        {historyPoints[historyPoints.length - 1].val >= historyPoints[0].val ? '▲' : '▼'} {historyFrame}
-                    </div>
-                </div>
-                <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '80px', overflow: 'visible' }}>
-                    <polyline
-                        fill="none"
-                        stroke={historyPoints[historyPoints.length - 1].val >= historyPoints[0].val ? '#22c55e' : '#ef4444'}
-                        strokeWidth="2"
-                        points={points}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                    />
-                </svg>
-            </div>
-        );
-    }
 
     return (
         <div className="container animate-fade">
@@ -520,7 +614,11 @@ export default function Portfolio() {
             </div>
 
             {/* --- BALANCE CHART --- */}
-            <BalanceChart />
+            <BalanceChart
+                historyFrame={historyFrame}
+                completedBets={completedBets}
+                currentBalance={user.balance}
+            />
 
 
             {/* --- BET IDEA MODAL --- */}
@@ -768,6 +866,6 @@ export default function Portfolio() {
                     </div>
                 )
             }
-        </div >
+        </div>
     );
 }
