@@ -110,7 +110,7 @@ service cloud.firestore {
       // Added 'lastComment' to allowed update fields
       allow update: if request.auth != null && (
          isAdmin() ||
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wagersCount', 'totalPool', 'lastComment'])
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wagersCount', 'totalPool', 'lastComment', 'tailedBy'])
       );
       // Allow users to delete their own parlays AND admins
       allow delete: if isAdmin() || (request.auth != null && resource.data.creatorId == request.auth.uid);
