@@ -396,8 +396,22 @@ export default function ParlayPage() {
                 activeParlays.push(p);
             }
         } else {
-            // No wins, no losses -> All Pending (Upcoming)
-            upcomingParlays.push(p);
+            // No wins, no losses yet.
+            // CHECK: Has any leg started? If so, it's "Active" not "Upcoming".
+            // We use isEventOpen(event) to check if it's still betting-enabled.
+            // If !isEventOpen, it means it started or deadline passed.
+            const hasStarted = p.legs.some(leg => {
+                const event = events.find(e => e.id === leg.eventId);
+                return event && !isEventOpen(event);
+            });
+
+            if (hasStarted) {
+                // Move to Active (Heating Up) since it is live.
+                activeParlays.push(p);
+            } else {
+                // Truly Upcoming (All legs open for betting)
+                upcomingParlays.push(p);
+            }
         }
     });
 
@@ -510,14 +524,18 @@ export default function ParlayPage() {
                 {/* Tailing Button Logic */}
                 {(() => {
                     // Check if any leg has started/closed/settled
-                    // The simplest check given our categorization: 
-                    // If it's Heating Up, it means something WON.
-                    // If it's Busted, it means something LOST.
-                    // In both cases, we can't tail.
-                    // We can check if any leg status is NOT 'pending'.
-                    const hasStarted = parlay.legs.some(leg => getLegStatus(leg) !== 'pending');
+                    // We check if (1) Leg Status is NOT pending (already won/lost) OR (2) Event is no longer open (started)
+                    const isClosed = parlay.legs.some(leg => {
+                        // Check settlement
+                        if (getLegStatus(leg) !== 'pending') return true;
 
-                    if (hasStarted) {
+                        // Check if event has started/closed (even if not settled yet)
+                        const event = events.find(e => e.id === leg.eventId);
+                        if (!event) return true; // Safety
+                        return !isEventOpen(event);
+                    });
+
+                    if (isClosed) {
                         return (
                             <button
                                 className="btn"

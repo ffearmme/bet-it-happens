@@ -10,7 +10,8 @@ function AdminContent() {
     const {
         user, events, createEvent, resolveEvent, deleteEvent, updateEvent,
         updateEventOrder, deleteBet, toggleFeatured, ideas, deleteIdea, replyToIdea,
-        users, deleteUser, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendSystemNotification
+        users, deleteUser, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendSystemNotification,
+        syncAllUsernames
     } = useApp();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -904,98 +905,123 @@ function AdminContent() {
 
                     {/* --- SYSTEM TAB --- */}
                     {activeTab === 'system' && (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) minmax(300px, 1fr)', gap: '24px', maxWidth: '1200px' }}>
-                            {/* Left Column: System Announcements */}
-                            <div className="card">
-                                <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>📢 System Announcements</h2>
-                                <div style={{ marginBottom: '24px' }}>
-                                    <label className="text-sm" style={{ display: 'block', marginBottom: '8px' }}>Current Announcement</label>
-                                    <div style={{ padding: '12px', background: '#333', borderRadius: '8px', marginBottom: '12px', color: '#ddd' }}>
-                                        {systemAnnouncement?.active ? systemAnnouncement.message : 'No active announcement'}
+                        <div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) minmax(300px, 1fr)', gap: '24px', maxWidth: '1200px' }}>
+                                {/* Left Column: System Announcements */}
+                                <div className="card">
+                                    <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>📢 System Announcements</h2>
+                                    <div style={{ marginBottom: '24px' }}>
+                                        <label className="text-sm" style={{ display: 'block', marginBottom: '8px' }}>Current Announcement</label>
+                                        <div style={{ padding: '12px', background: '#333', borderRadius: '8px', marginBottom: '12px', color: '#ddd' }}>
+                                            {systemAnnouncement?.active ? systemAnnouncement.message : 'No active announcement'}
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                                            <input id="sys-msg" className="input" placeholder="New announcement..." style={{ flex: 1 }} />
+                                            <select id="sys-type" className="input" style={{ width: '100px' }}>
+                                                <option value="info">Info</option>
+                                                <option value="warning">Warning</option>
+                                            </select>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '12px' }}>
+                                            <button
+                                                className="btn btn-primary"
+                                                onClick={() => {
+                                                    const msg = document.getElementById('sys-msg').value;
+                                                    const type = document.getElementById('sys-type').value;
+                                                    if (msg) updateSystemAnnouncement({ message: msg, type, active: true, postedAt: new Date().toISOString() });
+                                                }}
+                                            >
+                                                Post
+                                            </button>
+                                            <button
+                                                className="btn"
+                                                style={{ background: '#444' }}
+                                                onClick={() => updateSystemAnnouncement({ active: false })}
+                                            >
+                                                Clear Active
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                                        <input id="sys-msg" className="input" placeholder="New announcement..." style={{ flex: 1 }} />
-                                        <select id="sys-type" className="input" style={{ width: '100px' }}>
-                                            <option value="info">Info</option>
-                                            <option value="warning">Warning</option>
-                                        </select>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '12px' }}>
+                                </div>
+
+                                {/* Right Column: Global Notification */}
+                                <div className="card">
+                                    <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>🔔 Send Global Notification</h2>
+                                    <p style={{ fontSize: '13px', color: '#888', marginBottom: '12px' }}>
+                                        Send a notification to specific user groups or everyone.
+                                    </p>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        <div>
+                                            <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>Target Audience</label>
+                                            <select id="notif-target" className="input" style={{ width: '100%', background: '#222' }}>
+                                                <option value="all">Everyone (All Users)</option>
+                                                <option value="The Boys">The Boys</option>
+                                                <option value="The Fam">The Fam</option>
+                                                <option value="Moderator">Moderators</option>
+                                                <option value="admin">Admins</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>Title</label>
+                                            <input id="notif-title" className="input" placeholder="Notification Title" style={{ width: '100%' }} />
+                                        </div>
+
+                                        <div>
+                                            <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>Message Body</label>
+                                            <textarea id="notif-msg" className="input" style={{ width: '100%', height: '80px', resize: 'vertical' }} placeholder="Message body..." />
+                                        </div>
+
                                         <button
                                             className="btn btn-primary"
-                                            onClick={() => {
-                                                const msg = document.getElementById('sys-msg').value;
-                                                const type = document.getElementById('sys-type').value;
-                                                if (msg) updateSystemAnnouncement({ message: msg, type, active: true, postedAt: new Date().toISOString() });
+                                            onClick={async () => {
+                                                const targetSelect = document.getElementById('notif-target');
+                                                const target = targetSelect.value;
+                                                const title = document.getElementById('notif-title').value;
+                                                const msg = document.getElementById('notif-msg').value;
+
+                                                if (!title || !msg) return alert("Please fill both title and message.");
+
+                                                const targetLabel = targetSelect.options[targetSelect.selectedIndex].text;
+
+                                                if (confirm(`Send to ${targetLabel}?\nTitle: ${title}`)) {
+                                                    const res = await sendSystemNotification(title, msg, target);
+                                                    if (res.success) {
+                                                        alert(`Sent to ${res.count} users.`);
+                                                        document.getElementById('notif-title').value = '';
+                                                        document.getElementById('notif-msg').value = '';
+                                                    } else {
+                                                        alert("Error: " + res.error);
+                                                    }
+                                                }
                                             }}
                                         >
-                                            Post
-                                        </button>
-                                        <button
-                                            className="btn"
-                                            style={{ background: '#444' }}
-                                            onClick={() => updateSystemAnnouncement({ active: false })}
-                                        >
-                                            Clear Active
+                                            Send Notification
                                         </button>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Right Column: Global Notification */}
-                            <div className="card">
-                                <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>🔔 Send Global Notification</h2>
+                            {/* Data Maintenance Section */}
+                            <div className="card" style={{ marginTop: '24px', maxWidth: '1200px' }}>
+                                <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>🔧 Data Maintenance</h2>
                                 <p style={{ fontSize: '13px', color: '#888', marginBottom: '12px' }}>
-                                    Send a notification to specific user groups or everyone.
+                                    Run these tasks to ensure data consistency across the database.
                                 </p>
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                    <div>
-                                        <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>Target Audience</label>
-                                        <select id="notif-target" className="input" style={{ width: '100%', background: '#222' }}>
-                                            <option value="all">Everyone (All Users)</option>
-                                            <option value="The Boys">The Boys</option>
-                                            <option value="The Fam">The Fam</option>
-                                            <option value="Moderator">Moderators</option>
-                                            <option value="admin">Admins</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>Title</label>
-                                        <input id="notif-title" className="input" placeholder="Notification Title" style={{ width: '100%' }} />
-                                    </div>
-
-                                    <div>
-                                        <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>Message Body</label>
-                                        <textarea id="notif-msg" className="input" style={{ width: '100%', height: '80px', resize: 'vertical' }} placeholder="Message body..." />
-                                    </div>
-
+                                <div style={{ display: 'flex', gap: '12px' }}>
                                     <button
-                                        className="btn btn-primary"
+                                        className="btn"
+                                        style={{ background: '#f59e0b', color: '#000', fontWeight: 'bold' }}
                                         onClick={async () => {
-                                            const targetSelect = document.getElementById('notif-target');
-                                            const target = targetSelect.value;
-                                            const title = document.getElementById('notif-title').value;
-                                            const msg = document.getElementById('notif-msg').value;
-
-                                            if (!title || !msg) return alert("Please fill both title and message.");
-
-                                            const targetLabel = targetSelect.options[targetSelect.selectedIndex].text;
-
-                                            if (confirm(`Send to ${targetLabel}?\nTitle: ${title}`)) {
-                                                const res = await sendSystemNotification(title, msg, target);
-                                                if (res.success) {
-                                                    alert(`Sent to ${res.count} users.`);
-                                                    document.getElementById('notif-title').value = '';
-                                                    document.getElementById('notif-msg').value = '';
-                                                } else {
-                                                    alert("Error: " + res.error);
-                                                }
+                                            if (confirm("This will overwrite username/profilePic on ALL past bets, parlays, and ideas with the current user profile data. Continue?")) {
+                                                const res = await syncAllUsernames();
+                                                if (res.success) alert(res.message);
+                                                else alert("Error: " + res.error);
                                             }
                                         }}
                                     >
-                                        Send Notification
+                                        🔄 Sync All Usernames
                                     </button>
                                 </div>
                             </div>

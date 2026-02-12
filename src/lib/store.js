@@ -1504,30 +1504,194 @@ export function AppProvider({ children }) {
     }
   };
 
+  const cascadeUserUpdates = async (userId, updates) => {
+    const { username, profilePic } = updates;
+    if (!username && !profilePic) return;
+
+    try {
+      console.log(`Starting cascade update for user ${userId}...`);
+      let batch = writeBatch(db);
+      let opCount = 0;
+      const commitThreshold = 450;
+
+      const commitBatchIfFull = async () => {
+        if (opCount >= commitThreshold) {
+          await batch.commit();
+          batch = writeBatch(db);
+          opCount = 0;
+        }
+      };
+
+      // 1. Update Bets (username)
+      if (username) {
+        const betsQ = query(collection(db, 'bets'), where('userId', '==', userId));
+        const betsSnap = await getDocs(betsQ);
+        for (const docSnap of betsSnap.docs) {
+          batch.update(docSnap.ref, { username: username });
+          opCount++;
+          await commitBatchIfFull();
+        }
+      }
+
+      // 2. Update Parlays (creatorName, creatorProfilePic)
+      const parlaysQ = query(collection(db, 'parlays'), where('creatorId', '==', userId));
+      const parlaysSnap = await getDocs(parlaysQ);
+      for (const docSnap of parlaysSnap.docs) {
+        const updateData = {};
+        if (username) updateData.creatorName = username;
+        if (profilePic) updateData.creatorProfilePic = profilePic;
+
+        if (Object.keys(updateData).length > 0) {
+          batch.update(docSnap.ref, updateData);
+          opCount++;
+          await commitBatchIfFull();
+        }
+      }
+
+      // 3. Update Ideas (username)
+      if (username) {
+        const ideasQ = query(collection(db, 'ideas'), where('userId', '==', userId));
+        const ideasSnap = await getDocs(ideasQ);
+        for (const docSnap of ideasSnap.docs) {
+          batch.update(docSnap.ref, { username: username });
+          opCount++;
+          await commitBatchIfFull();
+        }
+      }
+
+      // 4. Update Comments (username)
+      if (username) {
+        const commentsQ = query(collection(db, 'comments'), where('userId', '==', userId));
+        const commentsSnap = await getDocs(commentsQ);
+        for (const docSnap of commentsSnap.docs) {
+          batch.update(docSnap.ref, { username: username });
+          opCount++;
+          await commitBatchIfFull();
+        }
+      }
+
+      // 5. Update Squads (memberDetails)
+      const squadsQ = query(collection(db, 'squads'), where('members', 'array-contains', userId));
+      const squadsSnap = await getDocs(squadsQ);
+
+      for (const docSnap of squadsSnap.docs) {
+        const squad = docSnap.data();
+        let changed = false;
+
+        // Update memberDetails
+        const newMemberDetails = (squad.memberDetails || []).map(member => {
+          if (member.id === userId) {
+            const newMember = { ...member };
+            if (username) newMember.username = username;
+            if (profilePic) newMember.profilePic = profilePic;
+
+            if (newMember.username !== member.username || newMember.profilePic !== member.profilePic) {
+              changed = true;
+            }
+            return newMember;
+          }
+          return member;
+        });
+
+        // Update requests if present
+        let newRequests = squad.requests;
+        if (squad.requests && squad.requests.length > 0) {
+          newRequests = squad.requests.map(req => {
+            if (req.userId === userId) {
+              const newReq = { ...req };
+              if (username) newReq.username = username;
+              if (newReq.username !== req.username) changed = true;
+              return newReq;
+            }
+            return req;
+          });
+        }
+
+        if (changed) {
+          const squadUpdate = { memberDetails: newMemberDetails };
+          if (newRequests) squadUpdate.requests = newRequests;
+
+          batch.update(docSnap.ref, squadUpdate);
+          opCount++;
+          await commitBatchIfFull();
+        }
+      }
+
+      if (opCount > 0) {
+        await batch.commit();
+      }
+      console.log("Cascade update complete.");
+
+    } catch (e) {
+      console.error("Cascade Update Failed:", e);
+    }
+  };
+
+  const syncAllUsernames = async () => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+
+    try {
+      console.log("Starting full username sync...");
+      const usersSnap = await getDocs(collection(db, 'users'));
+      let totalUpdated = 0;
+
+      for (const userDoc of usersSnap.docs) {
+        const userData = userDoc.data();
+        const userId = userDoc.id;
+
+        // Trigger update with current data
+        // This forces the cascade logic to run and overwrite any stale data in other collections
+        await cascadeUserUpdates(userId, {
+          username: userData.username,
+          profilePic: userData.profilePic
+        });
+        totalUpdated++;
+        console.log(`Synced user ${totalUpdated}/${usersSnap.size}: ${userData.username}`);
+      }
+
+      return { success: true, message: `Synced ${totalUpdated} users.` };
+    } catch (e) {
+      console.error("Sync All Failed:", e);
+      return { success: false, error: e.message };
+    }
+  };
+
   const updateUser = async (updates) => {
     if (!user) return { success: false, error: 'Not logged in' };
 
     try {
-      // 1. Update Firestore FIRST (Profile Pic, Username, etc.)
-      // This ensures that non-sensitive updates always succeed even if Auth fails.
+      // Capture old state for comparison
+      const oldUsername = user.username;
+      const oldProfilePic = user.profilePic;
+
+      // 1. Update Firestore FIRST
       const firestoreUpdates = { ...updates };
-      delete firestoreUpdates.password; // Don't store raw password in DB
+      delete firestoreUpdates.password;
 
       await updateDoc(doc(db, 'users', user.id), firestoreUpdates);
 
-      // Update local state immediately for the UI
+      // Update local state immediately
       setUser(prev => ({ ...prev, ...firestoreUpdates }));
 
-      // 2. Attempt Auth Updates (Sensitive: Email/Password)
+      // --- TRIGGER CASCADE UPDATES ---
+      const shouldCascade = (updates.username && updates.username !== oldUsername) ||
+        (updates.profilePic && updates.profilePic !== oldProfilePic);
+
+      if (shouldCascade) {
+        await cascadeUserUpdates(user.id, {
+          username: updates.username !== oldUsername ? updates.username : null,
+          profilePic: updates.profilePic !== oldProfilePic ? updates.profilePic : null
+        });
+      }
+
+      // 2. Attempt Auth Updates
       let authUpdated = false;
       let authErrorMsg = '';
 
       try {
-        // Update Email
         if (updates.email && auth.currentUser) {
           const currentAuthEmail = auth.currentUser.email;
           if (updates.email.toLowerCase() !== currentAuthEmail.toLowerCase()) {
-            console.log(`Debug: Attempting email update from ${currentAuthEmail} to ${updates.email}`);
             try {
               await updateEmail(auth.currentUser, updates.email);
               authUpdated = true;
@@ -1541,7 +1705,6 @@ export function AppProvider({ children }) {
           }
         }
 
-        // Update Password
         if (updates.password && updates.password.length > 0) {
           if (auth.currentUser) {
             await updatePassword(auth.currentUser, updates.password);
@@ -1549,7 +1712,6 @@ export function AppProvider({ children }) {
           }
         }
 
-        // Force refresh if Auth changed
         if (authUpdated && auth.currentUser) {
           await auth.currentUser.reload();
         }
@@ -2335,7 +2497,9 @@ export function AppProvider({ children }) {
 
           if (start && start < now) {
             boostLocked = true;
-            break;
+            // CRITICAL: If a leg has started, the parlay is locked/closed. No new bets allowed.
+            // Unless user is creator? No, even creator should not bet on started legs (would manipulate odds).
+            throw new Error(`Event "${e.title}" has already started.`);
           }
         }
       }
@@ -3269,7 +3433,8 @@ export function AppProvider({ children }) {
       notifications, markNotificationAsRead, clearAllNotifications, submitModConcern, claimReferralReward,
       createParlay, placeParlayBet, addParlayComment, calculateParlays, deleteParlay, sendSystemNotification,
       squads, createSquad, joinSquad, leaveSquad, manageSquadRequest, kickMember, updateSquad, inviteUserToSquad, respondToSquadInvite, searchUsers, getSquadStats,
-      depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest, sendSquadMessage
+      depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest, sendSquadMessage,
+      syncAllUsernames
     }}>
       {children}
     </AppContext.Provider>
