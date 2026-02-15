@@ -4,6 +4,7 @@ import './globals.css';
 import Navbar from '../components/Navbar';
 import TopHeader from '../components/TopHeader';
 import InstallPrompt from '../components/InstallPrompt';
+import JackpotAnnouncer from '../components/JackpotAnnouncer';
 import { AppProvider } from '../lib/store';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -92,6 +93,7 @@ export default function RootLayout({ children }) {
                 <AppProvider>
                     <BetaBanner />
                     <TopHeader />
+                    <JackpotAnnouncer />
                     {children}
                     <Navbar />
                     <InstallPrompt />
