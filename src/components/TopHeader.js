@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useApp } from '../lib/store';
 
 export default function TopHeader() {
@@ -8,6 +9,7 @@ export default function TopHeader() {
     const [showNotifs, setShowNotifs] = useState(false);
     const [claimingId, setClaimingId] = useState(null);
     const notifRef = useRef(null);
+    const router = useRouter();
 
     const unreadCount = notifications ? notifications.filter(n => !n.read).length : 0;
 
@@ -192,7 +194,10 @@ export default function TopHeader() {
                     </Link>
                 ) : isGuestMode && (
                     <div
-                        onClick={() => setIsGuestMode(false)}
+                        onClick={() => {
+                            setIsGuestMode(false);
+                            router.push('/');
+                        }}
                         style={{
                             padding: '6px 12px',
                             borderRadius: '20px',

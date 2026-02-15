@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useApp } from '../../lib/store';
 import { collection, query, orderBy, onSnapshot, where, limit } from 'firebase/firestore';
 
-export default function ParlayPage() {
+export default function ParlayPage({ isEmbedded = false }) {
     const { user, events, db, createParlay, placeParlayBet, getUserStats, deleteParlay, bets, addParlayComment } = useApp();
     const [mode, setMode] = useState('active'); // 'active' | 'create'
     const [parlays, setParlays] = useState([]);
@@ -870,7 +870,7 @@ export default function ParlayPage() {
     };
 
     return (
-        <div className="container animate-fade" style={{ paddingBottom: '100px' }}>
+        <div className={isEmbedded ? "animate-fade" : "container animate-fade"} style={{ paddingBottom: '100px' }}>
             <header style={{ marginBottom: '24px', textAlign: 'center' }}>
                 <h1 style={{
                     fontSize: '32px',

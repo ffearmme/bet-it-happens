@@ -23,6 +23,7 @@ export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [events, setEvents] = useState([]);
   const [bets, setBets] = useState([]);
+  const [casinoBets, setCasinoBets] = useState([]);
   const [ideas, setIdeas] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -249,16 +250,31 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (!user) {
       setNotifications([]);
+      setCasinoBets([]);
       return;
     }
-    const q = query(collection(db, 'notifications'), where('userId', '==', user.id), limit(20));
-    const unsub = onSnapshot(q, (snapshot) => {
+
+    // Notifications
+    const qNotif = query(collection(db, 'notifications'), where('userId', '==', user.id), limit(20));
+    const unsubNotif = onSnapshot(qNotif, (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Sort by date desc (client side)
       list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       setNotifications(list);
     });
-    return () => unsub();
+
+    // Casino Bets
+    // Fetch all for this user to ensure stats are accurate (no limit for now)
+    const qCasino = query(collection(db, 'casino_bets'), where('userId', '==', user.id));
+    const unsubCasino = onSnapshot(qCasino, (snapshot) => {
+      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      setCasinoBets(list);
+    });
+
+    return () => {
+      unsubNotif();
+      unsubCasino();
+    };
   }, [user?.id]);
 
   // --- 5. Manual Parlay Calculation (For retroactive fixes) ---
@@ -3428,7 +3444,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
       events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, toggleLikeComment, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendIdeaToAdmin, reviewIdea, replyToIdea,
-      bets, placeBet, isLoaded, isFirebase: true, users, ideas, db,
+      bets, casinoBets, placeBet, isLoaded, isFirebase: true, users, ideas, db,
       isGuestMode, setIsGuestMode,
       notifications, markNotificationAsRead, clearAllNotifications, submitModConcern, claimReferralReward,
       createParlay, placeParlayBet, addParlayComment, calculateParlays, deleteParlay, sendSystemNotification,

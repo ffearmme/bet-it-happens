@@ -213,6 +213,7 @@ function AdminContent() {
                         { id: 'users', label: 'Users', icon: '👥' },
                         { id: 'community', label: 'Community', icon: '💡' },
                         { id: 'system', label: 'System', icon: '📢' },
+                        { id: 'tutorials', label: 'Tutorials', icon: '🎓' },
                     ].map(item => (
                         <button
                             key={item.id}
