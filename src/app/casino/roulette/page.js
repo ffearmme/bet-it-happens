@@ -445,8 +445,20 @@ export default function RouletteGame() {
                                 </div>
                             </div>
 
-                            {/* Board Grid */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(40px, auto) repeat(12, 1fr)', gap: '4px', maxWidth: '100%', minWidth: '600px' }}>
+                            {/* Responsive Styles */}
+                            <style jsx>{`
+                                @media (min-width: 769px) {
+                                    .desktop-board { display: grid !important; }
+                                    .mobile-board { display: none !important; }
+                                }
+                                @media (max-width: 768px) {
+                                    .desktop-board { display: none !important; }
+                                    .mobile-board { display: grid !important; }
+                                }
+                            `}</style>
+
+                            {/* DESKTOP BOARD (Horizontal) */}
+                            <div className="desktop-board" style={{ gridTemplateColumns: 'minmax(40px, auto) repeat(12, 1fr)', gap: '4px', maxWidth: '100%', minWidth: '600px' }}>
                                 {/* 0 */}
                                 <div onClick={() => handlePlaceBet('straight_0')} style={{
                                     gridRow: '1 / span 3', background: COLORS[0],
@@ -458,12 +470,6 @@ export default function RouletteGame() {
                                 </div>
 
                                 {/* Numbers 1-36 */}
-                                {/* Create 3 rows: 3, 6, 9... / 2, 5, 8... / 1, 4, 7... */}
-                                {/* Actually standard board is:
-                                    Row 3: 3, 6, 9, ... 36
-                                    Row 2: 2, 5, 8, ... 35
-                                    Row 1: 1, 4, 7, ... 34
-                                */}
                                 {[3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36].map(n => (
                                     <NumberCell key={n} num={n} handlePlaceBet={handlePlaceBet} bets={bets} />
                                 ))}
@@ -506,7 +512,41 @@ export default function RouletteGame() {
                                 {[1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34].map(n => (
                                     <NumberCell key={n} num={n} handlePlaceBet={handlePlaceBet} bets={bets} row={3} />
                                 ))}
+                            </div>
 
+                            {/* MOBILE BOARD (Vertical) */}
+                            <div className="mobile-board" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', width: '100%' }}>
+                                {/* 0 spans top */}
+                                <div onClick={() => handlePlaceBet('straight_0')} style={{
+                                    gridColumn: '1 / span 3', background: COLORS[0],
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', cursor: 'pointer',
+                                    height: '50px', borderRadius: '4px 4px 0 0', border: '1px solid rgba(255,255,255,0.1)', position: 'relative'
+                                }}>
+                                    0
+                                    {bets['straight_0'] && <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '24px', height: '24px', borderRadius: '50%', background: 'white', color: 'black', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>{bets['straight_0']}</div>}
+                                </div>
+
+                                {/* Numbers 1-36 Vertical Flow */}
+                                {Array.from({ length: 36 }, (_, i) => i + 1).map(n => (
+                                    <NumberCell key={n} num={n} handlePlaceBet={handlePlaceBet} bets={bets} />
+                                ))}
+
+                                {/* Dozens below numbers */}
+                                <div style={{ gridColumn: '1 / span 3', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px', marginTop: '8px' }}>
+                                    <BetButton label="1st 12" onClick={() => handlePlaceBet('doz_1')} amount={bets['doz_1']} />
+                                    <BetButton label="2nd 12" onClick={() => handlePlaceBet('doz_2')} amount={bets['doz_2']} />
+                                    <BetButton label="3rd 12" onClick={() => handlePlaceBet('doz_3')} amount={bets['doz_3']} />
+                                </div>
+
+                                {/* Even Money Bets */}
+                                <div style={{ gridColumn: '1 / span 3', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                                    <BetButton label="1-18" onClick={() => handlePlaceBet('low')} amount={bets['low']} />
+                                    <BetButton label="Even" onClick={() => handlePlaceBet('even')} amount={bets['even']} />
+                                    <BetButton label="Red" bg="#ef4444" onClick={() => handlePlaceBet('red')} amount={bets['red']} />
+                                    <BetButton label="Black" bg="#1f2937" onClick={() => handlePlaceBet('black')} amount={bets['black']} />
+                                    <BetButton label="Odd" onClick={() => handlePlaceBet('odd')} amount={bets['odd']} />
+                                    <BetButton label="19-36" onClick={() => handlePlaceBet('high')} amount={bets['high']} />
+                                </div>
                             </div>
                         </div>
 
