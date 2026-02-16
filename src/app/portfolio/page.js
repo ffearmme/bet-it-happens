@@ -243,32 +243,7 @@ export default function Portfolio() {
         }
     }, [user, isLoaded, router]);
 
-    if (!isLoaded || !user) return null;
-
-    // --- LOGIC FROM MY BETS ---
-    const myBets = (bets || []).filter(b => b.userId === user.id).sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
-    const activeBets = myBets.filter(b => b.status === 'pending');
-    const completedBets = myBets.filter(b => b.status !== 'pending');
-    const wonBets = myBets.filter(b => b.status === 'won');
-
-    // Stats Calculations
-    // Stats Calculations
-    const settledBetsForStats = myBets.filter(b => b.status === 'won' || b.status === 'lost');
-    const winRate = settledBetsForStats.length > 0
-        ? ((wonBets.length / settledBetsForStats.length) * 100).toFixed(1)
-        : '0.0';
-
-    const biggestWin = wonBets.length > 0
-        ? Math.max(...wonBets.map(b => b.potentialPayout - b.amount))
-        : 0;
-
-    const totalNetProfit = completedBets.reduce((acc, bet) => {
-        if (bet.status === 'won') return acc + (bet.potentialPayout - bet.amount);
-        if (bet.status === 'lost') return acc - bet.amount;
-        return acc;
-    }, 0);
-
-    // Casino Stats
+    // Casino Stats - MOVED UP TO FIX HOOK ERROR
     const casinoStats = useMemo(() => {
         return (casinoBets || []).reduce((acc, bet) => {
             acc.totalHands += 1;
@@ -285,6 +260,30 @@ export default function Portfolio() {
             return acc;
         }, { totalHands: 0, highestMulti: 0, bestWin: 0, netProfit: 0 });
     }, [casinoBets]);
+
+    if (!isLoaded || !user) return null;
+
+    // --- LOGIC FROM MY BETS ---
+    const myBets = (bets || []).filter(b => b.userId === user.id).sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
+    const activeBets = myBets.filter(b => b.status === 'pending');
+    const completedBets = myBets.filter(b => b.status !== 'pending');
+    const wonBets = myBets.filter(b => b.status === 'won');
+
+    // Stats Calculations
+    const settledBetsForStats = myBets.filter(b => b.status === 'won' || b.status === 'lost');
+    const winRate = settledBetsForStats.length > 0
+        ? ((wonBets.length / settledBetsForStats.length) * 100).toFixed(1)
+        : '0.0';
+
+    const biggestWin = wonBets.length > 0
+        ? Math.max(...wonBets.map(b => b.potentialPayout - b.amount))
+        : 0;
+
+    const totalNetProfit = completedBets.reduce((acc, bet) => {
+        if (bet.status === 'won') return acc + (bet.potentialPayout - bet.amount);
+        if (bet.status === 'lost') return acc - bet.amount;
+        return acc;
+    }, 0);
 
     // --- LOGIC FROM WALLET ---
     const netWorth = (user.balance || 0) + (user.invested || 0);
