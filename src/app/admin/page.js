@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
 import { db } from '../../lib/firebase';
-import { collection, query, limit, onSnapshot, doc, updateDoc, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, limit, onSnapshot, doc, updateDoc, where, getDocs, orderBy, writeBatch, increment, getDoc } from 'firebase/firestore';
 
 function AdminContent() {
     const {
@@ -54,6 +54,110 @@ function AdminContent() {
     const [ideaFilter, setIdeaFilter] = useState('pending');
     const [openReplyId, setOpenReplyId] = useState(null);
     const [replyText, setReplyText] = useState('');
+
+    const runSlotsClawback = async () => {
+        if (!confirm("⚠️ WARNING: This will scan all slots history, calculate net profits, and deduct them from user balances (and their squad wallets if necessary). \n\nAre you sure?")) return;
+
+        try {
+            // 1. Get all slots bets
+            const q = query(collection(db, 'casino_bets'), where('game', '==', 'slots'));
+            const snapshot = await getDocs(q);
+
+            const userProfits = {}; // { userId: { won: 0, bet: 0, profit: 0 } }
+
+            snapshot.forEach(doc => {
+                const bet = doc.data();
+                if (!userProfits[bet.userId]) userProfits[bet.userId] = { won: 0, bet: 0, profit: 0, username: bet.username || bet.userId };
+
+                userProfits[bet.userId].bet += (bet.amount || 0);
+                userProfits[bet.userId].won += (bet.payout || 0);
+            });
+
+            // Calculate profits
+            const targets = [];
+            Object.keys(userProfits).forEach(uid => {
+                const stats = userProfits[uid];
+                stats.profit = stats.won - stats.bet;
+                if (stats.profit > 0) {
+                    targets.push({ id: uid, ...stats });
+                }
+            });
+
+            if (targets.length === 0) {
+                alert("No users found with net profits from slots.");
+                return;
+            }
+
+            const totalProfit = targets.reduce((acc, t) => acc + t.profit, 0);
+            if (!confirm(`Found ${targets.length} users with total slots profit of $${totalProfit.toLocaleString()}. Proceed with clawback?`)) {
+                return;
+            }
+
+            const batch = writeBatch(db);
+            const report = [];
+            let opCount = 0;
+
+            for (const target of targets) {
+                let remainingUrl = target.profit;
+                let recoveredFromUser = 0;
+                let recoveredFromSquad = 0;
+
+                // 2. User Balance
+                const userRef = doc(db, 'users', target.id);
+                const userSnap = await getDoc(userRef);
+
+                if (userSnap.exists()) {
+                    const userData = userSnap.data();
+                    const userBalance = userData.balance || 0;
+
+                    if (userBalance > 0) {
+                        const take = Math.min(userBalance, remainingUrl);
+                        if (take > 0) {
+                            recoveredFromUser = take;
+                            remainingUrl -= take;
+                            batch.update(userRef, { balance: increment(-take) });
+                            opCount++;
+                        }
+                    }
+
+                    // 3. Squad Balance (if needed)
+                    if (remainingUrl > 0 && userData.squadId) {
+                        const squadRef = doc(db, 'squads', userData.squadId);
+                        const squadSnap = await getDoc(squadRef);
+
+                        if (squadSnap.exists()) {
+                            const squadData = squadSnap.data();
+                            const squadBalance = squadData.wallet?.balance || 0;
+
+                            if (squadBalance > 0) {
+                                const takeSquad = Math.min(squadBalance, remainingUrl);
+                                if (takeSquad > 0) {
+                                    recoveredFromSquad = takeSquad;
+                                    remainingUrl -= takeSquad;
+                                    batch.update(squadRef, { 'wallet.balance': increment(-takeSquad) });
+                                    opCount++;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                report.push(`${target.username}: Profit $${target.profit.toFixed(2)} -> Took $${recoveredFromUser.toFixed(2)} (User) + $${recoveredFromSquad.toFixed(2)} (Squad). Unrecovered: $${remainingUrl.toFixed(2)}`);
+            }
+
+            if (opCount > 0) {
+                await batch.commit();
+                console.log("Clawback Report:", report);
+                alert("Clawback Complete!\n\nCheck console for full report.\n\nSummary:\n" + report.slice(0, 10).join("\n") + (report.length > 10 ? "\n...and " + (report.length - 10) + " more." : ""));
+            } else {
+                alert("No funds could be recovered (balances were 0).");
+            }
+
+        } catch (e) {
+            console.error(e);
+            alert("Error: " + e.message);
+        }
+    };
 
     // Hardcoded Categories List
     const CATEGORIES = [
@@ -1022,6 +1126,13 @@ function AdminContent() {
                                         }}
                                     >
                                         🔄 Sync All Usernames
+                                    </button>
+                                    <button
+                                        className="btn"
+                                        style={{ background: '#ef4444', color: '#fff', fontWeight: 'bold' }}
+                                        onClick={runSlotsClawback}
+                                    >
+                                        🎰 Clawback Slots Profits
                                     </button>
                                 </div>
                             </div>
