@@ -74,8 +74,8 @@ export default function CrashGame() {
                 timestamp: Date.now()
             });
 
-            // Check for Global Jackpot Announcement (> 5x or $10k+)
-            if (currentMulti > 5 || winAmount >= 10000) {
+            // Check for Global Jackpot Announcement (> 5x or $300+)
+            if (currentMulti > 5 || winAmount >= 300) {
                 addDoc(collection(db, 'jackpots'), {
                     userId: user.id,
                     username: user.username || 'User',

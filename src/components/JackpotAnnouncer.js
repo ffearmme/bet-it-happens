@@ -22,10 +22,9 @@ export default function JackpotAnnouncer() {
         const unsubscribe = onSnapshot(q, (snapshot) => {
             if (!snapshot.empty) {
                 const data = snapshot.docs[0].data();
-                // Only show if it happened recently (e.g., within last 60 seconds)
-                // This prevents showing old jackpots on page load
+                // Filter: Recent (< 60s) AND Amount >= 300
                 const now = Date.now();
-                if (now - data.timestamp < 60000) {
+                if (now - data.timestamp < 60000 && data.amount >= 300) {
                     setJackpot(data);
                     setVisible(true);
 

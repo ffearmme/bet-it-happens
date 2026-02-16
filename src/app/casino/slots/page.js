@@ -150,9 +150,9 @@ export default function SlotsGame() {
                         timestamp: Date.now()
                     });
 
-                    // Check for Global Jackpot Announcement (> 5x or > 10000)
+                    // Check for Global Jackpot Announcement (> 5x or >= 300)
                     const actualMultiplier = amount > 0 ? totalWin / amount : 0;
-                    if (actualMultiplier > 5 || totalWin >= 10000) {
+                    if (actualMultiplier > 5 || totalWin >= 300) {
                         addDoc(collection(db, 'jackpots'), {
                             userId: user.id,
                             username: user.username || 'User',

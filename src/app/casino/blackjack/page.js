@@ -217,9 +217,9 @@ export default function BlackjackGame() {
                 timestamp: Date.now()
             });
 
-            // Check for Jackpot ($10k+ or >5x)
+            // Check for Jackpot ($300+ or >5x)
             const multiplier = amount > 0 ? payout / amount : 0;
-            if (payout >= 10000 || multiplier > 5) {
+            if (payout >= 300 || multiplier > 5) {
                 addDoc(collection(db, 'jackpots'), {
                     userId: user.id,
                     username: user.username || 'User',

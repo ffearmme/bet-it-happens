@@ -147,7 +147,7 @@ export default function RouletteGame() {
                     });
 
                     // Check for Jackpot/High Win
-                    if (totalWin >= 1000 || totalWin >= totalBet * 10) {
+                    if (totalWin >= 300 || totalWin >= totalBet * 10) {
                         addDoc(collection(db, 'jackpots'), {
                             userId: user.id,
                             username: user.username || 'User',
