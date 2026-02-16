@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
@@ -11,7 +11,7 @@ function AdminContent() {
         user, events, createEvent, resolveEvent, deleteEvent, updateEvent,
         updateEventOrder, deleteBet, toggleFeatured, ideas, deleteIdea, replyToIdea,
         users, deleteUser, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendSystemNotification,
-        syncAllUsernames, casinoSettings, updateCasinoStatus
+        syncAllUsernames, casinoSettings, updateCasinoStatus, updateMaintenanceStatus, maintenanceSettings
     } = useApp();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -55,6 +55,363 @@ function AdminContent() {
     const [ideaFilter, setIdeaFilter] = useState('pending');
     const [openReplyId, setOpenReplyId] = useState(null);
     const [replyText, setReplyText] = useState('');
+
+    const fileInputRef = useRef(null);
+    const jackpotsFileInputRef = useRef(null);
+
+    const handleRestoreBackup = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                if (!confirm(`⚠️ WARNING: You are about to RESTORE ${Object.keys(data).length} users from a backup file.\n\nThis will COMPLETELY OVERWRITE current user balances, roles, and profiles with the data from the file.\n\nAre you sure you want to proceed?`)) return;
+
+                const batchSize = 400;
+                const entries = Object.entries(data);
+
+                let restoredCount = 0;
+                for (let i = 0; i < entries.length; i += batchSize) {
+                    const batch = writeBatch(db);
+                    const chunk = entries.slice(i, i + batchSize);
+
+                    chunk.forEach(([uid, userData]) => {
+                        batch.set(doc(db, 'users', uid), userData, { merge: true });
+                    });
+
+                    await batch.commit();
+                    restoredCount += chunk.length;
+                }
+
+                alert(`✅ Successfully restored ${restoredCount} users.`);
+                window.location.reload();
+
+            } catch (err) {
+                console.error(err);
+                alert("❌ Error parsing backup file: " + err.message);
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    const handleRestoreJackpots = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const data = JSON.parse(event.target.result); // Array of jackpots
+                if (!Array.isArray(data)) throw new Error("Invalid format: Expected an array of jackpots.");
+                if (!confirm(`⚠️ WARNING: This will DELETE all current jackpots and RESTORE ${data.length} jackpots from the backup file.\n\nProceed?`)) return;
+
+                const batchLimit = 400;
+
+                // 1. Delete existing jackpots
+                console.log("Deleting existing jackpots...");
+                const existing = await getDocs(collection(db, 'jackpots'));
+                const deleteBatches = [];
+                let deleteBatch = writeBatch(db);
+                let deleteCount = 0;
+
+                existing.docs.forEach((doc) => {
+                    deleteBatch.delete(doc.ref);
+                    deleteCount++;
+                    if (deleteCount >= batchLimit) {
+                        deleteBatches.push(deleteBatch.commit());
+                        deleteBatch = writeBatch(db);
+                        deleteCount = 0;
+                    }
+                });
+                if (deleteCount > 0) deleteBatches.push(deleteBatch.commit());
+                await Promise.all(deleteBatches);
+
+                // 2. Restore from backup
+                console.log("Restoring jackpots...");
+                const restoreBatches = [];
+                let restoreBatch = writeBatch(db);
+                let restoreCount = 0;
+
+                data.forEach(jp => {
+                    const ref = doc(collection(db, 'jackpots'));
+                    restoreBatch.set(ref, jp);
+                    restoreCount++;
+                    if (restoreCount >= batchLimit) {
+                        restoreBatches.push(restoreBatch.commit());
+                        restoreBatch = writeBatch(db);
+                        restoreCount = 0;
+                    }
+                });
+                if (restoreCount > 0) restoreBatches.push(restoreBatch.commit());
+                await Promise.all(restoreBatches);
+
+                alert(`✅ Successfully restored ${data.length} jackpots.`);
+
+            } catch (err) {
+                console.error(err);
+                alert("❌ Error restoring jackpots: " + err.message);
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    const backupJackpots = async () => {
+        try {
+            const snap = await getDocs(collection(db, 'jackpots'));
+            const data = snap.docs.map(d => d.data());
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `jackpots_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            alert(`Backup of ${data.length} jackpots downloaded.`);
+        } catch (e) {
+            console.error(e);
+            alert("Backup failed: " + e.message);
+        }
+    };
+
+    const backupUserData = async () => {
+        try {
+            const usersSnap = await getDocs(collection(db, 'users'));
+            const data = {};
+            usersSnap.forEach(doc => {
+                data[doc.id] = doc.data();
+            });
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `users_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            alert(`Backup of ${Object.keys(data).length} users downloaded.`);
+        } catch (e) {
+            console.error(e);
+            alert("Backup failed: " + e.message);
+        }
+    };
+
+    // ... (rest of code)
+
+    // And in the render (Data Maintenance section):
+    /*
+                                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef} 
+                                        style={{ display: 'none' }} 
+                                        accept=".json" 
+                                        onChange={handleRestoreBackup} 
+                                    />
+                                    <button
+                                        className="btn"
+                                        style={{ background: '#ec4899', color: '#fff', fontWeight: 'bold' }}
+                                        onClick={() => fileInputRef.current.click()}
+                                    >
+                                        📂 Restore from Backup
+                                    </button>
+                                    <button ... (Backup Button)
+    */
+
+    const recalculateCasinoStats = async () => {
+        if (!confirm("🎰 This will recalculate 'Casino Stats' (Plays, High Multi, Best Win, Net Profit) for ALL users based on existing casino bets.\n\nIt will also REGENERATE the 'Jackpots' collection to match.\n\nIt will NOT change user balances.\n\nProceed?")) return;
+
+        try {
+            console.log("Starting Casino Stats Recalculation...");
+
+            // 0. Fetch Valid Users
+            const usersSnap = await getDocs(collection(db, 'users'));
+            const validUserIds = new Set(usersSnap.docs.map(d => d.id));
+            console.log(`Found ${validUserIds.size} valid users.`);
+
+            const casinoSnap = await getDocs(collection(db, 'casino_bets'));
+            const bets = casinoSnap.docs.map(d => d.data());
+
+            // 1. Calculate Stats per User
+            const userStats = {};
+            const newJackpots = [];
+
+            bets.forEach(bet => {
+                const uid = bet.userId;
+
+                // Track stats even for deleted users? 
+                // We need to track them to find Jackpots, but we won't update their profile later.
+                if (!userStats[uid]) userStats[uid] = { plays: 0, invested: 0, won: 0, highestMulti: 0, bestWin: 0, username: bet.username };
+
+                const amount = Number(bet.amount) || 0;
+                const payout = Number(bet.payout) || 0;
+                const multi = Number(bet.multiplier) || (amount > 0 ? payout / amount : 0);
+
+                userStats[uid].plays++;
+                userStats[uid].invested += amount;
+                userStats[uid].won += payout;
+
+                if (multi > userStats[uid].highestMulti) userStats[uid].highestMulti = multi;
+                if (payout > userStats[uid].bestWin) userStats[uid].bestWin = payout;
+
+                // Jackpot Logic
+                if (multi > 5 || payout >= 300) {
+                    newJackpots.push({
+                        userId: uid,
+                        username: bet.username || 'User',
+                        game: bet.game || 'unknown',
+                        amount: payout,
+                        multiplier: multi,
+                        timestamp: bet.timestamp || Date.now()
+                    });
+                }
+            });
+
+            const batchLimit = 400;
+
+            // 2. Clear old Jackpots
+            console.log("Clearing old jackpots...");
+            const oldJackpotsSnap = await getDocs(collection(db, 'jackpots'));
+            for (let i = 0; i < oldJackpotsSnap.size; i += batchLimit) {
+                const chunk = oldJackpotsSnap.docs.slice(i, i + batchLimit);
+                const batch = writeBatch(db);
+                chunk.forEach(d => batch.delete(d.ref));
+                await batch.commit();
+            }
+
+            // 3. Write New Jackpots
+            console.log(`Writing ${newJackpots.length} new jackpots...`);
+            for (let i = 0; i < newJackpots.length; i += batchLimit) {
+                const chunk = newJackpots.slice(i, i + batchLimit);
+                const batch = writeBatch(db);
+                chunk.forEach(jp => {
+                    const ref = doc(collection(db, 'jackpots'));
+                    batch.set(ref, jp);
+                });
+                await batch.commit();
+            }
+
+            // 4. Update Users (ONLY VALID ONES)
+            const userUpdates = Object.entries(userStats).filter(([uid]) => validUserIds.has(uid));
+            console.log(`Updating ${userUpdates.length} users (skipped ${Object.keys(userStats).length - userUpdates.length} deleted/invalid)...`);
+
+            for (let i = 0; i < userUpdates.length; i += batchLimit) {
+                const chunk = userUpdates.slice(i, i + batchLimit);
+                const batch = writeBatch(db);
+                chunk.forEach(([uid, stats]) => {
+                    batch.update(doc(db, 'users', uid), {
+                        casinoStats: {
+                            plays: stats.plays,
+                            invested: Number(stats.invested.toFixed(2)),
+                            won: Number(stats.won.toFixed(2)),
+                            netProfit: Number((stats.won - stats.invested).toFixed(2)),
+                            highestMulti: Number(stats.highestMulti.toFixed(2)),
+                            bestWin: Number(stats.bestWin.toFixed(2))
+                        }
+                    });
+                });
+                await batch.commit();
+            }
+
+            alert(`Casino stats recalculated! Updated ${userUpdates.length} users and ${newJackpots.length} jackpots.`);
+
+        } catch (e) {
+            console.error(e);
+            alert("Error: " + e.message);
+        }
+    };
+
+
+
+    const recalculateAllUserBalances = async () => {
+
+        if (!confirm("⚠️ DANGER: This will RESET everyone's balance based on their EXISTING bet history.\n\nLogic:\n1. Start at $1000.\n2. Replay all Sports Bets.\n3. Replay all Casino Bets.\n\nIf you deleted Casino Bets, those winnings will be WIPED OUT.\n\nAny manual adjustments or referral bonuses NOT in the bet history will be lost.\n\nAre you sure?")) return;
+
+        try {
+            const usersSnap = await getDocs(collection(db, 'users'));
+            const betsSnap = await getDocs(collection(db, 'bets')); // Sports
+            const casinoSnap = await getDocs(collection(db, 'casino_bets')); // Casino
+
+            const newBalances = {}; // { uid: { balance: 1000, invested: 0 } }
+
+            // 1. Init Users with Baseline
+            usersSnap.docs.forEach(doc => {
+                // Ignore the current balance, we are rebuilding it.
+                newBalances[doc.id] = { balance: 1000, invested: 0, username: doc.data().username };
+            });
+
+            // 2. Process Sports Bets
+            betsSnap.docs.forEach(doc => {
+                const bet = doc.data();
+                if (!newBalances[bet.userId]) return; // User might be deleted
+
+                const amount = Number(bet.amount) || 0;
+
+                // Deduct Stake (happens for all placed bets)
+                newBalances[bet.userId].balance -= amount;
+
+                // Add Winnings / Refunds
+                if (bet.status === 'won') {
+                    newBalances[bet.userId].balance += (Number(bet.potentialPayout) || 0);
+                } else if (bet.status === 'void') {
+                    newBalances[bet.userId].balance += amount; // Refund
+                }
+
+                // Track Invested (Pending)
+                if (bet.status === 'pending') {
+                    newBalances[bet.userId].invested += amount;
+                }
+            });
+
+            // 3. Process Casino Bets
+            casinoSnap.docs.forEach(doc => {
+                const bet = doc.data();
+                if (!newBalances[bet.userId]) return;
+
+                const amount = Number(bet.amount) || 0;
+                const payout = Number(bet.payout) || 0;
+
+                // Casino is simple: Balance - Bet + Payout
+                newBalances[bet.userId].balance -= amount;
+                newBalances[bet.userId].balance += payout;
+            });
+
+            console.log("Recalculation Preview:", newBalances);
+
+            if (!confirm(`Calculated new balances for ${Object.keys(newBalances).length} users. Check console for details. Apply updates?`)) return;
+
+            // 4. Commit Updates in Batches
+            const allUpdates = Object.entries(newBalances);
+            let updatedCount = 0;
+
+            for (let i = 0; i < allUpdates.length; i += 400) { // Batch limit 500
+                const chunk = allUpdates.slice(i, i + 400);
+                const batch = writeBatch(db);
+                chunk.forEach(([uid, data]) => {
+                    batch.update(doc(db, 'users', uid), {
+                        balance: Number(data.balance.toFixed(2)),
+                        invested: Number(data.invested.toFixed(2))
+                    });
+                });
+                await batch.commit();
+                updatedCount += chunk.length;
+            }
+
+            alert(`Success! Updated balances for ${updatedCount} users.`);
+
+        } catch (e) {
+            console.error(e);
+            alert("Error: " + e.message);
+        }
+    };
 
     const runSlotsClawback = async () => {
         if (!confirm("⚠️ WARNING: This will scan all slots history, calculate net profits, and deduct them from user balances (and their squad wallets if necessary). \n\nAre you sure?")) return;
@@ -335,6 +692,7 @@ function AdminContent() {
                         { id: 'users', label: 'Users', icon: '👥' },
                         { id: 'community', label: 'Community', icon: '💡' },
                         { id: 'system', label: 'System', icon: '📢' },
+                        { id: 'maintenance', label: 'Maintenance', icon: '🛠️' },
                     ].map(item => (
                         <button
                             key={item.id}
@@ -1052,6 +1410,102 @@ function AdminContent() {
                     )}
 
                     {/* --- SYSTEM TAB --- */}
+                    {activeTab === 'maintenance' && (
+                        <div>
+                            {/* Page Visibility Status */}
+                            <div className="card" style={{ marginBottom: '24px', maxWidth: '1200px' }}>
+                                <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>🚫 Page Visibility & Access</h2>
+                                <p style={{ fontSize: '13px', color: '#888', marginBottom: '16px' }}>
+                                    Turn off specific pages for maintenance. Users will see a 'Under Maintenance' screen. Admins can still access them.
+                                </p>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
+                                    {['bets', 'parlay', 'leaderboard'].map(pageId => {
+                                        const isEnabled = maintenanceSettings?.[pageId] !== false; // Default true
+                                        return (
+                                            <div key={pageId} style={{
+                                                padding: '16px',
+                                                background: '#222',
+                                                borderRadius: '8px',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                border: isEnabled ? '1px solid #10b981' : '1px solid #ef4444'
+                                            }}>
+                                                <div>
+                                                    <strong style={{ textTransform: 'capitalize', display: 'block', color: '#fff' }}>{pageId}</strong>
+                                                    <span style={{ fontSize: '12px', color: isEnabled ? '#10b981' : '#ef4444' }}>
+                                                        {isEnabled ? 'Visible' : 'Maintenance'}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    onClick={() => updateMaintenanceStatus(pageId, !isEnabled)}
+                                                    style={{
+                                                        padding: '6px 12px',
+                                                        borderRadius: '20px',
+                                                        border: 'none',
+                                                        cursor: 'pointer',
+                                                        fontWeight: 'bold',
+                                                        fontSize: '12px',
+                                                        background: isEnabled ? '#10b981' : '#ef4444',
+                                                        color: '#000'
+                                                    }}
+                                                >
+                                                    {isEnabled ? 'Disable' : 'Enable'}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Casino Management Section (Moved) */}
+                            <div className="card" style={{ maxWidth: '1200px' }}>
+                                <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>🎰 Casino Game Status</h2>
+                                <p style={{ fontSize: '13px', color: '#888', marginBottom: '16px' }}>
+                                    Disable games temporarily for maintenance or to resolve issues. Users will see a locked screen.
+                                </p>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
+                                    {['slots', 'crash', 'blackjack', 'roulette'].map(gameId => {
+                                        const isEnabled = casinoSettings?.[gameId] !== false; // Default true
+                                        return (
+                                            <div key={gameId} style={{
+                                                padding: '16px',
+                                                background: '#222',
+                                                borderRadius: '8px',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                border: isEnabled ? '1px solid #10b981' : '1px solid #ef4444'
+                                            }}>
+                                                <div>
+                                                    <strong style={{ textTransform: 'capitalize', display: 'block', color: '#fff' }}>{gameId}</strong>
+                                                    <span style={{ fontSize: '12px', color: isEnabled ? '#10b981' : '#ef4444' }}>
+                                                        {isEnabled ? 'Active' : 'Disabled'}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    onClick={() => updateCasinoStatus(gameId, !isEnabled)}
+                                                    style={{
+                                                        padding: '6px 12px',
+                                                        borderRadius: '20px',
+                                                        border: 'none',
+                                                        cursor: 'pointer',
+                                                        fontWeight: 'bold',
+                                                        fontSize: '12px',
+                                                        background: isEnabled ? '#10b981' : '#ef4444',
+                                                        color: '#000'
+                                                    }}
+                                                >
+                                                    {isEnabled ? 'Turn OFF' : 'Turn ON'}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {activeTab === 'system' && (
                         <div>
                             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) minmax(300px, 1fr)', gap: '24px', maxWidth: '1200px' }}>
@@ -1151,51 +1605,7 @@ function AdminContent() {
                                 </div>
                             </div>
 
-                            {/* Casino Management Section */}
-                            <div className="card" style={{ marginTop: '24px', maxWidth: '1200px' }}>
-                                <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>🎰 Casino Game Status</h2>
-                                <p style={{ fontSize: '13px', color: '#888', marginBottom: '16px' }}>
-                                    Disable games temporarily for maintenance or to resolve issues. Users will see a locked screen.
-                                </p>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
-                                    {['slots', 'crash', 'blackjack', 'roulette'].map(gameId => {
-                                        const isEnabled = casinoSettings?.[gameId] !== false; // Default true
-                                        return (
-                                            <div key={gameId} style={{
-                                                padding: '16px',
-                                                background: '#222',
-                                                borderRadius: '8px',
-                                                display: 'flex',
-                                                justifyContent: 'space-between',
-                                                alignItems: 'center',
-                                                border: isEnabled ? '1px solid #10b981' : '1px solid #ef4444'
-                                            }}>
-                                                <div>
-                                                    <strong style={{ textTransform: 'capitalize', display: 'block', color: '#fff' }}>{gameId}</strong>
-                                                    <span style={{ fontSize: '12px', color: isEnabled ? '#10b981' : '#ef4444' }}>
-                                                        {isEnabled ? 'Active' : 'Disabled'}
-                                                    </span>
-                                                </div>
-                                                <button
-                                                    onClick={() => updateCasinoStatus(gameId, !isEnabled)}
-                                                    style={{
-                                                        padding: '6px 12px',
-                                                        borderRadius: '20px',
-                                                        border: 'none',
-                                                        cursor: 'pointer',
-                                                        fontWeight: 'bold',
-                                                        fontSize: '12px',
-                                                        background: isEnabled ? '#10b981' : '#ef4444',
-                                                        color: '#000'
-                                                    }}
-                                                >
-                                                    {isEnabled ? 'Turn OFF' : 'Turn ON'}
-                                                </button>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+
 
                             {/* Data Maintenance Section */}
                             <div className="card" style={{ marginTop: '24px', maxWidth: '1200px' }}>
@@ -1203,7 +1613,64 @@ function AdminContent() {
                                 <p style={{ fontSize: '13px', color: '#888', marginBottom: '12px' }}>
                                     Run these tasks to ensure data consistency across the database.
                                 </p>
-                                <div style={{ display: 'flex', gap: '12px' }}>
+                                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                                    <input
+                                        type="file"
+                                        ref={jackpotsFileInputRef}
+                                        style={{ display: 'none' }}
+                                        accept=".json"
+                                        onChange={handleRestoreJackpots}
+                                    />
+                                    <button
+                                        className="btn"
+                                        style={{ background: '#ec4899', color: '#fff', fontWeight: 'bold' }}
+                                        onClick={() => jackpotsFileInputRef.current.click()}
+                                    >
+                                        📂 Restore Jackpots
+                                    </button>
+                                    <button
+                                        className="btn"
+                                        style={{ background: '#10b981', color: '#fff', fontWeight: 'bold' }}
+                                        onClick={backupJackpots}
+                                    >
+                                        💾 Backup Jackpots
+                                    </button>
+                                    <div style={{ width: '100%', height: '1px', background: '#333', margin: '4px 0' }}></div>
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        style={{ display: 'none' }}
+                                        accept=".json"
+                                        onChange={handleRestoreBackup}
+                                    />
+                                    <button
+                                        className="btn"
+                                        style={{ background: '#ec4899', color: '#fff', fontWeight: 'bold' }}
+                                        onClick={() => fileInputRef.current.click()}
+                                    >
+                                        📂 Restore from Backup
+                                    </button>
+                                    <button
+                                        className="btn"
+                                        style={{ background: '#10b981', color: '#fff', fontWeight: 'bold' }}
+                                        onClick={backupUserData}
+                                    >
+                                        💾 Backup Users (JSON)
+                                    </button>
+                                    <button
+                                        className="btn"
+                                        style={{ background: '#3b82f6', color: '#fff', fontWeight: 'bold' }}
+                                        onClick={recalculateAllUserBalances}
+                                    >
+                                        ⚖️ Recalculate All Balances
+                                    </button>
+                                    <button
+                                        className="btn"
+                                        style={{ background: '#8b5cf6', color: '#fff', fontWeight: 'bold' }}
+                                        onClick={recalculateCasinoStats}
+                                    >
+                                        🎰 Recalculate Casino Stats
+                                    </button>
                                     <button
                                         className="btn"
                                         style={{ background: '#f59e0b', color: '#000', fontWeight: 'bold' }}

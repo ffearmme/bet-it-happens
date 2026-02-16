@@ -4,8 +4,19 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
 export default function Leaderboard() {
-    const { user, users, isLoaded, getUserStats, getWeeklyLeaderboard, setIsGuestMode } = useApp();
+    const { user, users, isLoaded, getUserStats, getWeeklyLeaderboard, setIsGuestMode, maintenanceSettings } = useApp();
     const router = useRouter();
+
+    // Maintenance Check
+    if (maintenanceSettings?.leaderboard === false && user?.role !== 'admin') {
+        return (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
+                <h2 style={{ color: '#fff', marginBottom: '8px' }}>Leaderboard Under Maintenance</h2>
+                <p>Calculating who's really winning. Back soon.</p>
+            </div>
+        );
+    }
 
     const [viewingUser, setViewingUser] = useState(null);
     const [viewingProfile, setViewingProfile] = useState(null);

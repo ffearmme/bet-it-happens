@@ -162,6 +162,7 @@ export function AppProvider({ children }) {
   const [squads, setSquads] = useState([]); // List of all squads
   const [systemAnnouncement, setSystemAnnouncement] = useState(null);
   const [casinoSettings, setCasinoSettings] = useState({}); // { slots: true, etc }
+  const [maintenanceSettings, setMaintenanceSettings] = useState({}); // { bets: true, parlay: true, leaderboard: true }
 
   // ... (existing timeout code) ...
 
@@ -185,6 +186,17 @@ export function AppProvider({ children }) {
       } else {
         // Default settings if doc doesn't exist
         setCasinoSettings({ slots: true, crash: true, blackjack: true });
+      }
+    });
+
+    // Listen to Maintenance Settings
+    const maintenanceSettingsRef = doc(db, 'system', 'maintenance');
+    const unsubMaintenanceSettings = onSnapshot(maintenanceSettingsRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setMaintenanceSettings(docSnap.data());
+      } else {
+        // Default settings if doc doesn't exist (all pages enabled by default)
+        setMaintenanceSettings({ bets: true, parlay: true, leaderboard: true });
       }
     });
 
@@ -242,7 +254,10 @@ export function AppProvider({ children }) {
       unsubIdeas();
       unsubUsers();
       unsubSquads();
+      unsubUsers();
+      unsubSquads();
       unsubCasinoSettings();
+      unsubMaintenanceSettings();
     };
 
 
@@ -3515,6 +3530,17 @@ export function AppProvider({ children }) {
     }
   };
 
+  const updateMaintenanceStatus = async (pageId, isEnabled) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      const ref = doc(db, 'system', 'maintenance');
+      await setDoc(ref, { [pageId]: isEnabled }, { merge: true });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
@@ -3525,7 +3551,7 @@ export function AppProvider({ children }) {
       createParlay, placeParlayBet, addParlayComment, calculateParlays, deleteParlay, sendSystemNotification,
       squads, createSquad, joinSquad, leaveSquad, manageSquadRequest, kickMember, updateSquad, inviteUserToSquad, respondToSquadInvite, searchUsers, getSquadStats,
       depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest, sendSquadMessage,
-      syncAllUsernames, updateCasinoStatus, casinoSettings,
+      syncAllUsernames, updateCasinoStatus, casinoSettings, updateMaintenanceStatus, maintenanceSettings,
       todayBetCount, todayCasinoCount
     }}>
       {children}

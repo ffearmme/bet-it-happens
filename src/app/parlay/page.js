@@ -5,7 +5,19 @@ import { useApp } from '../../lib/store';
 import { collection, query, orderBy, onSnapshot, where, limit } from 'firebase/firestore';
 
 export default function ParlayPage({ isEmbedded = false }) {
-    const { user, events, db, createParlay, placeParlayBet, getUserStats, deleteParlay, bets, addParlayComment } = useApp();
+    const { user, events, db, createParlay, placeParlayBet, getUserStats, deleteParlay, bets, addParlayComment, maintenanceSettings } = useApp();
+
+    // Maintenance Check
+    if (maintenanceSettings?.parlay === false && user?.role !== 'admin') {
+        return (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
+                <h2 style={{ color: '#fff', marginBottom: '8px' }}>Parlays Under Maintenance</h2>
+                <p>We are tuning the engines. Check back shortly.</p>
+            </div>
+        );
+    }
+
     const [mode, setMode] = useState('active'); // 'active' | 'create'
     const [parlays, setParlays] = useState([]);
     const scrollRef = useRef(null);
