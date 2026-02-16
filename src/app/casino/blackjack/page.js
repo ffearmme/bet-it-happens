@@ -4,11 +4,13 @@ import Link from 'next/link';
 import { ChevronLeft, Club, History, AlertCircle } from 'lucide-react';
 import { useApp } from '../../../lib/store';
 import { doc, updateDoc, increment, addDoc, collection } from 'firebase/firestore';
+import BiggestWins from '../../../components/BiggestWins';
 
 export default function BlackjackGame() {
     const { user, db } = useApp();
     const [gameState, setGameState] = useState('IDLE'); // 'IDLE', 'PLAYING', 'FINISHED'
     const [betAmount, setBetAmount] = useState('1.00');
+    const [activeBet, setActiveBet] = useState(0); // Track actual wager (for doubling)
     // Balance is tracked via user.balance in context
 
     // Cards: { suit: '♠', value: '10', display: '10' }
@@ -61,6 +63,7 @@ export default function BlackjackGame() {
             // Deduct Bet
             const userRef = doc(db, 'users', user.id);
             await updateDoc(userRef, { balance: increment(-amount) });
+            setActiveBet(amount);
 
             const newDeck = createDeck();
             const pHand = [newDeck.pop(), newDeck.pop()];
@@ -80,9 +83,7 @@ export default function BlackjackGame() {
                 const dVal = getHandValue(dHand);
 
                 if (dVal === 21) {
-                    handleGameOver(pHand, dHand, amount, 'Push! Both have Blackjack.'); // Push
-                } else {
-                    handleGameOver(pHand, dHand, amount * 2.5, 'BLACKJACK! You win!'); // 1.5x payout + bet back
+                    handleGameOver(pHand, dHand, amount * 2.5, 'BLACKJACK! You win!', amount); // 1.5x payout + bet back
                 }
             }
 
@@ -103,14 +104,19 @@ export default function BlackjackGame() {
 
         const val = getHandValue(newHand);
         if (val > 21) {
-            handleGameOver(newHand, dealerHand, 0, 'Bust! You went over 21.'); // Bust
+            handleGameOver(newHand, dealerHand, 0, 'Bust! You went over 21.', activeBet); // Bust
         }
     };
 
     // Stand
     const stand = () => {
-        let dHand = [...dealerHand];
-        let dDeck = [...deck];
+        runDealer(deck, playerHand, dealerHand, activeBet);
+    };
+
+    // Helper: Run Dealer Logic
+    const runDealer = (currentDeck, currentPHand, currentDHand, currentBetAmount) => {
+        let dHand = [...currentDHand];
+        let dDeck = [...currentDeck];
 
         // Dealer AI: Hit until 17
         while (getHandValue(dHand) < 17) {
@@ -121,14 +127,50 @@ export default function BlackjackGame() {
         setDeck(dDeck);
         setDealerHand(dHand);
 
-        calculateWinner(playerHand, dHand);
+        calculateWinner(currentPHand, dHand, currentBetAmount);
+    };
+
+    // Double Down
+    const doubleDown = async () => {
+        if (!user) return;
+        if ((user.balance || 0) < activeBet) return alert("Insufficient balance to double down.");
+
+        try {
+            // Deduct Additional Bet
+            const userRef = doc(db, 'users', user.id);
+            await updateDoc(userRef, { balance: increment(-activeBet) });
+
+            const newTotalBet = activeBet * 2;
+            setActiveBet(newTotalBet);
+
+            // Hit Once
+            const newDeck = [...deck];
+            const card = newDeck.pop();
+            const newHand = [...playerHand, card];
+
+            setPlayerHand(newHand);
+            // Don't setDeck yet, runDealer will do it or we do it if bust
+
+            const val = getHandValue(newHand);
+
+            if (val > 21) {
+                setDeck(newDeck);
+                handleGameOver(newHand, dealerHand, 0, 'Bust! You doubled and busted.', newTotalBet);
+            } else {
+                // Determine winner immediately after one card
+                runDealer(newDeck, newHand, dealerHand, newTotalBet);
+            }
+
+        } catch (e) {
+            console.error("Double down error", e);
+        }
     };
 
     // Determine Winner
-    const calculateWinner = async (pHand, dHand) => {
+    const calculateWinner = async (pHand, dHand, currentBetAmount) => {
         const pVal = getHandValue(pHand);
         const dVal = getHandValue(dHand);
-        const amount = parseFloat(betAmount);
+        const amount = currentBetAmount;
         let winAmount = 0;
         let resultMsg = '';
 
@@ -146,10 +188,10 @@ export default function BlackjackGame() {
             resultMsg = 'Dealer Wins';
         }
 
-        handleGameOver(pHand, dHand, winAmount, resultMsg);
+        handleGameOver(pHand, dHand, winAmount, resultMsg, amount);
     };
 
-    const handleGameOver = async (pHand, dHand, payout, msg) => {
+    const handleGameOver = async (pHand, dHand, payout, msg, finalBetAmount) => {
         setGameState('FINISHED');
         if (msg) setMessage(msg);
 
@@ -158,7 +200,7 @@ export default function BlackjackGame() {
             await updateDoc(userRef, { balance: increment(payout) });
         }
 
-        const amount = parseFloat(betAmount);
+        const amount = finalBetAmount || parseFloat(betAmount);
         const profit = payout - amount;
         const result = profit > 0 ? 'won' : profit === 0 ? 'push' : 'loss';
 
@@ -329,6 +371,13 @@ export default function BlackjackGame() {
                                         border: 'none', padding: '16px', borderRadius: '16px', fontSize: '18px', fontWeight: 'bold',
                                         boxShadow: '0 4px 0 #b91c1c', transform: 'translateY(-2px)'
                                     }}>Stand</button>
+                                    {playerHand.length === 2 && (
+                                        <button onClick={doubleDown} className="btn" style={{
+                                            flex: 1, background: 'linear-gradient(to bottom, #eab308, #ca8a04)',
+                                            border: 'none', padding: '16px', borderRadius: '16px', fontSize: '18px', fontWeight: 'bold',
+                                            boxShadow: '0 4px 0 #854d0e', transform: 'translateY(-2px)'
+                                        }}>Double</button>
+                                    )}
                                 </>
                             ) : (
                                 <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
@@ -366,6 +415,8 @@ export default function BlackjackGame() {
                         borderRadius: '24px', padding: '24px', border: '1px solid rgba(255,255,255,0.1)',
                         minHeight: '400px', maxHeight: '600px', overflowY: 'auto'
                     }}>
+                        <BiggestWins game="blackjack" />
+
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', color: '#94a3b8' }}>
                             <History size={16} />
                             <h3 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', margin: 0, letterSpacing: '1px' }}>Session History</h3>

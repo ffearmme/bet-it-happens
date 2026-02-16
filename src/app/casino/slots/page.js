@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ChevronLeft, Zap, Trophy, History } from 'lucide-react';
 import { useApp } from '../../../lib/store';
 import { doc, updateDoc, increment, addDoc, collection } from 'firebase/firestore';
+import BiggestWins from '../../../components/BiggestWins';
 
 // Configuration
 const REELS = 5;
@@ -365,6 +366,8 @@ export default function SlotsGame() {
                         maxHeight: '600px',
                         overflowY: 'auto'
                     }}>
+                        <BiggestWins game="slots" />
+
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', color: '#94a3b8' }}>
                             <History size={16} />
                             <h3 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>

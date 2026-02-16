@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ChevronLeft, Rocket, History } from 'lucide-react';
 import { useApp } from '../../../lib/store';
 import { doc, updateDoc, increment, addDoc, collection } from 'firebase/firestore';
+import BiggestWins from '../../../components/BiggestWins';
 
 export default function CrashGame() {
     const { user, db } = useApp();
@@ -373,8 +374,11 @@ export default function CrashGame() {
                         border: '1px solid rgba(255,255,255,0.1)',
                         minHeight: '400px',
                         maxHeight: '600px',
+                        maxHeight: '600px',
                         overflowY: 'auto'
                     }}>
+                        <BiggestWins game="crash" />
+
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', color: '#94a3b8' }}>
                             <History size={16} />
                             <h3 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>
