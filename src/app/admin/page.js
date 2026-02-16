@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '../../lib/store';
 
 import { db } from '../../lib/firebase';
-import { collection, query, limit, onSnapshot, doc, updateDoc, where, getDocs, orderBy, writeBatch, increment, getDoc } from 'firebase/firestore';
+import { collection, query, limit, onSnapshot, doc, updateDoc, where, getDocs, orderBy, writeBatch, increment, getDoc, deleteDoc } from 'firebase/firestore';
 
 function AdminContent() {
     const {
@@ -58,6 +58,12 @@ function AdminContent() {
 
     const fileInputRef = useRef(null);
     const jackpotsFileInputRef = useRef(null);
+
+    // State for Prune Casino Bets
+    const [showPruneModal, setShowPruneModal] = useState(false);
+    const [pruneCriteria, setPruneCriteria] = useState({ game: 'slots', minMulti: 10, minPayout: 1000, startDate: '', endDate: '' });
+    const [prunePreview, setPrunePreview] = useState(null);
+    const [isPruning, setIsPruning] = useState(false);
 
     const handleRestoreBackup = (e) => {
         const file = e.target.files[0];
@@ -514,6 +520,81 @@ function AdminContent() {
         } catch (e) {
             console.error(e);
             alert("Error: " + e.message);
+        }
+    };
+
+    const scanForPruning = async () => {
+        try {
+            setIsPruning(true);
+            let q = query(collection(db, 'casino_bets'));
+
+            if (pruneCriteria.game && pruneCriteria.game !== 'all') {
+                q = query(q, where('game', '==', pruneCriteria.game));
+            }
+            // Date filters? Firestore compound queries can be tricky without indexes.
+            // We'll filter date and numeric thresholds in memory for flexibility/safety.
+
+            const snapshot = await getDocs(q);
+            const bets = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+            const filtered = bets.filter(b => {
+                const multi = Number(b.multiplier) || (b.payout && b.amount ? b.payout / b.amount : 0);
+                const payout = Number(b.payout) || 0;
+
+                if (pruneCriteria.minMulti && multi < pruneCriteria.minMulti) return false;
+                if (pruneCriteria.minPayout && payout < pruneCriteria.minPayout) return false;
+
+                if (pruneCriteria.startDate && new Date(b.timestamp || b.createdAt) < new Date(pruneCriteria.startDate)) return false;
+                if (pruneCriteria.endDate && new Date(b.timestamp || b.createdAt) > new Date(pruneCriteria.endDate)) return false;
+
+                return true;
+            });
+
+            // Calculate impact
+            const impact = filtered.reduce((acc, b) => ({
+                count: acc.count + 1,
+                totalPayout: acc.totalPayout + (Number(b.payout) || 0)
+            }), { count: 0, totalPayout: 0 });
+
+            setPrunePreview({ bets: filtered, impact });
+        } catch (e) {
+            console.error(e);
+            alert("Scan failed: " + e.message);
+        } finally {
+            setIsPruning(false);
+        }
+    };
+
+    const executePrune = async () => {
+        if (!prunePreview || !prunePreview.bets.length) return;
+        if (!confirm(`Are you sure you want to PERMANENTLY DELETE ${prunePreview.bets.length} casino bets?\n\nThis will remove them from the database history. It will NOT refund balances (use Clawback for that).`)) return;
+
+        try {
+            setIsPruning(true);
+            const batchLimit = 400;
+            const chunks = [];
+            for (let i = 0; i < prunePreview.bets.length; i += batchLimit) {
+                chunks.push(prunePreview.bets.slice(i, i + batchLimit));
+            }
+
+            let deletedCount = 0;
+            for (const chunk of chunks) {
+                const batch = writeBatch(db);
+                chunk.forEach(b => {
+                    batch.delete(doc(db, 'casino_bets', b.id));
+                });
+                await batch.commit();
+                deletedCount += chunk.length;
+            }
+
+            alert(`Successfully deleted ${deletedCount} bets.\n\nIMPORTANT: Now run 'Recalculate Casino Stats' to fix the profile stats.`);
+            setShowPruneModal(false);
+            setPrunePreview(null);
+        } catch (e) {
+            console.error(e);
+            alert("Delete failed: " + e.message);
+        } finally {
+            setIsPruning(false);
         }
     };
 
@@ -1691,6 +1772,13 @@ function AdminContent() {
                                     >
                                         🎰 Clawback Slots Profits
                                     </button>
+                                    <button
+                                        className="btn"
+                                        style={{ background: '#7f1d1d', color: '#fff', fontWeight: 'bold' }}
+                                        onClick={() => setShowPruneModal(true)}
+                                    >
+                                        🧹 Prune Bad Casino Bets
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1700,6 +1788,88 @@ function AdminContent() {
             </div>
 
             {/* EDIT MODAL REMAINS SAME */}
+            {/* PRUNE MODAL */}
+            {showPruneModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
+                    <div className="card" style={{ width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', border: '1px solid #ef4444', padding: '24px' }}>
+                        <h2 style={{ marginBottom: '16px', fontSize: '20px', color: '#ef4444' }}>🧹 Prune Bad Casino Bets</h2>
+                        <p style={{ fontSize: '13px', color: '#ccc', marginBottom: '20px' }}>
+                            Use this tool to delete bugged or glitched casino bets. Once deleted, they won't count towards stats.
+                            <br /><br />
+                            <b>Step 1:</b> Scan for bets matching criteria.
+                            <br />
+                            <b>Step 2:</b> Delete them.
+                            <br />
+                            <b>Step 3:</b> Run "Recalculate Casino Stats" from the main menu.
+                        </p>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', color: '#888', marginBottom: '4px' }}>Game</label>
+                                <select className="input" style={{ width: '100%' }} value={pruneCriteria.game} onChange={e => setPruneCriteria({ ...pruneCriteria, game: e.target.value })}>
+                                    <option value="all">All Games</option>
+                                    <option value="slots">Slots</option>
+                                    <option value="crash">Crash</option>
+                                    <option value="blackjack">Blackjack</option>
+                                    <option value="roulette">Roulette</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', color: '#888', marginBottom: '4px' }}>Min Multiplier (x)</label>
+                                <input type="number" className="input" style={{ width: '100%' }} value={pruneCriteria.minMulti} onChange={e => setPruneCriteria({ ...pruneCriteria, minMulti: Number(e.target.value) })} />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', color: '#888', marginBottom: '4px' }}>Min Payout ($)</label>
+                                <input type="number" className="input" style={{ width: '100%' }} value={pruneCriteria.minPayout} onChange={e => setPruneCriteria({ ...pruneCriteria, minPayout: Number(e.target.value) })} />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', color: '#888', marginBottom: '4px' }}>Start Date (Optional)</label>
+                                <input type="date" className="input" style={{ width: '100%' }} value={pruneCriteria.startDate} onChange={e => setPruneCriteria({ ...pruneCriteria, startDate: e.target.value })} />
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+                            <button
+                                className="btn btn-primary"
+                                onClick={scanForPruning}
+                                disabled={isPruning}
+                                style={{ flex: 1 }}
+                            >
+                                {isPruning ? 'Scanning...' : '🔍 Scan for Bets'}
+                            </button>
+                        </div>
+
+                        {prunePreview && (
+                            <div style={{ background: '#222', padding: '16px', borderRadius: '8px', marginBottom: '20px' }}>
+                                <h3 style={{ fontSize: '16px', marginBottom: '8px', color: '#fff' }}>Scan Results</h3>
+                                <div style={{ fontSize: '14px', marginBottom: '12px' }}>
+                                    Found <b style={{ color: '#ef4444' }}>{prunePreview.impact.count}</b> bets with total payout <b style={{ color: '#10b981' }}>${prunePreview.impact.totalPayout.toLocaleString()}</b>.
+                                </div>
+                                <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #444', padding: '8px' }}>
+                                    {prunePreview.bets.slice(0, 50).map(b => (
+                                        <div key={b.id} style={{ fontSize: '11px', borderBottom: '1px solid #333', padding: '2px 0' }}>
+                                            {new Date(b.timestamp).toLocaleDateString()} - <b>{b.username}</b> - Won ${b.payout} (x{b.multiplier})
+                                        </div>
+                                    ))}
+                                    {prunePreview.bets.length > 50 && <div style={{ fontSize: '11px', color: '#888', padding: '4px' }}>...and {prunePreview.bets.length - 50} more</div>}
+                                </div>
+
+                                <button
+                                    className="btn"
+                                    style={{ width: '100%', marginTop: '16px', background: '#ef4444', color: '#fff', fontWeight: 'bold' }}
+                                    onClick={executePrune}
+                                    disabled={isPruning}
+                                >
+                                    🗑️ DELETE THESE BETS
+                                </button>
+                            </div>
+                        )}
+
+                        <button className="btn" style={{ width: '100%', background: '#333' }} onClick={() => setShowPruneModal(false)}>Close</button>
+                    </div>
+                </div>
+            )}
+
             {showEditModal && editingEvent && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
                     <div className="card" style={{ width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto', border: '1px solid var(--primary)', padding: '24px' }}>
