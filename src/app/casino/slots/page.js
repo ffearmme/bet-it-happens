@@ -170,7 +170,8 @@ export default function SlotsGame() {
                     id: Date.now(),
                     result: profit > 0 ? 'won' : profit === 0 ? 'push' : 'loss',
                     profit: profit,
-                    amount: amount
+                    amount: amount,
+                    match: matches.length > 0 ? matches.join(', ') : 'No Win'
                 }, ...prev]);
 
 
@@ -388,8 +389,8 @@ export default function SlotsGame() {
                                             {h.result === 'won' ? 'WIN' : 'LOSS'}
                                         </div>
                                     </div>
-                                    <div style={{ fontWeight: 'bold', color: h.result === 'won' ? '#10b981' : '#ef4444' }}>
-                                        {h.result === 'won' ? `+$${h.amount.toFixed(2)}` : `-$${h.amount.toFixed(2)}`}
+                                    <div style={{ fontWeight: 'bold', color: h.profit >= 0 ? '#10b981' : '#ef4444' }}>
+                                        {h.profit > 0 ? '+' : ''}${h.profit.toFixed(2)}
                                     </div>
                                 </div>
                             ))}
