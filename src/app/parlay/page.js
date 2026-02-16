@@ -2,10 +2,10 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useApp } from '../../lib/store';
-import { collection, query, orderBy, onSnapshot, where, limit } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where, limit, doc, getDoc, getDocs } from 'firebase/firestore';
 
 export default function ParlayPage({ isEmbedded = false }) {
-    const { user, events, db, createParlay, placeParlayBet, getUserStats, deleteParlay, bets, addParlayComment, maintenanceSettings } = useApp();
+    const { user, events, db, createParlay, placeParlayBet, getUserStats, deleteParlay, bets, addParlayComment, maintenanceSettings, calculateParlays } = useApp();
 
     // Maintenance Check
     if (maintenanceSettings?.parlay === false && user?.role !== 'admin') {
@@ -20,6 +20,8 @@ export default function ParlayPage({ isEmbedded = false }) {
 
     const [mode, setMode] = useState('active'); // 'active' | 'create'
     const [parlays, setParlays] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [headersLoaded, setHeadersLoaded] = useState(false);
     const scrollRef = useRef(null);
 
     const scrollNext = () => {
@@ -108,6 +110,32 @@ export default function ParlayPage({ isEmbedded = false }) {
         }
     };
 
+    // Admin Wagers View
+    const [viewingWagersParlayId, setViewingWagersParlayId] = useState(null);
+    const [wagersList, setWagersList] = useState([]);
+    const [wagersLoading, setWagersLoading] = useState(false);
+
+    const handleViewWagers = async (parlayId) => {
+        setViewingWagersParlayId(parlayId);
+        setWagersList([]);
+        setWagersLoading(true);
+        if (!db) return;
+
+        try {
+            const q = query(collection(db, 'bets'), where('parlayId', '==', parlayId));
+            const snap = await getDocs(q);
+            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            // Sort by amount desc
+            list.sort((a, b) => b.amount - a.amount);
+            setWagersList(list);
+        } catch (err) {
+            console.error(err);
+            alert("Failed to fetch wagers");
+        } finally {
+            setWagersLoading(false);
+        }
+    };
+
     // Fetch Parlays
     useEffect(() => {
         if (!db) return;
@@ -116,9 +144,64 @@ export default function ParlayPage({ isEmbedded = false }) {
         const unsub = onSnapshot(q, (snap) => {
             const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             setParlays(list);
+            setHeadersLoaded(true);
         });
         return () => unsub();
     }, [db]);
+
+    // --- Fix: Fetch Missing Events & Manage Loading State ---
+    const [extraEvents, setExtraEvents] = useState([]);
+
+    useEffect(() => {
+        if (!db || !headersLoaded) return;
+
+        // If no parlays, we are done loading
+        if (parlays.length === 0) {
+            setIsLoading(false);
+            return;
+        }
+
+        const checkAndFetch = async () => {
+            const contextIds = new Set(events.map(e => e.id));
+            const extraIds = new Set(extraEvents.map(e => e.id));
+            const missingIds = new Set();
+
+            parlays.forEach(p => {
+                p.legs.forEach(leg => {
+                    if (!contextIds.has(leg.eventId) && !extraIds.has(leg.eventId)) {
+                        missingIds.add(leg.eventId);
+                    }
+                });
+            });
+
+            if (missingIds.size > 0) {
+                // Fetch missing events
+                const newEvents = [];
+                const promises = Array.from(missingIds).map(id => getDoc(doc(db, 'events', id)));
+                const snaps = await Promise.all(promises);
+
+                snaps.forEach(snap => {
+                    if (snap.exists()) {
+                        newEvents.push({ id: snap.id, ...snap.data() });
+                    }
+                });
+
+                if (newEvents.length > 0) {
+                    setExtraEvents(prev => [...prev, ...newEvents]);
+                }
+            }
+
+            // Data is ready (or sufficient)
+            setIsLoading(false);
+        };
+
+        checkAndFetch();
+    }, [parlays, events, headersLoaded]); // headersLoaded ensures we don't finish early
+
+    // Unified Event Lookup
+    const getEvent = (eventId) => {
+        return events.find(e => e.id === eventId) || extraEvents.find(e => e.id === eventId);
+    };
 
     // Helpers
     const isEventOpen = (event) => {
@@ -270,7 +353,7 @@ export default function ParlayPage({ isEmbedded = false }) {
 
         // Validate that all legs are from OPEN events and haven't started
         const closedLeg = selectedLegs.find(leg => {
-            const event = events.find(e => e.id === leg.eventId);
+            const event = getEvent(leg.eventId);
             return !isEventOpen(event);
         });
 
@@ -300,12 +383,21 @@ export default function ParlayPage({ isEmbedded = false }) {
         setIsSubmitting(false);
     };
 
+    if (isLoading) {
+        return (
+            <div style={{ padding: '60px', textAlign: 'center', color: '#888' }}>
+                <div style={{ display: 'inline-block', fontSize: '32px', marginBottom: '16px' }} className="animate-pulse">⏳</div>
+                <h2 style={{ color: '#fff', fontSize: '18px', fontWeight: 'bold' }}>Loading Parlays...</h2>
+            </div>
+        );
+    }
+
     const handlePlaceBet = async () => {
         if (!bettingParlay) return;
 
         // Validate that all legs are from OPEN events and haven't started
         const closedLeg = bettingParlay.legs.find(leg => {
-            const event = events.find(e => e.id === leg.eventId);
+            const event = getEvent(leg.eventId);
             return !isEventOpen(event);
         });
 
@@ -348,7 +440,7 @@ export default function ParlayPage({ isEmbedded = false }) {
 
     // --- Helper for Leg Status ---
     const getLegStatus = (leg) => {
-        const event = events.find(e => e.id === leg.eventId);
+        const event = getEvent(leg.eventId);
         if (!event) return 'pending';
         if (event.status === 'settled' || event.winnerOutcomeId) {
             return event.winnerOutcomeId === leg.outcomeId ? 'won' : 'lost';
@@ -399,7 +491,7 @@ export default function ParlayPage({ isEmbedded = false }) {
             // We use isEventOpen(event) to check if it's still betting-enabled.
             // If !isEventOpen, it means it started or deadline passed.
             const hasStarted = p.legs.some(leg => {
-                const event = events.find(e => e.id === leg.eventId);
+                const event = getEvent(leg.eventId);
                 return event && !isEventOpen(event);
             });
 
@@ -446,15 +538,26 @@ export default function ParlayPage({ isEmbedded = false }) {
                         </div>
                         <div style={{ fontSize: '11px', color: '#a1a1aa' }}>PAYOUT</div>
                         {user?.role === 'admin' && (
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDelete(parlay.id);
-                                }}
-                                style={{ marginTop: '4px', fontSize: '10px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid #ef4444', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}
-                            >
-                                DELETE
-                            </button>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDelete(parlay.id);
+                                    }}
+                                    style={{ marginTop: '4px', fontSize: '10px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid #ef4444', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}
+                                >
+                                    DELETE
+                                </button>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleViewWagers(parlay.id);
+                                    }}
+                                    style={{ fontSize: '10px', background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', border: '1px solid #3b82f6', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}
+                                >
+                                    WAGERS
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -528,7 +631,7 @@ export default function ParlayPage({ isEmbedded = false }) {
                         if (getLegStatus(leg) !== 'pending') return true;
 
                         // Check if event has started/closed (even if not settled yet)
-                        const event = events.find(e => e.id === leg.eventId);
+                        const event = getEvent(leg.eventId);
                         if (!event) return true; // Safety
                         return !isEventOpen(event);
                     });
@@ -693,6 +796,20 @@ export default function ParlayPage({ isEmbedded = false }) {
                     <div style={{ fontSize: '13px', color: '#fca5a5', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         🔥 1 LEG AWAY
                     </div>
+                    {user?.role === 'admin' && (
+                        <>
+                            <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.2)' }}></div>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewWagers(parlay.id);
+                                }}
+                                style={{ fontSize: '10px', background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', border: '1px solid #3b82f6', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}
+                            >
+                                WAGERS
+                            </button>
+                        </>
+                    )}
                 </div>
 
                 {/* LEGS DISPLAY (Always Expanded for On Fire) */}
@@ -862,16 +979,58 @@ export default function ParlayPage({ isEmbedded = false }) {
                     <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Multiplier</div>
                         <div style={{ fontWeight: 'bold', color: color }}>{parlay.finalMultiplier.toFixed(2)}x</div>
+                        {user?.role === 'admin' && !isLost && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRecalculate(parlay.id);
+                                }}
+                                className="btn"
+                                style={{
+                                    marginTop: '4px',
+                                    fontSize: '9px',
+                                    padding: '2px 6px',
+                                    background: 'rgba(234, 179, 8, 0.1)',
+                                    color: '#eab308',
+                                    border: '1px solid rgba(234, 179, 8, 0.3)',
+                                    height: 'auto'
+                                }}
+                            >
+                                ↺ Reprocess
+                            </button>
+                        )}
+                        {user?.role === 'admin' && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewWagers(parlay.id);
+                                }}
+                                className="btn"
+                                style={{
+                                    marginTop: '4px',
+                                    fontSize: '9px',
+                                    padding: '2px 6px',
+                                    background: 'rgba(59, 130, 246, 0.2)',
+                                    color: '#3b82f6',
+                                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                                    height: 'auto'
+                                }}
+                            >
+                                👁 Wagers
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
         );
     };
 
-    const handleRecalculate = async () => {
-        if (!confirm("Recalculate all active parlays? This forces payouts for confirmed wins.")) return;
+    const handleRecalculate = async (parlayId = null) => {
+        const msg = parlayId ? "Reprocess payouts for this parlay?" : "Recalculate all parlays?";
+        if (!confirm(msg)) return;
+
         setIsSubmitting(true);
-        const res = await calculateParlays();
+        const res = await calculateParlays(parlayId);
         if (res.success) {
             setSuccess(res.message);
             setTimeout(() => setSuccess(''), 3000);
@@ -1530,6 +1689,68 @@ export default function ParlayPage({ isEmbedded = false }) {
                                 <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#fbbf24' }}>{selectedParlay.finalMultiplier.toFixed(2)}x</div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* ADMIN WAGERS MODAL */}
+            {viewingWagersParlayId && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                    background: 'rgba(0,0,0,0.85)', zIndex: 1200,
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px'
+                }} onClick={() => setViewingWagersParlayId(null)}>
+                    <div className="card animate-fade" style={{ width: '100%', maxWidth: '500px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', background: '#09090b', border: '1px solid #333' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
+                            <h2 style={{ fontSize: '18px', margin: 0, color: '#fff' }}>Parlay Wagers</h2>
+                            <button onClick={() => setViewingWagersParlayId(null)} className="btn" style={{ padding: '4px 8px', width: 'auto' }}>✕</button>
+                        </div>
+
+                        {wagersLoading ? (
+                            <div style={{ padding: '20px', textAlign: 'center', color: '#888' }}>
+                                <div className="animate-pulse">Loading wagers...</div>
+                            </div>
+                        ) : (
+                            <div style={{ overflowY: 'auto' }}>
+                                {wagersList.length === 0 ? (
+                                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>No wagers found.</div>
+                                ) : (
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                                        <thead>
+                                            <tr style={{ color: 'var(--text-muted)', textAlign: 'left', borderBottom: '1px solid #333' }}>
+                                                <th style={{ padding: '8px' }}>User</th>
+                                                <th style={{ padding: '8px', textAlign: 'right' }}>Wager</th>
+                                                <th style={{ padding: '8px', textAlign: 'right' }}>Date</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {wagersList.map(wager => (
+                                                <tr key={wager.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                                    <td style={{ padding: '8px', color: '#e4e4e7' }}>
+                                                        <div style={{ fontWeight: 'bold' }}>{wager.username}</div>
+                                                    </td>
+                                                    <td style={{ padding: '8px', textAlign: 'right', color: '#fbbf24', fontWeight: 'bold' }}>
+                                                        ${wager.amount?.toFixed(2)}
+                                                    </td>
+                                                    <td style={{ padding: '8px', textAlign: 'right', color: 'var(--text-muted)', fontSize: '11px' }}>
+                                                        {new Date(wager.placedAt).toLocaleDateString()}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        {/* Total */}
+                                        <tfoot>
+                                            <tr style={{ borderTop: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.02)' }}>
+                                                <td style={{ padding: '8px', fontWeight: 'bold', color: '#fff' }}>TOTAL POOL</td>
+                                                <td style={{ padding: '8px', textAlign: 'right', color: '#fbbf24', fontWeight: 'bold' }}>
+                                                    ${wagersList.reduce((sum, w) => sum + (w.amount || 0), 0).toFixed(2)}
+                                                </td>
+                                                <td></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

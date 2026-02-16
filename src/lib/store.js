@@ -335,44 +335,65 @@ export function AppProvider({ children }) {
   }, [user?.id]);
 
   // --- 5. Manual Parlay Calculation (For retroactive fixes) ---
-  const calculateParlays = async () => {
+  // --- 5. Manual Parlay Calculation (For retroactive fixes) ---
+  const calculateParlays = async (parlayId = null) => {
     if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
 
     try {
-      // FIX: Query ALL parlays and filter client side to catch those with undefined status (legacy)
-      // const parlaysQ = query(collection(db, 'parlays'), where('status', '==', 'active'));
-      const parlaysQ = query(collection(db, 'parlays'));
-      const parlaysSnap = await getDocs(parlaysQ);
+      // 1. Fetch Squads for Ranking
+      const squadsSnap = await getDocs(collection(db, 'squads'));
+      const squadsList = squadsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Sort by members count descending
+      squadsList.sort((a, b) => (b.members?.length || 0) - (a.members?.length || 0));
 
-      // Fetch all events for lookup
-      // Ideally we only fetch events in the parlays, but simpler to fetch active/recent events or just all for this admin tool
-      // Let's fetch all events since this is an admin tool
+      const squadBoostMap = new Map();
+      squadsList.forEach((sq, index) => {
+        let boost = 0;
+        if (index === 0) boost = 0.15;      // #1: +15%
+        else if (index === 1) boost = 0.10; // #2: +10%
+        else if (index === 2) boost = 0.05; // #3: +5%
+        if (boost > 0) squadBoostMap.set(sq.id, boost);
+      });
+      console.log(`[CalcParlays] Squad Rank Boosts prepared. Top Squad: ${squadsList[0]?.id || 'None'}`);
+
+      // 2. Query Parlays
+      let parlaysSnap;
+      if (parlayId) {
+        const docRef = doc(db, 'parlays', parlayId);
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) return { success: false, error: "Parlay not found" };
+        parlaysSnap = { docs: [docSnap] }; // Mock snapshot structure
+      } else {
+        const parlaysQ = query(collection(db, 'parlays'));
+        parlaysSnap = await getDocs(parlaysQ);
+      }
+
+      // 3. Fetch Events for Lookup
       const eventsSnap = await getDocs(collection(db, 'events'));
       const eventMap = new Map(eventsSnap.docs.map(d => [d.id, d.data()]));
 
-      const batch = writeBatch(db);
+      let batch = writeBatch(db);
       let updatesCount = 0;
       let pCount = 0;
 
       for (const parlayDoc of parlaysSnap.docs) {
         const parlay = { id: parlayDoc.id, ...parlayDoc.data() };
 
-        // Skip already settled
-        if (parlay.status === 'won' || parlay.status === 'lost') continue;
-
+        // Determine Status
         let isLost = false;
         let isFullyWon = true;
+        let pendingCount = 0;
 
         for (const leg of parlay.legs) {
           const event = eventMap.get(leg.eventId);
           let legStatus = 'pending';
 
           if (!event) {
-            // removing leg? or keeping pending
-            legStatus = 'pending';
+            legStatus = 'pending'; // Event missing/deleted?
           } else if (event.status === 'settled' && event.winnerOutcomeId) {
             legStatus = event.winnerOutcomeId === leg.outcomeId ? 'won' : 'lost';
           } else {
+            // Event still open or just closed but not settled
             legStatus = 'pending';
           }
 
@@ -382,6 +403,7 @@ export function AppProvider({ children }) {
           }
           if (legStatus !== 'won') {
             isFullyWon = false;
+            pendingCount++;
           }
         }
 
@@ -389,39 +411,110 @@ export function AppProvider({ children }) {
         if (isLost) newStatus = 'lost';
         else if (isFullyWon) newStatus = 'won';
 
+        // Check if status actually changed or needs update
+        // (We might re-process 'won' requests if payouts weren't done, but safer to rely on 'pending' bets)
+        // If the parlay is already marked 'won', we might still have pending bets if previous run crashed.
+        // So we proceed to check bets regardless of whether parlay status needs update.
+
+        if (parlay.status !== newStatus) {
+          batch.update(parlayDoc.ref, { status: newStatus });
+          updatesCount++;
+          pCount++;
+        }
+
+        // Only process outcomes if Won or Lost
         if (newStatus === 'active') continue;
 
-        // Found a change!
-        pCount++;
-        batch.update(parlayDoc.ref, { status: newStatus });
-        updatesCount++;
+        console.log(`[CalcParlays] Processing Parlay ${parlay.id} -> Status: ${newStatus}`);
 
-        // Settle Bets
+        // Fetch Pending Bets for this Parlay
         const betsQ = query(collection(db, 'bets'), where('parlayId', '==', parlay.id), where('status', '==', 'pending'));
         const betsSnap = await getDocs(betsQ);
+        console.log(`[CalcParlays] Parsed ${betsSnap.size} pending bets.`);
+
+        // Pre-fetch users for these bets to get squad info
+        // (Optimization: dedup userIds)
+        const userIds = [...new Set(betsSnap.docs.map(b => b.data().userId))];
+        const userMap = new Map();
+        if (userIds.length > 0 && newStatus === 'won') {
+          // Only fetch users if we are paying out
+          const userChunks = [];
+          for (let i = 0; i < userIds.length; i += 10) {
+            const chunk = userIds.slice(i, i + 10);
+            const qUsers = query(collection(db, 'users'), where('__name__', 'in', chunk));
+            const snapUsers = await getDocs(qUsers);
+            snapUsers.forEach(u => userMap.set(u.id, u.data()));
+          }
+        }
 
         for (const betDoc of betsSnap.docs) {
           const bet = betDoc.data();
-          const payout = newStatus === 'won' ? (bet.amount * parlay.finalMultiplier) : 0;
+          let payout = 0;
 
-          batch.update(betDoc.ref, {
-            status: newStatus,
-            payout: payout,
-            settledAt: new Date().toISOString()
-          });
-          updatesCount++;
+          if (newStatus === 'lost') {
+            payout = 0;
+            batch.update(betDoc.ref, {
+              status: 'lost',
+              payout: 0,
+              settledAt: new Date().toISOString()
+            });
+            updatesCount++;
 
-          if (newStatus === 'won') {
+            // Update User Stats (Invested processed at bet time, so no change needed? 
+            // Wait, logic says `invested` tracks ACTIVE bets. So we must decrement it.)
             const userRef = doc(db, 'users', bet.userId);
             batch.update(userRef, {
-              balance: increment(payout),
               invested: increment(-bet.amount)
             });
             updatesCount++;
-          } else {
+
+          } else if (newStatus === 'won') {
+            // --- PAYOUT LOGIC ---
+
+            // 1. Base Multiplier
+            let effectiveOdds = parlay.finalMultiplier;
+
+            // 2. Creator Boost (Tailed By)
+            // If I am the creator, I get a boost for every person who tailed me
+            if (bet.userId === parlay.creatorId) {
+              const tailCount = (parlay.tailedBy || []).length;
+              const tailBoost = Math.min(tailCount * 0.5, 5.0); // +0.5x per tail, max +5x
+              effectiveOdds += tailBoost;
+              console.log(`[CalcParlays] Creator Boost Applied! Original: ${parlay.finalMultiplier}x -> New: ${effectiveOdds}x`);
+            }
+
+            // 3. Calculate Winnings
+            let grossPayout = bet.amount * effectiveOdds;
+
+            // 4. Squad Boost (Percentage on top)
+            const betUser = userMap.get(bet.userId);
+            if (betUser && betUser.squadId) {
+              const squadBonusPct = squadBoostMap.get(betUser.squadId) || 0;
+              if (squadBonusPct > 0) {
+                const originalPayout = grossPayout;
+                grossPayout = grossPayout * (1 + squadBonusPct);
+                console.log(`[CalcParlays] Squad Boost Applied (${squadBonusPct * 100}%)! ${originalPayout.toFixed(2)} -> ${grossPayout.toFixed(2)}`);
+              }
+            }
+
+            payout = grossPayout;
+            console.log(`[CalcParlays] Paying out User ${bet.username}: $${payout.toFixed(2)}`);
+
+            // Update Bet
+            batch.update(betDoc.ref, {
+              status: 'won',
+              payout: payout,
+              settledAt: new Date().toISOString()
+            });
+            updatesCount++;
+
+            // Update User
             const userRef = doc(db, 'users', bet.userId);
             batch.update(userRef, {
-              invested: increment(-bet.amount)
+              balance: increment(payout),
+              invested: increment(-bet.amount),
+              totalWinnings: increment(payout - bet.amount),
+              wins: increment(1)
             });
             updatesCount++;
           }
@@ -430,6 +523,7 @@ export function AppProvider({ children }) {
           if (updatesCount >= 450) {
             await batch.commit();
             updatesCount = 0;
+            batch = writeBatch(db); // Reset batch
           }
         }
       }
@@ -440,6 +534,7 @@ export function AppProvider({ children }) {
       return { success: true, message: `Processed ${pCount} parlays.` };
 
     } catch (e) {
+      console.error(e);
       return { success: false, error: e.message };
     }
   };
