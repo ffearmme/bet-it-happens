@@ -45,48 +45,32 @@ export default function SlotsGame() {
             setMessage('Spinning...');
             setLastWin(0);
 
-            // 2. Determine Outcome Type
-            // 50% Loss
-            // 40% Small Win (0.3x - 1.5x)
-            // 10% Big Win
-            const rand = Math.random();
-            const outcome = rand < 0.5 ? 'loss' : rand < 0.9 ? 'small_win' : 'big_win';
+            // 2. Weighted Random Selection
+            const WEIGHTS = [
+                { symbol: '🍒', weight: 30 },
+                { symbol: '🍋', weight: 25 },
+                { symbol: '🍇', weight: 18 },
+                { symbol: '🍉', weight: 12 },
+                { symbol: '🔔', weight: 8 },
+                { symbol: '💎', weight: 5 },
+                { symbol: '7️⃣', weight: 2 }
+            ];
 
-            // Helper to get random symbol
-            const getSym = () => SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+            const getRandomSymbol = () => {
+                const totalWeight = WEIGHTS.reduce((acc, item) => acc + item.weight, 0);
+                let random = Math.random() * totalWeight;
+                for (const item of WEIGHTS) {
+                    if (random < item.weight) return item.symbol;
+                    random -= item.weight;
+                }
+                return WEIGHTS[0].symbol;
+            };
 
-            // Generate Reels based on outcome
+            // Generate Reels
             const finalReels = Array(REELS).fill(null).map(() => Array(ROWS).fill(null));
-
-            // Fill with random first
             for (let i = 0; i < REELS; i++) {
                 for (let j = 0; j < ROWS; j++) {
-                    finalReels[i][j] = getSym();
-                }
-            }
-
-            if (outcome === 'small_win') {
-                // Force a small win on the middle row (index 1)
-                // Small win = 3 of first 3 symbols match specific low value types, or just 2 for some.
-                // Let's force 3x match of a low tier symbol for ~0.75-1.5x, or 2x match for 0.3-0.5x
-                const symbol = SYMBOLS[Math.floor(Math.random() * 3)]; // Cherry, Lemon, or Grape
-                const matchCount = Math.random() < 0.5 ? 2 : 3; // 2 or 3 match
-
-                for (let k = 0; k < matchCount; k++) {
-                    finalReels[k][1] = symbol; // Set middle row
-                }
-                // Ensure next one doesn't match to limit win
-                if (matchCount < REELS) {
-                    while (finalReels[matchCount][1] === symbol) {
-                        finalReels[matchCount][1] = getSym();
-                    }
-                }
-            } else if (outcome === 'big_win') {
-                // Force 4 or 5 match
-                const symbol = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
-                const matchCount = Math.random() < 0.7 ? 4 : 5;
-                for (let k = 0; k < matchCount; k++) {
-                    finalReels[k][1] = symbol;
+                    finalReels[i][j] = getRandomSymbol();
                 }
             }
 
@@ -95,44 +79,53 @@ export default function SlotsGame() {
                 setReels(finalReels);
                 setIsSpinning(false);
 
-                // 3. Evaluate Results
+                // 3. Evaluate Results (Middle Row Payline)
+                const r = 1; // Middle row
+                const rowSymbols = finalReels.map(col => col[r]);
+
+                // Count Occurrences
+                const counts = {};
+                rowSymbols.forEach(sym => {
+                    counts[sym] = (counts[sym] || 0) + 1;
+                });
+
                 let totalWin = 0;
                 let matches = [];
 
-                // Check Middle Row Only for this simplified version to match generation logic
-                // (Can expand to all rows if we adjust generation to not overwrite other rows accidentally)
-                const r = 1; // Middle row
-                const rowSymbols = finalReels.map(col => col[r]);
-                const firstSym = rowSymbols[0];
+                // Rules
+                // 🍒 Cherries (Anywhere)
+                const cherryCount = counts['🍒'] || 0;
+                if (cherryCount === 2) totalWin += amount * 0.25;
+                else if (cherryCount === 3) totalWin += amount * 0.5;
+                else if (cherryCount === 4) totalWin += amount * 1;
+                else if (cherryCount === 5) totalWin += amount * 2;
+                if (cherryCount >= 2) matches.push(`${cherryCount}x 🍒`);
 
-                let count = 1;
-                for (let k = 1; k < REELS; k++) {
-                    if (rowSymbols[k] === firstSym) count++;
-                    else break;
+                // 🍋 Lemons (Anywhere)
+                const lemonCount = counts['🍋'] || 0;
+                if (lemonCount === 2) {
+                    totalWin += amount * 0.5;
+                    matches.push(`2x 🍋`);
                 }
 
-                // Calculate Payout
-                // New Payout Scheme for frequents:
-                // 2x: 0.3 (Cherry/Lemon only)
-                // 3x: 0.75 (Low), 2x (Mid), 5x (High)
-                // 4x: 2x (Low), 5x (Mid), 10x (High)
-                // 5x: 5x, 10x, 50x
+                // For other symbols, we can apply standard payouts for 3+ of others
+                Object.entries(counts).forEach(([sym, count]) => {
+                    if (sym === '🍒' || sym === '🍋') return; // Handled above
+                    if (count >= 3) {
+                        let winVal = 0;
+                        if (count === 3) winVal = amount * (PAYOUTS[sym] || 0);
+                        if (count === 4) winVal = amount * (PAYOUTS[sym] || 0) * 2;
+                        if (count === 5) winVal = amount * (PAYOUTS[sym] || 0) * 10;
 
-                let winMult = 0;
-                if (count === 2) {
-                    if (['🍒', '🍋'].includes(firstSym)) winMult = 0.3; // Frequent small refund
-                    else if (['🍇', '🍉'].includes(firstSym)) winMult = 0.5;
-                } else if (count === 3) {
-                    if (['🍒', '🍋'].includes(firstSym)) winMult = 0.75;
-                    else winMult = PAYOUTS[firstSym] || 2;
-                } else if (count >= 4) {
-                    winMult = (PAYOUTS[firstSym] || 2) * (count === 5 ? 3 : 1.5); // Bonus for 4/5
-                }
+                        if (winVal > 0) {
+                            totalWin += winVal;
+                            matches.push(`${count}x ${sym}`);
+                        }
+                    }
+                });
 
-                totalWin = amount * winMult;
 
                 if (totalWin > 0) {
-                    matches.push(`${count}x ${firstSym}`);
                     setMessage(`WINNER! +$${totalWin.toFixed(2)}`);
                     setLastWin(totalWin);
                     // Add winnings
@@ -156,7 +149,7 @@ export default function SlotsGame() {
                         timestamp: Date.now()
                     });
 
-                    // Check for Global Jackpot Announcement (> 5x)
+                    // Check for Global Jackpot Announcement (> 5x or > 10000)
                     const actualMultiplier = amount > 0 ? totalWin / amount : 0;
                     if (actualMultiplier > 5 || totalWin >= 10000) {
                         addDoc(collection(db, 'jackpots'), {
