@@ -1,6 +1,6 @@
 "use client";
 import Link from 'next/link';
-import { TrendingUp, Gem, Club, ArrowRight, X, Info } from 'lucide-react';
+import { TrendingUp, Gem, Club, ArrowRight, X, Info, Disc } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 export default function CasinoPage() {
@@ -106,6 +106,14 @@ export default function CasinoPage() {
             icon: <Club size={48} className="text-green-500" />,
             color: '#10b981', // Green for Blackjack
             link: '/casino/blackjack'
+        },
+        {
+            id: 'roulette',
+            name: 'Roulette',
+            description: 'Spin the wheel and test your luck.',
+            icon: <Disc size={48} className="text-purple-500" />,
+            color: '#a855f7', // Purple for Roulette
+            link: '/casino/roulette'
         }
     ];
 

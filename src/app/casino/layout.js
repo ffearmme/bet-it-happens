@@ -33,6 +33,8 @@ export default function CasinoLayout({ children }) {
             setMaintenanceMode(true);
         } else if (pathname.includes('/casino/blackjack') && casinoSettings?.blackjack === false) {
             setMaintenanceMode(true);
+        } else if (pathname.includes('/casino/roulette') && casinoSettings?.roulette === false) {
+            setMaintenanceMode(true);
         } else {
             setMaintenanceMode(false);
         }
