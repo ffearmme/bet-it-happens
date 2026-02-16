@@ -78,13 +78,7 @@ export default function BlackjackGame() {
             // Check Instant Blackjack
             const pVal = getHandValue(pHand);
             if (pVal === 21) {
-                // Determine immediately if dealer also has BJ or if player wins 3:2
-                // Dealer hidden card is index 0 in our array logic for now, let's peek
-                const dVal = getHandValue(dHand);
-
-                if (dVal === 21) {
-                    handleGameOver(pHand, dHand, amount * 2.5, 'BLACKJACK! You win!', amount); // 1.5x payout + bet back
-                }
+                handleGameOver(pHand, dHand, amount * 2.5, 'BLACKJACK! You win!', amount); // 1.5x payout + bet back
             }
 
         } catch (e) {
