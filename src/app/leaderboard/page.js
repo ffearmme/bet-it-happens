@@ -43,7 +43,7 @@ export default function Leaderboard() {
     }, [tab, users]);
 
     const activePlayers = users
-        ? users.filter(u => u.role !== 'admin')
+        ? users.filter(u => u.role !== 'admin' && u.role !== 'banned' && !u.banned)
             .sort((a, b) => ((b.balance + (b.invested || 0)) - (a.balance + (a.invested || 0))))
             .slice(0, 20)
         : [];

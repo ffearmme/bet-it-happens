@@ -44,6 +44,7 @@ function AdminContent() {
     const [allBets, setAllBets] = useState([]);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingBets, setEditingBets] = useState([]);
+    const [showBanned, setShowBanned] = useState(false);
 
     // State for viewing bets in Completed tab
     const [viewingBetsEventId, setViewingBetsEventId] = useState(null);
@@ -818,7 +819,23 @@ function AdminContent() {
                     {/* --- USERS TAB --- */}
                     {activeTab === 'users' && (
                         <div className="card">
-                            <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>Users Directory ({filteredUsers.length})</h2>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <h2 style={{ fontSize: '18px' }}>Users Directory ({filteredUsers.length})</h2>
+                                <button
+                                    onClick={() => setShowBanned(!showBanned)}
+                                    style={{
+                                        fontSize: '12px',
+                                        padding: '4px 8px',
+                                        background: showBanned ? '#ef4444' : '#333',
+                                        color: showBanned ? '#fff' : '#888',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    {showBanned ? 'Hide Banned' : 'Show Banned'}
+                                </button>
+                            </div>
 
                             <div className="mod-table">
                                 {/* Table Header */}
@@ -832,86 +849,89 @@ function AdminContent() {
 
                                 {/* Table Rows */}
                                 <div className="mod-table-body">
-                                    {filteredUsers.sort((a, b) => (b.balance || 0) - (a.balance || 0)).map(u => (
-                                        <div key={u.id} className="mod-table-row">
-                                            <div className="mod-col" data-label="User">
-                                                <div style={{ fontWeight: 'bold' }}>{u.username}</div>
-                                                <div style={{ fontSize: '10px', color: '#666' }}>{u.email}</div>
-                                                <div style={{ fontSize: '10px', color: '#444' }}>ID: {u.id}</div>
-                                            </div>
-                                            <div className="mod-col" data-label="Balance">
-                                                <span className="mod-balance">${u.balance?.toFixed(2)}</span>
-                                                <button
-                                                    onClick={() => adjustUserBalance(u)}
-                                                    style={{ marginLeft: '6px', cursor: 'pointer', background: 'none', border: 'none', fontSize: '12px' }}
-                                                    title="Edit Balance"
-                                                >
-                                                    ✏️
-                                                </button>
-                                            </div>
-                                            <div className="mod-col" data-label="Role">
-                                                <button
-                                                    onClick={() => toggleUserRole(u)}
-                                                    style={{
-                                                        padding: '4px 8px', borderRadius: '4px',
-                                                        background: u.role === 'admin' ? '#ef4444' : '#333',
-                                                        fontSize: '11px', fontWeight: 'bold',
-                                                        color: u.role === 'admin' ? '#fff' : '#888',
-                                                        border: '1px solid transparent',
-                                                        cursor: u.id === user.id ? 'not-allowed' : 'pointer',
-                                                        opacity: u.id === user.id ? 0.7 : 1
-                                                    }}
-                                                    title={u.id === user.id ? "Cannot change own role" : "Click to toggle Admin/User"}
-                                                    disabled={u.id === user.id}
-                                                >
-                                                    {u.role ? u.role.toUpperCase() : 'USER'}
-                                                </button>
-                                            </div>
-                                            <div className="mod-col" data-label="Groups">
-                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                                    {['The Boys', 'The Fam', 'Moderator'].map(g => {
-                                                        const isActive = (u.groups || []).includes(g);
-                                                        return (
+                                    {filteredUsers
+                                        .filter(u => showBanned ? true : u.role !== 'banned' && !u.banned)
+                                        .sort((a, b) => (b.balance || 0) - (a.balance || 0))
+                                        .map(u => (
+                                            <div key={u.id} className="mod-table-row">
+                                                <div className="mod-col" data-label="User">
+                                                    <div style={{ fontWeight: 'bold' }}>{u.username}</div>
+                                                    <div style={{ fontSize: '10px', color: '#666' }}>{u.email}</div>
+                                                    <div style={{ fontSize: '10px', color: '#444' }}>ID: {u.id}</div>
+                                                </div>
+                                                <div className="mod-col" data-label="Balance">
+                                                    <span className="mod-balance">${u.balance?.toFixed(2)}</span>
+                                                    <button
+                                                        onClick={() => adjustUserBalance(u)}
+                                                        style={{ marginLeft: '6px', cursor: 'pointer', background: 'none', border: 'none', fontSize: '12px' }}
+                                                        title="Edit Balance"
+                                                    >
+                                                        ✏️
+                                                    </button>
+                                                </div>
+                                                <div className="mod-col" data-label="Role">
+                                                    <button
+                                                        onClick={() => toggleUserRole(u)}
+                                                        style={{
+                                                            padding: '4px 8px', borderRadius: '4px',
+                                                            background: u.role === 'admin' ? '#ef4444' : '#333',
+                                                            fontSize: '11px', fontWeight: 'bold',
+                                                            color: u.role === 'admin' ? '#fff' : '#888',
+                                                            border: '1px solid transparent',
+                                                            cursor: u.id === user.id ? 'not-allowed' : 'pointer',
+                                                            opacity: u.id === user.id ? 0.7 : 1
+                                                        }}
+                                                        title={u.id === user.id ? "Cannot change own role" : "Click to toggle Admin/User"}
+                                                        disabled={u.id === user.id}
+                                                    >
+                                                        {u.role ? u.role.toUpperCase() : 'USER'}
+                                                    </button>
+                                                </div>
+                                                <div className="mod-col" data-label="Groups">
+                                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                                        {['The Boys', 'The Fam', 'Moderator'].map(g => {
+                                                            const isActive = (u.groups || []).includes(g);
+                                                            return (
+                                                                <button
+                                                                    key={g}
+                                                                    onClick={() => toggleGroup(u, g)}
+                                                                    style={{
+                                                                        padding: '4px 8px', fontSize: '10px', borderRadius: '4px',
+                                                                        border: isActive ? (g === 'Moderator' ? '1px solid #3b82f6' : '1px solid var(--primary)') : '1px solid #333',
+                                                                        background: isActive ? (g === 'Moderator' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(234, 179, 8, 0.2)') : 'transparent',
+                                                                        color: isActive ? (g === 'Moderator' ? '#3b82f6' : 'var(--primary)') : '#666',
+                                                                        cursor: 'pointer', transition: 'all 0.2s', fontWeight: isActive ? 'bold' : 'normal'
+                                                                    }}
+                                                                >
+                                                                    {g === 'Moderator' ? '🛡️ Mod' : g}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                                <div className="mod-col" data-label="Actions">
+                                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                                        {u.id !== user.id && (
                                                             <button
-                                                                key={g}
-                                                                onClick={() => toggleGroup(u, g)}
-                                                                style={{
-                                                                    padding: '4px 8px', fontSize: '10px', borderRadius: '4px',
-                                                                    border: isActive ? (g === 'Moderator' ? '1px solid #3b82f6' : '1px solid var(--primary)') : '1px solid #333',
-                                                                    background: isActive ? (g === 'Moderator' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(234, 179, 8, 0.2)') : 'transparent',
-                                                                    color: isActive ? (g === 'Moderator' ? '#3b82f6' : 'var(--primary)') : '#666',
-                                                                    cursor: 'pointer', transition: 'all 0.2s', fontWeight: isActive ? 'bold' : 'normal'
-                                                                }}
-                                                            >
-                                                                {g === 'Moderator' ? '🛡️ Mod' : g}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                            <div className="mod-col" data-label="Actions">
-                                                <div style={{ display: 'flex', gap: '4px' }}>
-                                                    {u.id !== user.id && (
-                                                        <button
-                                                            onClick={async () => {
-                                                                if (confirm('Delete user? This action cannot be undone.')) {
-                                                                    const res = await deleteUser(u.id);
-                                                                    if (res.success) {
-                                                                        alert('User deleted successfully.');
-                                                                    } else {
-                                                                        alert('Error deleting user: ' + res.error);
+                                                                onClick={async () => {
+                                                                    if (confirm('Delete user? This action cannot be undone.')) {
+                                                                        const res = await deleteUser(u.id);
+                                                                        if (res.success) {
+                                                                            alert('User deleted successfully.');
+                                                                        } else {
+                                                                            alert('Error deleting user: ' + res.error);
+                                                                        }
                                                                     }
-                                                                }
-                                                            }}
-                                                            style={{ padding: '4px 8px', background: '#333', color: '#ef4444', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}
-                                                        >
-                                                            Delete
-                                                        </button>
-                                                    )}
+                                                                }}
+                                                                style={{ padding: '4px 8px', background: '#333', color: '#ef4444', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        ))}
                                 </div>
                             </div>
                         </div>

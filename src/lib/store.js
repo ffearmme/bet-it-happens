@@ -87,6 +87,13 @@ export function AppProvider({ children }) {
           if (docSnap.exists()) {
             const userData = docSnap.data();
 
+            // Check for Ban
+            if (userData.banned || userData.role === 'banned') {
+              alert("Your account has been banned.");
+              signOut(auth);
+              return;
+            }
+
             // Check for missing referral code (Backfill for existing users)
             if (!userData.referralCode) {
               const newCode = Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -95,7 +102,6 @@ export function AppProvider({ children }) {
               // We don't need to manually update state here, the snapshot will fire again instantly
             }
 
-            setUser({ id: firebaseUser.uid, ...userData });
             setUser({ id: firebaseUser.uid, ...userData });
           } else {
             // Check if we are intentionally deleting the account
@@ -1986,24 +1992,46 @@ export function AppProvider({ children }) {
       const betsSnap = await getDocs(query(collection(db, 'bets'), where('userId', '==', targetUserId)));
       betsSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
 
-      // 2. Ideas
+      // 2. Casino Bets (New)
+      const casinoSnap = await getDocs(query(collection(db, 'casino_bets'), where('userId', '==', targetUserId)));
+      casinoSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
+
+      // 3. Parlays (Created by user) (New)
+      const parlaysSnap = await getDocs(query(collection(db, 'parlays'), where('creatorId', '==', targetUserId)));
+      parlaysSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
+
+      // 4. Ideas
       const ideasSnap = await getDocs(query(collection(db, 'ideas'), where('userId', '==', targetUserId)));
       ideasSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
 
-      // 3. Comments (New)
+      // 5. Comments
       const commentsSnap = await getDocs(query(collection(db, 'comments'), where('userId', '==', targetUserId)));
       commentsSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
 
-      // 4. Notifications (New)
+      // 6. Notifications
       const notifSnap = await getDocs(query(collection(db, 'notifications'), where('userId', '==', targetUserId)));
       notifSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
 
-      // 5. User Profile
-      allDocsToDelete.push(doc(db, 'users', targetUserId));
+      // 7. Jackpots (New)
+      const jackpotSnap = await getDocs(query(collection(db, 'jackpots'), where('userId', '==', targetUserId)));
+      jackpotSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
 
-      console.log(`Deleting user ${targetUserId}: ${allDocsToDelete.length} documents total.`);
-
+      console.log(`Clearing data for user ${targetUserId}: ${allDocsToDelete.length} documents total.`);
       await commitBatchBuffer(allDocsToDelete);
+
+      // 8. BAN User Profile (Instead of deleting, to prevent auto-creation)
+      // We overwrite the doc with a banned state
+      await setDoc(doc(db, 'users', targetUserId), {
+        banned: true,
+        role: 'banned',
+        username: 'Banned User',
+        email: 'banned@user.com', // Obfuscate
+        balance: 0,
+        invested: 0,
+        profilePic: null,
+        groups: [],
+        createdAt: new Date().toISOString()
+      });
 
       return { success: true };
     } catch (e) {
