@@ -51,6 +51,11 @@ export default function CasinoPage() {
             const scrollTop = window.scrollY || document.documentElement.scrollTop;
             const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
 
+            // Check if there is space below
+            // If distance from bottom of element to bottom of viewport is less than ~250px, place on top
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const placeTop = spaceBelow < 250;
+
             setSpotlightStyle({
                 top: rect.top + scrollTop - 10,
                 left: rect.left + scrollLeft - 10,
@@ -58,10 +63,11 @@ export default function CasinoPage() {
                 height: rect.height + 20,
                 opacity: 1,
                 borderRadius: '16px',
+                placement: placeTop ? 'top' : 'bottom'
             });
 
             // Scroll to element if needed
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
         }
     }, [tourStep]);
 
@@ -223,10 +229,15 @@ export default function CasinoPage() {
                             {/* The Tooltip/Explanation */}
                             <div style={{
                                 position: 'absolute',
-                                top: spotlightStyle.top + spotlightStyle.height + 20, // Position below
+                                top: spotlightStyle.placement === 'top'
+                                    ? spotlightStyle.top - 20
+                                    : spotlightStyle.top + spotlightStyle.height + 20,
                                 left: spotlightStyle.left + (spotlightStyle.width / 2),
-                                transform: 'translateX(-50%)',
+                                transform: spotlightStyle.placement === 'top'
+                                    ? 'translateX(-50%) translateY(-100%)'
+                                    : 'translateX(-50%)',
                                 width: '300px',
+                                maxWidth: '90vw',
                                 background: '#1e293b',
                                 border: '1px solid rgba(255,255,255,0.1)',
                                 borderRadius: '16px',
@@ -238,10 +249,18 @@ export default function CasinoPage() {
                                 opacity: spotlightStyle.opacity,
                                 pointerEvents: 'auto' // Fix: Capture clicks so they don't fall through to elements like Crash card
                             }}>
-                                {/* Triangle arrow pointing up */}
+                                {/* Triangle arrow */}
                                 <div style={{
-                                    position: 'absolute', top: '-6px', left: '50%', transform: 'translateX(-50%) rotate(45deg)',
-                                    width: '12px', height: '12px', background: '#1e293b', borderLeft: '1px solid rgba(255,255,255,0.1)', borderTop: '1px solid rgba(255,255,255,0.1)'
+                                    position: 'absolute',
+                                    top: spotlightStyle.placement === 'top' ? 'auto' : '-6px',
+                                    bottom: spotlightStyle.placement === 'top' ? '-6px' : 'auto',
+                                    left: '50%', transform: 'translateX(-50%) rotate(45deg)',
+                                    width: '12px', height: '12px',
+                                    background: '#1e293b',
+                                    borderLeft: spotlightStyle.placement === 'top' ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                                    borderTop: spotlightStyle.placement === 'top' ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                                    borderRight: spotlightStyle.placement === 'top' ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                                    borderBottom: spotlightStyle.placement === 'top' ? '1px solid rgba(255,255,255,0.1)' : 'none'
                                 }}></div>
 
                                 <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
