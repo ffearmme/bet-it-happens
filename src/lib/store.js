@@ -27,6 +27,8 @@ export function AppProvider({ children }) {
   const [ideas, setIdeas] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [todayBetCount, setTodayBetCount] = useState(0);
+  const [todayCasinoCount, setTodayCasinoCount] = useState(0);
 
   // Ref to track if we are currently deleting the account to prevent auto-recreation
   const isDeletingAccount = useRef(false);
@@ -238,6 +240,27 @@ export function AppProvider({ children }) {
     };
 
 
+  }, []);
+
+  // --- 2b. Global Daily Stats Listeners ---
+  useEffect(() => {
+    // Bets Today Listener
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+
+    // Normal Bets
+    const betsTodayQuery = query(collection(db, 'bets'), where('placedAt', '>=', startOfDay.toISOString()));
+    const unsubBetsToday = onSnapshot(betsTodayQuery, (snap) => setTodayBetCount(snap.size));
+
+    // Casino Rolls Today
+    // Casino bets use timestamp (number), not ISO string
+    const casinoTodayQuery = query(collection(db, 'casino_bets'), where('timestamp', '>=', startOfDay.getTime()));
+    const unsubCasinoToday = onSnapshot(casinoTodayQuery, (snap) => setTodayCasinoCount(snap.size));
+
+    return () => {
+      unsubBetsToday();
+      unsubCasinoToday();
+    };
   }, []);
 
   // --- 3. Bets Listener (Only for logged in user) ---
@@ -3474,7 +3497,8 @@ export function AppProvider({ children }) {
       createParlay, placeParlayBet, addParlayComment, calculateParlays, deleteParlay, sendSystemNotification,
       squads, createSquad, joinSquad, leaveSquad, manageSquadRequest, kickMember, updateSquad, inviteUserToSquad, respondToSquadInvite, searchUsers, getSquadStats,
       depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest, sendSquadMessage,
-      syncAllUsernames, updateCasinoStatus, casinoSettings
+      syncAllUsernames, updateCasinoStatus, casinoSettings,
+      todayBetCount, todayCasinoCount
     }}>
       {children}
     </AppContext.Provider>

@@ -19,7 +19,8 @@ export default function Home() {
         user, events, bets, placeBet, isLoaded, users, systemAnnouncement,
         addComment, deleteComment, getUserStats, deleteEvent,
         signin, signup, activeEventsCount, serverTime, isGuestMode, setIsGuestMode, db,
-        notifications, markNotificationAsRead, toggleLikeComment
+        notifications, markNotificationAsRead, toggleLikeComment,
+        todayBetCount, todayCasinoCount
     } = useApp(); // Used destructuring to get EVERYTHING needed from storeRef(null);
     const chatContainerRef = useRef(null);
     const [selectedOutcome, setSelectedOutcome] = useState(null);
@@ -136,28 +137,7 @@ export default function Home() {
         return () => clearInterval(timer);
     }, []);
 
-    const [todayBetCount, setTodayBetCount] = useState(0);
 
-    useEffect(() => {
-        if (!db) return;
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        const q = query(collection(db, 'bets'), where('placedAt', '>=', startOfDay.toISOString()));
-        const unsub = onSnapshot(q, (snap) => setTodayBetCount(snap.size));
-        return () => unsub();
-    }, [db]);
-
-    const [todayCasinoCount, setTodayCasinoCount] = useState(0);
-
-    useEffect(() => {
-        if (!db) return;
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        // Casino bets use timestamp (number), not ISO string
-        const q = query(collection(db, 'casino_bets'), where('timestamp', '>=', startOfDay.getTime()));
-        const unsub = onSnapshot(q, (snap) => setTodayCasinoCount(snap.size));
-        return () => unsub();
-    }, [db]);
 
     useEffect(() => {
         if (typeof window !== 'undefined' && localStorage.getItem('justSignedUp')) {
