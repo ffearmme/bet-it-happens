@@ -147,6 +147,18 @@ export default function Home() {
         return () => unsub();
     }, [db]);
 
+    const [todayCasinoCount, setTodayCasinoCount] = useState(0);
+
+    useEffect(() => {
+        if (!db) return;
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        // Casino bets use timestamp (number), not ISO string
+        const q = query(collection(db, 'casino_bets'), where('timestamp', '>=', startOfDay.getTime()));
+        const unsub = onSnapshot(q, (snap) => setTodayCasinoCount(snap.size));
+        return () => unsub();
+    }, [db]);
+
     useEffect(() => {
         if (typeof window !== 'undefined' && localStorage.getItem('justSignedUp')) {
             setShowWelcome(true);
@@ -708,18 +720,20 @@ export default function Home() {
 
 
                 <div style={{ textAlign: 'center' }}>
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '48px', flexWrap: 'wrap', marginBottom: '12px' }}>
-                        <p style={{
-                            fontSize: '16px',
-                            color: '#fff',
-                            fontWeight: '600',
-                            background: 'linear-gradient(90deg, #fff, #a1a1aa)',
-                            WebkitBackgroundClip: 'text',
-                            WebkitTextFillColor: 'transparent',
-                            margin: 0
-                        }}>
-                            Prediction markets for real life — make predictions, earn coins, climb the leaderboard.
-                        </p>
+                    <p style={{
+                        fontSize: '16px',
+                        color: '#fff',
+                        fontWeight: '600',
+                        background: 'linear-gradient(90deg, #fff, #a1a1aa)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        marginBottom: '16px',
+                        marginTop: '0'
+                    }}>
+                        Prediction markets for real life — make predictions, earn coins, climb the leaderboard.
+                    </p>
+
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '24px', flexWrap: 'wrap', marginBottom: '12px' }}>
                         <div style={{
                             background: 'rgba(34, 197, 94, 0.1)',
                             border: '1px solid var(--primary)',
@@ -732,6 +746,19 @@ export default function Home() {
                         }}>
                             <span style={{ fontSize: '11px', color: '#fff', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.5px' }}>Bets Today</span>
                             <span style={{ fontSize: '20px', fontWeight: '900', color: '#fff', textShadow: '0 0 10px var(--primary)' }}>{todayBetCount}</span>
+                        </div>
+                        <div style={{
+                            background: 'rgba(234, 179, 8, 0.1)',
+                            border: '1px solid #eab308',
+                            borderRadius: '12px',
+                            padding: '8px 16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            boxShadow: '0 0 15px rgba(234, 179, 8, 0.2)'
+                        }}>
+                            <span style={{ fontSize: '11px', color: '#fff', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.5px' }}>Casino Rolls</span>
+                            <span style={{ fontSize: '20px', fontWeight: '900', color: '#fff', textShadow: '0 0 10px #eab308' }}>{todayCasinoCount}</span>
                         </div>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
