@@ -377,22 +377,69 @@ export default function RouletteGame() {
                         }}>
 
                             {/* Controls */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
                                 <div style={{ display: 'flex', gap: '8px' }}>
-                                    {[1, 5, 10, 25, 100].map(val => (
-                                        <button key={val} onClick={() => setChipValue(val)} style={{
-                                            width: '40px', height: '40px', borderRadius: '50%', border: chipValue === val ? '2px solid #fff' : '2px solid transparent',
-                                            background: `linear-gradient(135deg, ${val === 1 ? '#94a3b8' : val === 5 ? '#ef4444' : val === 10 ? '#3b82f6' : val === 25 ? '#10b981' : '#1e293b'}, #000)`,
-                                            color: '#fff', fontWeight: 'bold', fontSize: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
-                                            transform: chipValue === val ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s'
-                                        }}>
-                                            {val}
-                                        </button>
-                                    ))}
+                                    {[1, 5, 10, 25, 100].map(val => {
+                                        const getColor = (v) => {
+                                            if (v === 1) return '#64748b'; // Slate (Grey)
+                                            if (v === 5) return '#dc2626'; // Red
+                                            if (v === 10) return '#2563eb'; // Blue
+                                            if (v === 25) return '#059669'; // Green
+                                            if (v === 100) return '#0f172a'; // Black
+                                            return '#fff';
+                                        };
+                                        const bgColor = getColor(val);
+                                        const isSelected = chipValue === val;
+
+                                        return (
+                                            <button key={val} onClick={() => setChipValue(val)} style={{
+                                                width: '48px', height: '48px', borderRadius: '50%',
+                                                padding: 0,
+                                                background: bgColor,
+                                                border: `4px dashed rgba(255,255,255,0.5)`,
+                                                boxShadow: isSelected
+                                                    ? `0 0 0 3px #fbbf24, 0 8px 16px rgba(0,0,0,0.5)` // Gold ring for selected
+                                                    : `0 4px 6px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.2)`,
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                transform: isSelected ? 'translateY(-4px) scale(1.1)' : 'scale(1)',
+                                                transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                                                position: 'relative',
+                                                cursor: 'pointer',
+                                                flexShrink: 0
+                                            }}>
+                                                <div style={{
+                                                    width: '32px', height: '32px', borderRadius: '50%',
+                                                    background: 'rgba(255,255,255,0.1)',
+                                                    border: '1px solid rgba(255,255,255,0.3)',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    color: '#fff', fontSize: '13px', fontWeight: '900',
+                                                    textShadow: '0 1px 2px rgba(0,0,0,0.8)'
+                                                }}>
+                                                    {val}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                     <div style={{ marginRight: '16px', fontSize: '14px', color: '#94a3b8' }}>
                                         Bet: <span style={{ color: '#fff', fontWeight: 'bold' }}>${getTotalBet().toFixed(2)}</span>
+                                        {getTotalBet() > 0 && (
+                                            <span style={{ marginLeft: '12px', color: '#10b981' }}>
+                                                Max Payout: <span style={{ fontWeight: 'bold' }}>${(() => {
+                                                    let maxWin = 0;
+                                                    // Check all 37 outcomes to find max potential win
+                                                    for (let i = 0; i <= 36; i++) {
+                                                        let currentWin = 0;
+                                                        Object.entries(bets).forEach(([key, amount]) => {
+                                                            currentWin += checkWin(key, i, amount);
+                                                        });
+                                                        if (currentWin > maxWin) maxWin = currentWin;
+                                                    }
+                                                    return maxWin.toFixed(2);
+                                                })()}</span>
+                                            </span>
+                                        )}
                                     </div>
                                     <button onClick={clearBets} disabled={gameState !== 'IDLE'} style={{ padding: '8px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: 'none', cursor: 'pointer' }}><Trash2 size={16} /></button>
                                 </div>
