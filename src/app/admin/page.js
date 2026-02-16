@@ -11,7 +11,7 @@ function AdminContent() {
         user, events, createEvent, resolveEvent, deleteEvent, updateEvent,
         updateEventOrder, deleteBet, toggleFeatured, ideas, deleteIdea, replyToIdea,
         users, deleteUser, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendSystemNotification,
-        syncAllUsernames
+        syncAllUsernames, casinoSettings, updateCasinoStatus
     } = useApp();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -282,6 +282,23 @@ function AdminContent() {
             : [...currentGroups, groupName];
 
         await updateUserGroups(targetUser.id, newGroups);
+    };
+
+    const adjustUserBalance = async (targetUser) => {
+        const current = targetUser.balance || 0;
+        const input = prompt(`Update balance for ${targetUser.username}?\nCurrent: $${current.toFixed(2)}`, current);
+        if (input === null) return;
+        const newVal = parseFloat(input);
+        if (isNaN(newVal)) return alert("Invalid number");
+
+        if (confirm(`Set balance of ${targetUser.username} to $${newVal.toFixed(2)}?`)) {
+            try {
+                await updateDoc(doc(db, 'users', targetUser.id), { balance: newVal });
+                alert("Balance updated.");
+            } catch (e) {
+                alert("Error: " + e.message);
+            }
+        }
     };
 
 
@@ -824,6 +841,13 @@ function AdminContent() {
                                             </div>
                                             <div className="mod-col" data-label="Balance">
                                                 <span className="mod-balance">${u.balance?.toFixed(2)}</span>
+                                                <button
+                                                    onClick={() => adjustUserBalance(u)}
+                                                    style={{ marginLeft: '6px', cursor: 'pointer', background: 'none', border: 'none', fontSize: '12px' }}
+                                                    title="Edit Balance"
+                                                >
+                                                    ✏️
+                                                </button>
                                             </div>
                                             <div className="mod-col" data-label="Role">
                                                 <button
@@ -1104,6 +1128,52 @@ function AdminContent() {
                                             Send Notification
                                         </button>
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* Casino Management Section */}
+                            <div className="card" style={{ marginTop: '24px', maxWidth: '1200px' }}>
+                                <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>🎰 Casino Game Status</h2>
+                                <p style={{ fontSize: '13px', color: '#888', marginBottom: '16px' }}>
+                                    Disable games temporarily for maintenance or to resolve issues. Users will see a locked screen.
+                                </p>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
+                                    {['slots', 'crash', 'blackjack'].map(gameId => {
+                                        const isEnabled = casinoSettings?.[gameId] !== false; // Default true
+                                        return (
+                                            <div key={gameId} style={{
+                                                padding: '16px',
+                                                background: '#222',
+                                                borderRadius: '8px',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                border: isEnabled ? '1px solid #10b981' : '1px solid #ef4444'
+                                            }}>
+                                                <div>
+                                                    <strong style={{ textTransform: 'capitalize', display: 'block', color: '#fff' }}>{gameId}</strong>
+                                                    <span style={{ fontSize: '12px', color: isEnabled ? '#10b981' : '#ef4444' }}>
+                                                        {isEnabled ? 'Active' : 'Disabled'}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    onClick={() => updateCasinoStatus(gameId, !isEnabled)}
+                                                    style={{
+                                                        padding: '6px 12px',
+                                                        borderRadius: '20px',
+                                                        border: 'none',
+                                                        cursor: 'pointer',
+                                                        fontWeight: 'bold',
+                                                        fontSize: '12px',
+                                                        background: isEnabled ? '#10b981' : '#ef4444',
+                                                        color: '#000'
+                                                    }}
+                                                >
+                                                    {isEnabled ? 'Turn OFF' : 'Turn ON'}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
 

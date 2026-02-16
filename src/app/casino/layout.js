@@ -2,13 +2,15 @@
 import Link from 'next/link';
 import { Lock } from 'lucide-react';
 import { useApp } from '../../lib/store';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 export default function CasinoLayout({ children }) {
-    const { user, isLoaded } = useApp();
+    const { user, isLoaded, casinoSettings } = useApp();
     const router = useRouter();
+    const pathname = usePathname();
     const [accessDenied, setAccessDenied] = useState(false);
+    const [maintenanceMode, setMaintenanceMode] = useState(false);
 
     useEffect(() => {
         if (!isLoaded) return;
@@ -23,7 +25,19 @@ export default function CasinoLayout({ children }) {
         } else {
             setAccessDenied(false);
         }
-    }, [user, isLoaded, router]);
+
+        // Check for Disabled Games
+        if (pathname.includes('/casino/slots') && casinoSettings?.slots === false) {
+            setMaintenanceMode(true);
+        } else if (pathname.includes('/casino/crash') && casinoSettings?.crash === false) {
+            setMaintenanceMode(true);
+        } else if (pathname.includes('/casino/blackjack') && casinoSettings?.blackjack === false) {
+            setMaintenanceMode(true);
+        } else {
+            setMaintenanceMode(false);
+        }
+
+    }, [user, isLoaded, router, pathname, casinoSettings]);
 
     if (!isLoaded) return (
         <div style={{
@@ -37,6 +51,50 @@ export default function CasinoLayout({ children }) {
             Loading...
         </div>
     );
+
+    if (maintenanceMode) {
+        return (
+            <div className="animate-fade" style={{
+                minHeight: '100vh',
+                background: '#0f172a',
+                padding: '20px',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center'
+            }}>
+                <div style={{
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    backdropFilter: 'blur(10px)',
+                    padding: '40px',
+                    borderRadius: '24px',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    maxWidth: '500px',
+                    width: '100%',
+                    boxShadow: '0 20px 50px rgba(0,0,0,0.5)'
+                }}>
+                    <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px', color: '#f59e0b' }}>
+                        🚧 Game Maintenance
+                    </h1>
+                    <p style={{ color: '#cbd5e1', marginBottom: '32px', lineHeight: '1.6' }}>
+                        This game is currently disabled for maintenance or updates. Please check back later!
+                    </p>
+                    <Link href="/casino" style={{
+                        display: 'inline-block',
+                        background: '#333',
+                        color: '#fff',
+                        fontWeight: 'bold',
+                        padding: '12px 24px',
+                        borderRadius: '8px',
+                        textDecoration: 'none'
+                    }}>
+                        Back to Casino
+                    </Link>
+                </div>
+            </div>
+        );
+    }
 
     if (accessDenied) {
         return (

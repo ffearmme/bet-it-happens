@@ -176,7 +176,7 @@ export function AppProvider({ children }) {
         setCasinoSettings(docSnap.data());
       } else {
         // Default settings if doc doesn't exist
-        setCasinoSettings({ slots: true, roulette: true, blackjack: true });
+        setCasinoSettings({ slots: true, crash: true, blackjack: true });
       }
     });
 
@@ -3451,34 +3451,36 @@ export function AppProvider({ children }) {
       console.error("Send Msg Error:", e);
       return { success: false, error: e.message };
     }
-    const updateCasinoStatus = async (gameId, isEnabled) => {
-      if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
-      try {
-        const ref = doc(db, 'system', 'casino');
-        await setDoc(ref, { [gameId]: isEnabled }, { merge: true });
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: e.message };
-      }
-    };
+  };
 
-    return (
-      <AppContext.Provider value={{
-        user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
-        events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, toggleLikeComment, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendIdeaToAdmin, reviewIdea, replyToIdea,
-        bets, casinoBets, placeBet, isLoaded, isFirebase: true, users, ideas, db,
-        isGuestMode, setIsGuestMode,
-        notifications, markNotificationAsRead, clearAllNotifications, submitModConcern, claimReferralReward,
-        createParlay, placeParlayBet, addParlayComment, calculateParlays, deleteParlay, sendSystemNotification,
-        squads, createSquad, joinSquad, leaveSquad, manageSquadRequest, kickMember, updateSquad, inviteUserToSquad, respondToSquadInvite, searchUsers, getSquadStats,
-        depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest, sendSquadMessage,
-        syncAllUsernames, updateCasinoStatus, casinoSettings
-      }}>
-        {children}
-      </AppContext.Provider>
-    );
-  }
+  const updateCasinoStatus = async (gameId, isEnabled) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      const ref = doc(db, 'system', 'casino');
+      await setDoc(ref, { [gameId]: isEnabled }, { merge: true });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
 
-  export function useApp() {
-    return useContext(AppContext);
-  }
+  return (
+    <AppContext.Provider value={{
+      user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
+      events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, toggleLikeComment, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendIdeaToAdmin, reviewIdea, replyToIdea,
+      bets, casinoBets, placeBet, isLoaded, isFirebase: true, users, ideas, db,
+      isGuestMode, setIsGuestMode,
+      notifications, markNotificationAsRead, clearAllNotifications, submitModConcern, claimReferralReward,
+      createParlay, placeParlayBet, addParlayComment, calculateParlays, deleteParlay, sendSystemNotification,
+      squads, createSquad, joinSquad, leaveSquad, manageSquadRequest, kickMember, updateSquad, inviteUserToSquad, respondToSquadInvite, searchUsers, getSquadStats,
+      depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest, sendSquadMessage,
+      syncAllUsernames, updateCasinoStatus, casinoSettings
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
+}
+
+export function useApp() {
+  return useContext(AppContext);
+}
