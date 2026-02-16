@@ -1138,7 +1138,7 @@ function AdminContent() {
                                     Disable games temporarily for maintenance or to resolve issues. Users will see a locked screen.
                                 </p>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
-                                    {['slots', 'crash', 'blackjack'].map(gameId => {
+                                    {['slots', 'crash', 'blackjack', 'roulette'].map(gameId => {
                                         const isEnabled = casinoSettings?.[gameId] !== false; // Default true
                                         return (
                                             <div key={gameId} style={{
