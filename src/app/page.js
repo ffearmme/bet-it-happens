@@ -2175,7 +2175,7 @@ export default function Home() {
                     onClick={() => setShowChangelog(true)}
                     style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', textDecoration: 'underline', fontSize: '11px' }}
                 >
-                    System V0.97
+                    System V0.99
                 </button>
             </div>
 
@@ -2195,8 +2195,18 @@ export default function Home() {
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                 <div>
-                                    <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '8px' }}>Version 0.97 <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>(Current)</span></h3>
+                                    <h3 style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '8px' }}>Version 0.99 <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>(Current)</span></h3>
                                     <ul style={{ paddingLeft: '20px', color: '#d4d4d8', fontSize: '14px', lineHeight: '1.6' }}>
+                                        <li><b>The Arena:</b> Challenge other users directly to 1v1 battles! ⚔️</li>
+                                        <li><b>Private Duels:</b> Send exclusive invites to specific friends for private high-stakes matches. 🔒</li>
+                                        <li><b>Tic Tac Toe:</b> The first Arena game is live! Test your strategy in this classic. ⭕❌</li>
+                                        <li><b>Enhanced Stats:</b> Portfolio now tracks your Net Worth and Arena specific performance. 📈</li>
+                                    </ul>
+                                </div>
+
+                                <div>
+                                    <h3 style={{ fontSize: '16px', color: '#a1a1aa', marginBottom: '8px' }}>Version 0.97</h3>
+                                    <ul style={{ paddingLeft: '20px', color: '#a1a1aa', fontSize: '14px', lineHeight: '1.6' }}>
                                         <li><b>Squads:</b> Create or join squads to compete on the squad leaderboard! 🏆</li>
                                         <li><b>Squad Transactions:</b> Deposit and withdraw funds from your squad wallet. 💰</li>
                                         <li><b>Admin Tools:</b> Enhanced moderation for squad management. 🛡️</li>
