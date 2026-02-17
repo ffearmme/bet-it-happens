@@ -100,6 +100,7 @@ export default function TicTacToePage({ params }) {
 
     const handleJoinGame = async () => {
         if (!user) return alert("Login required");
+        if (user.requiresVerification && !user.emailVerified) return alert("Please verify your email to join this duel!");
         if (user.balance < game.wager) return alert("Insufficient funds");
 
         try {

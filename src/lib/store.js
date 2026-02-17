@@ -9,7 +9,7 @@ import {
 
 import {
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  signOut, onAuthStateChanged, updateEmail, updatePassword, verifyBeforeUpdateEmail
+  signOut, onAuthStateChanged, updateEmail, updatePassword, verifyBeforeUpdateEmail, sendEmailVerification
 } from 'firebase/auth';
 import { db, auth } from './firebase';
 
@@ -105,7 +105,28 @@ export function AppProvider({ children }) {
               // We don't need to manually update state here, the snapshot will fire again instantly
             }
 
-            setUser({ id: firebaseUser.uid, ...userData });
+            setUser({ id: firebaseUser.uid, emailVerified: firebaseUser.emailVerified, ...userData });
+
+            // Check if we need to award the Welcome Bonus (Verification Just Happened)
+            if (firebaseUser.emailVerified && userData.requiresVerification && !userData.welcomeBonusClaimed) {
+              console.log(">>> USER VERIFIED EMAIL! Awarding Bonus...");
+              updateDoc(userRef, {
+                balance: increment(1000),
+                welcomeBonusClaimed: true,
+                requiresVerification: false // specific flag cleanup
+              }).then(() => {
+                // alert("Email Verified! $1000 Welcome Bonus Added!"); // Maybe handled in UI or Notification
+                // Create a notification
+                addDoc(collection(db, 'notifications'), {
+                  userId: firebaseUser.uid,
+                  type: 'system',
+                  title: 'Email Verified!',
+                  message: 'You have verified your email and received $1000!',
+                  read: false,
+                  createdAt: new Date().toISOString()
+                });
+              }).catch(err => console.error("Error awarding bonus:", err));
+            }
           } else {
             // Check if we are intentionally deleting the account
             if (isDeletingAccount.current) {
@@ -125,7 +146,8 @@ export function AppProvider({ children }) {
               role: (firebaseUser.email.toLowerCase().includes('admin')) ? 'admin' : 'user',
               balance: 1000,
               createdAt: new Date().toISOString(),
-              referralCode: myReferralCode
+              referralCode: myReferralCode,
+              requiresVerification: true // New users need to verify
             };
 
             // Write to DB
@@ -655,11 +677,15 @@ export function AppProvider({ children }) {
         email,
         username: username || email.split('@')[0],
         role: email.toLowerCase().includes('admin') ? 'admin' : 'user',
-        balance: 1000,
+        balance: 0, // Start with 0 until verified
         createdAt: new Date().toISOString(),
         referralCode: myReferralCode,
-        referredBy: referredBy
+        referredBy: referredBy,
+        requiresVerification: true
       });
+
+      // Send Verification Email
+      await sendEmailVerification(resp.user);
 
       return { success: true };
     } catch (error) {
@@ -777,6 +803,20 @@ export function AppProvider({ children }) {
     }
   };
 
+  const resendVerification = async () => {
+    if (!auth.currentUser) return { success: false, error: "Not logged in" };
+    try {
+      await sendEmailVerification(auth.currentUser);
+      return { success: true, message: "Verification email sent!" };
+    } catch (error) {
+      // Handle rate limiting (firebase throws if too frequent)
+      if (error.code === 'auth/too-many-requests') {
+        return { success: false, error: "Please wait a moment before trying again." };
+      }
+      return { success: false, error: error.message };
+    }
+  };
+
   const placeBet = async (eventId, outcomeId, amount) => {
     if (!user) return { success: false, error: 'Not logged in' };
     if (user.balance < amount) return { success: false, error: 'Insufficient funds' };
@@ -791,6 +831,11 @@ export function AppProvider({ children }) {
 
     if (otherSideBet) {
       return { success: false, error: "Loyalty check! You already bet on the other side. No switching." };
+    }
+
+    // Verification Check
+    if (user.requiresVerification && !user.emailVerified) {
+      return { success: false, error: "Please verify your email to place bets!" };
     }
 
     const outcome = event.outcomes.find(o => o.id === outcomeId);
@@ -3714,7 +3759,7 @@ export function AppProvider({ children }) {
 
   return (
     <AppContext.Provider value={{
-      user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
+      user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats, resendVerification,
       events, createEvent, resolveEvent, updateEvent, updateEventOrder, fixStuckBets, deleteBet, deleteEvent, toggleFeatured, recalculateLeaderboard, backfillLastBetPercent, addComment, deleteComment, toggleLikeComment, getUserStats, getWeeklyLeaderboard, setMainBet, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendIdeaToAdmin, reviewIdea, replyToIdea,
       bets, casinoBets, placeBet, isLoaded, isFirebase: true, users, ideas, db,
       isGuestMode, setIsGuestMode,

@@ -5,8 +5,8 @@ import { useApp } from '../../lib/store';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-export default function CasinoLayout({ children }) {
-    const { user, isLoaded, casinoSettings } = useApp();
+export default function ArenaLayout({ children }) {
+    const { user, isLoaded, arenaSettings } = useApp();
     const router = useRouter();
     const pathname = usePathname();
     const [accessDenied, setAccessDenied] = useState(false);
@@ -27,19 +27,21 @@ export default function CasinoLayout({ children }) {
         }
 
         // Check for Disabled Games
-        if (pathname.includes('/casino/slots') && casinoSettings?.slots === false) {
+        if (pathname.includes('/arena/slots') && arenaSettings?.slots === false) {
             setMaintenanceMode(true);
-        } else if (pathname.includes('/casino/crash') && casinoSettings?.crash === false) {
+        } else if (pathname.includes('/arena/crash') && arenaSettings?.crash === false) {
             setMaintenanceMode(true);
-        } else if (pathname.includes('/casino/blackjack') && casinoSettings?.blackjack === false) {
+        } else if (pathname.includes('/arena/blackjack') && arenaSettings?.blackjack === false) {
             setMaintenanceMode(true);
-        } else if (pathname.includes('/casino/roulette') && casinoSettings?.roulette === false) {
+        } else if (pathname.includes('/arena/roulette') && arenaSettings?.roulette === false) {
+            setMaintenanceMode(true);
+        } else if (pathname.includes('/arena/tictactoe') && arenaSettings?.tictactoe === false) {
             setMaintenanceMode(true);
         } else {
             setMaintenanceMode(false);
         }
 
-    }, [user, isLoaded, router, pathname, casinoSettings]);
+    }, [user, isLoaded, router, pathname, arenaSettings]);
 
     if (!isLoaded) return (
         <div style={{
@@ -82,7 +84,7 @@ export default function CasinoLayout({ children }) {
                     <p style={{ color: '#cbd5e1', marginBottom: '32px', lineHeight: '1.6' }}>
                         This game is currently disabled for maintenance or updates. Please check back later!
                     </p>
-                    <Link href="/casino" style={{
+                    <Link href="/arena" style={{
                         display: 'inline-block',
                         background: '#333',
                         color: '#fff',
@@ -91,7 +93,7 @@ export default function CasinoLayout({ children }) {
                         borderRadius: '8px',
                         textDecoration: 'none'
                     }}>
-                        Back to Casino
+                        Back to Arena
                     </Link>
                 </div>
             </div>
@@ -137,11 +139,11 @@ export default function CasinoLayout({ children }) {
                     </div>
 
                     <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>
-                        Casino Access Restricted
+                        Arena Access Restricted
                     </h1>
 
                     <p style={{ color: '#cbd5e1', marginBottom: '32px', lineHeight: '1.6' }}>
-                        To ensure a safe and verified community, all players must have a profile picture set before entering the casino.
+                        To ensure a safe and verified community, all players must have a profile picture set before entering the arena.
                     </p>
 
                     <Link href="/profile" style={{

@@ -120,7 +120,8 @@ service cloud.firestore {
       allow update: if isAdmin() || (
         request.auth != null && 
         resource.data.userId == request.auth.uid &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'claimed', 'message'])
+        // Allow users to update state (read/claimed) but NOT critical fields
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['amount', 'userId', 'type', 'createdAt', 'squadId', 'eventId'])
       );
       // Allow users to delete their own notifications AND admins
       allow delete: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);

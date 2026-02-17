@@ -20,7 +20,7 @@ export default function Home() {
         addComment, deleteComment, getUserStats, deleteEvent,
         signin, signup, activeEventsCount, serverTime, isGuestMode, setIsGuestMode, db,
         notifications, markNotificationAsRead, toggleLikeComment,
-        todayBetCount, todayCasinoCount, maintenanceSettings, todayArenaCount
+        todayBetCount, todayCasinoCount, maintenanceSettings, todayArenaCount, resendVerification
     } = useApp(); // Used destructuring to get EVERYTHING needed from storeRef(null);
     const chatContainerRef = useRef(null);
     const [selectedOutcome, setSelectedOutcome] = useState(null);
@@ -693,6 +693,63 @@ export default function Home() {
                         <span>👀 Viewing as Guest.</span>
                         <span style={{ background: '#fff', padding: '2px 8px', borderRadius: '4px', color: '#d97706' }}>Sign Up = $1000 Free! 💰</span>
                     </p>
+                </div>
+            )}
+
+            {/* --- VERIFICATION BANNER --- */}
+            {user && user.requiresVerification && !user.emailVerified && (
+                <div style={{
+                    background: 'linear-gradient(135deg, #7c2d12 0%, #450a0a 100%)',
+                    border: '1px solid #ef4444',
+                    padding: '16px',
+                    borderRadius: '12px',
+                    marginBottom: '24px',
+                    marginTop: '10px',
+                    textAlign: 'center',
+                    boxShadow: '0 4px 15px rgba(220, 38, 38, 0.4)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '8px'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                        <span style={{ fontSize: '24px' }}>📧</span>
+                        <h3 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>Action Required</h3>
+                    </div>
+                    <p style={{ margin: 0, color: '#fca5a5', fontSize: '14px', maxWidth: '400px' }}>
+                        Please verify your email address to unlock your <span style={{ color: '#fff', fontWeight: 'bold' }}>$1000 Welcome Bonus</span> and start betting!
+                    </p>
+                    <button
+                        className="btn"
+                        style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: '1px solid rgba(255,255,255,0.2)',
+                            fontSize: '12px',
+                            padding: '6px 16px',
+                            marginTop: '4px'
+                        }}
+                        onClick={async (e) => {
+                            const btn = e.target;
+                            btn.innerText = "Sending...";
+                            btn.disabled = true;
+                            const res = await resendVerification();
+                            if (res.success) {
+                                btn.innerText = "Sent! Check Inbox";
+                                setTimeout(() => { btn.innerText = "Resend Email"; btn.disabled = false; }, 5000);
+                            } else {
+                                alert(res.error);
+                                btn.innerText = "Resend Email";
+                                btn.disabled = false;
+                            }
+                        }}
+                    >
+                        Resend Verification Email
+                    </button>
+                    {!showProfileNudge && (
+                        <p style={{ fontSize: '11px', color: '#7f1d1d', marginTop: '4px', background: '#fca5a5', padding: '2px 6px', borderRadius: '4px' }}>
+                            Refresh this page after verifying.
+                        </p>
+                    )}
                 </div>
             )}
 

@@ -48,6 +48,7 @@ export default function RouletteGame() {
     const handlePlaceBet = (key) => {
         if (gameState !== 'IDLE') return;
         if (!user) return alert("Please login to play.");
+        if (user.requiresVerification && !user.emailVerified) return alert("Please verify your email to play!");
 
         const currentBet = bets[key] || 0;
         const newTotal = getTotalBet() + chipValue;

@@ -255,6 +255,11 @@ export default function ArenaPage() {
             return;
         }
 
+        if (user.requiresVerification && !user.emailVerified) {
+            alert("Please verify your email to join Arena battles!");
+            return;
+        }
+
         if (user.balance < wager) {
             alert('Insufficient funds to join this duel.');
             return;
@@ -344,6 +349,7 @@ export default function ArenaPage() {
 
     const handleCreateDuel = async () => {
         if (!user) return alert("You must be logged in.");
+        if (user.requiresVerification && !user.emailVerified) return alert("Please verify your email to create a duel!");
         if (!duelConfig.game) return alert("Please select a game.");
         if (arenaSettings?.[duelConfig.game] === false) return alert("This game is currently disabled.");
 

@@ -31,6 +31,7 @@ export default function SlotsGame() {
 
     const spin = async () => {
         if (!user) return alert("Please login to play.");
+        if (user.requiresVerification && !user.emailVerified) return alert("Please verify your email to play!");
         const amount = parseFloat(betAmount);
         if (isNaN(amount) || amount <= 0) return alert("Invalid bet amount.");
         if ((user.balance || 0) < amount) return alert("Insufficient balance.");
