@@ -5,6 +5,7 @@ import Navbar from '../components/Navbar';
 import TopHeader from '../components/TopHeader';
 import InstallPrompt from '../components/InstallPrompt';
 import JackpotAnnouncer from '../components/JackpotAnnouncer';
+import ChallengeModal from '../components/ChallengeModal';
 import { AppProvider } from '../lib/store';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -94,6 +95,7 @@ export default function RootLayout({ children }) {
                     <BetaBanner />
                     <TopHeader />
                     <JackpotAnnouncer />
+                    <ChallengeModal />
                     {children}
                     <Navbar />
                     <InstallPrompt />

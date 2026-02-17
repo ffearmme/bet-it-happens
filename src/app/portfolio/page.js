@@ -3,9 +3,10 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '../../lib/store';
 import { Wallet, TrendingUp, BarChart3, ArrowUpRight, ArrowDownRight, DollarSign, History, AlertCircle, ChevronDown, ChevronUp, LineChart } from 'lucide-react';
+import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
 
 
-const BalanceChart = ({ historyFrame, allBets, casinoBets, currentBalance }) => {
+const BalanceChart = ({ historyFrame, allBets, casinoBets, currentNetWorth }) => {
     const [hoverData, setHoverData] = useState(null);
     const containerRef = useRef(null);
 
@@ -47,72 +48,78 @@ const BalanceChart = ({ historyFrame, allBets, casinoBets, currentBalance }) => 
         if (historyFrame === '30d') cutoff = now - 30 * 24 * 60 * 60 * 1000;
         if (historyFrame === 'all') cutoff = 0;
 
-        // 5. Build Points (Walk Backwards)
-        let simBalance = Number(currentBalance) || 0;
+        // 5. Build Points (Walk Backwards from Net Worth)
+        // Note: Graphing "Net Worth" is difficult because "invested" value fluctuates
+        // BUT, if we assume: Net Worth = Balance + Invested.
+        // When a bet is placed: Balance - X, Invested + X. Net Worth = No Change.
+        // When a bet is won: Balance + Y, Invested - X. Net Worth Change = Y - X (Profit).
+        // So, if we only track RESOLVED events (wins/losses), we can graph Net Worth.
+        // Placed bets don't change net worth.
+
+        // Re-strategy: Only count RESOLVED events (profit/loss).
+        // "Delta" for a win is (Payout - Wager).
+        // "Delta" for a loss is (-Wager).
+        // "Delta" for void is 0.
+        // "Delta" for casino is (Payout - Wager).
+
+        const nwEvents = [];
+
+        (allBets || []).forEach(bet => {
+            if (bet.status === 'won') {
+                const t = bet.resolvedAt ? new Date(bet.resolvedAt).getTime() : new Date(bet.placedAt).getTime() + 1000;
+                nwEvents.push({ time: t, delta: (bet.potentialPayout - bet.amount) });
+            } else if (bet.status === 'lost') {
+                // Resolved time usually not stored on loss, use placed time + duration or now?
+                // Approximation: if lost, assume it resolved recently or if old, placed time
+                // Ideally we need 'resolvedAt' for losses too. Assuming it exists or fallback.
+                const t = bet.resolvedAt ? new Date(bet.resolvedAt).getTime() : (bet.expiresAt ? new Date(bet.expiresAt).getTime() : new Date(bet.placedAt).getTime() + (2 * 3600 * 1000));
+                nwEvents.push({ time: t, delta: -Number(bet.amount) });
+            }
+        });
+
+        (casinoBets || []).forEach(bet => {
+            const t = bet.timestamp || Date.now();
+            nwEvents.push({ time: t, delta: (Number(bet.payout) - Number(bet.amount)) });
+        });
+
+        nwEvents.sort((a, b) => b.time - a.time);
+
+        let simNW = Number(currentNetWorth) || 0;
         const pts = [];
 
-        // Add current point
-        pts.push({ time: now, val: simBalance });
+        pts.push({ time: now, val: simNW });
 
-        // Iterate events backwards in time
-        for (const event of events) {
-            // Apply inverse of delta to get previous balance
-            // e.g. If event added 10, previous was (curr - 10)
-            simBalance -= event.delta;
-
-            // If the event happened before cutoff, we effectively reached our start point
+        for (const event of nwEvents) {
+            simNW -= event.delta;
             if (event.time < cutoff) {
-                pts.push({ time: cutoff, val: simBalance });
+                pts.push({ time: cutoff, val: simNW });
                 break;
             }
-
-            // Record point at event time (balance simulates state just before next event)
-            pts.push({ time: event.time, val: simBalance + event.delta });
-            // Wait, logic: At time T, balance CHANGED by Delta to Become Current.
-            // So point at T should be 'Current'.
-            // Previous point (T-1) should be 'Current - Delta'.
-            // My loop pushes AFTER update?
-            // Let's re-verify:
-            // Times: T (Latest), T-1 (Event).
-            // Current Balance B.
-            // Push { time: T, val: B }.
-            // Event at T-1 with Delta D.
-            // Balance became B at T-1.
-            // Before T-1, balance was B - D.
-            // So at T-1, the value is B.
-            // So push { time: T-1, val: B }.
-            // Then update simBalance -= D. (Now B-D).
-            // Next event at T-2. Push { time: T-2, val: B-D }.
-
-            // Correction:
-            // pts.push({ time: event.time, val: simBalance + event.delta }); // Uses value BEFORE subtraction? 
-            // No, simBalance is current.
-            // Push { time: event.time, val: simBalance }.
-            // THEN subtract.
+            pts.push({ time: event.time, val: simNW + event.delta }); // Point just before change?
+            // Actually: At time T, Value changed FROM (Current - Delta) TO Current.
+            // So at T-epsilon, value was (Current - Delta).
+            // We want the line to step or slope? Slope is better visually.
+            // Let's just plot the values.
+            // The loop walks backwards.
+            // Current is V. Event delta D. Previous was V - D.
+            // So we push { time: event.time, val: simNW } (which is the PREVIOUS value).
         }
 
-        // If loop finished without hitting cutoff (not enough history), push final calc as start
-        if (events.length === 0 || events[events.length - 1].time >= cutoff) {
-            pts.push({ time: cutoff, val: simBalance });
+        if (nwEvents.length === 0 || nwEvents[nwEvents.length - 1].time >= cutoff) {
+            pts.push({ time: cutoff, val: simNW });
         }
 
-        // 6. Finalize
-        // Reverse to chronological order [Old -> New]
         pts.reverse();
-
-        // Filter out any points before cutoff
         const filtered = pts.filter(p => p.time >= cutoff);
 
-        // Ensure at least 2 points for line
         if (filtered.length < 2) {
-            // If only 1 point, duplicate it or add start/end
             if (filtered.length === 1) filtered.push({ ...filtered[0], time: now });
-            else filtered.push({ time: cutoff, val: Number(currentBalance) || 0 }, { time: now, val: Number(currentBalance) || 0 });
+            else filtered.push({ time: cutoff, val: Number(currentNetWorth) || 0 }, { time: now, val: Number(currentNetWorth) || 0 });
         }
 
         return filtered;
 
-    }, [allBets, casinoBets, historyFrame, currentBalance]);
+    }, [allBets, casinoBets, historyFrame, currentNetWorth]);
 
     const handleInteraction = (clientX) => {
         if (!containerRef.current || historyPoints.length < 2) return;
@@ -201,13 +208,15 @@ const BalanceChart = ({ historyFrame, allBets, casinoBets, currentBalance }) => 
 };
 
 export default function Portfolio() {
-    const { user, bets, events, isLoaded, casinoBets } = useApp();
+    const { db, user, bets, events, isLoaded, casinoBets } = useApp();
     const router = useRouter();
     const [expandedBet, setExpandedBet] = useState(null);
     const [showActiveBets, setShowActiveBets] = useState(false);
     const [showSettledBets, setShowSettledBets] = useState(false);
     const [historyFrame, setHistoryFrame] = useState('7d');
     const [portfolioTab, setPortfolioTab] = useState('bets');
+    const [arenaStats, setArenaStats] = useState({ duels: 0, biggestWin: 0, winRate: 0, netProfit: 0 });
+    const [loadingArena, setLoadingArena] = useState(false);
 
     // --- BET IDEA LOGIC ---
     const [showIdeaModal, setShowIdeaModal] = useState(false);
@@ -243,23 +252,98 @@ export default function Portfolio() {
         }
     }, [user, isLoaded, router]);
 
-    // Casino Stats - MOVED UP TO FIX HOOK ERROR
-    const casinoStats = useMemo(() => {
-        return (casinoBets || []).reduce((acc, bet) => {
-            acc.totalHands += 1;
-            const amount = Number(bet.amount) || 0;
-            const payout = Number(bet.payout) || 0;
-            const multi = Number(bet.multiplier) || (amount > 0 ? payout / amount : 0);
+    // Arena Stats Calculation
+    useEffect(() => {
+        if (!user || !db) return;
 
-            if (multi > acc.highestMulti) acc.highestMulti = multi;
-            // Track the highest PAYOUT as 'Best Win'
-            if (payout > acc.bestWin) acc.bestWin = payout;
+        const fetchArenaStats = async () => {
+            setLoadingArena(true);
+            try {
+                // Corrected: Fetch ALL completed games where user was a player
+                const qGames = query(
+                    collection(db, 'arena_games'),
+                    where('status', '==', 'completed')
+                    // Note: 'players' is a map, so we can't simple 'where' check deeply on keys without specific index
+                    // Workaround: We can't index every user ID map key.
+                    // Better approach: Since we don't have massive data yet, fetch completed games and filter client side
+                    // OR: Use the 'players' array if we had one.
+                    // Let's stick to the transaction method but ensure it captures everything? No, transaction method relies on 'duel_join' which might be purged.
 
-            // Net Profit includes stake
-            acc.netProfit += (payout - amount);
-            return acc;
-        }, { totalHands: 0, highestMulti: 0, bestWin: 0, netProfit: 0 });
-    }, [casinoBets]);
+                    // Actually, let's use a composite index or just fetch the user's games if we can track them.
+                    // A 'participatedGameIds' array on the user doc would be best.
+                    // Lacking that, let's try the transaction method again but purely based on 'arena_games' that contain the user.
+                    // Firestore doesn't support: where(`players.${user.id}`, '!=', null).
+
+                    // FALLBACK: Transaction method is actually decent for now, BUT let's fetch 'arena_games' where 'creatorId' == user.id OR 'players' logic?
+                    // We can't query map keys.
+
+                    // OK, let's try to query by 'creatorId' == me AND 'config.opponentId' == me? No active games would be found.
+                    // Let's rely on the transaction history but query specifically for completed events?
+                    // Or, just fetch ALL arena games (if < 1000) and filter.
+
+                    // Let's assume the transaction log is the most reliable "History" we have for now.
+                    // If transactions ARE cleared, we lose history.
+                    // Let's try to fetch games where I am the creator OR opponent.
+                );
+
+                // Optimized: Fetch games where I created
+                const qCreated = query(collection(db, 'arena_games'), where('creatorId', '==', user.id), where('status', '==', 'completed'));
+                // Fetch games where I was opponent (private?) Public games are hard.
+
+                // Let's go with: Fetch all 'completed' arena games (Assuming reasonable count < 500 for beta) and filter.
+                // If scaling is issue, we need a 'participants' array field on game doc.
+                const gamesSnap = await getDocs(qGames);
+
+                let duels = 0;
+                let wins = 0;
+                let settledCount = 0;
+                let biggest = 0;
+                let profit = 0;
+
+                gamesSnap.docs.forEach(doc => {
+                    const g = { id: doc.id, ...doc.data() };
+                    // Check participation
+                    if (!g.players || !g.players[user.id]) return;
+
+                    duels++;
+                    const isWinner = g.winnerId === user.id;
+                    const isDraw = g.result === 'draw';
+
+                    if (isDraw) {
+                        settledCount++;
+                        // No profit/loss
+                    } else if (isWinner) {
+                        wins++;
+                        settledCount++;
+                        // Net Profit = Pot - Wager?
+                        // If I put in 10, Pot is 20. I win 20. Net +10.
+                        const winAmount = (g.pot || 0) - (g.wager || 0);
+                        if (winAmount > biggest) biggest = winAmount;
+                        profit += winAmount;
+                    } else {
+                        settledCount++;
+                        profit -= (g.wager || 0);
+                    }
+                });
+
+                const rate = settledCount > 0 ? ((wins / settledCount) * 100).toFixed(1) : '0.0';
+
+                setArenaStats({
+                    duels: duels,
+                    biggestWin: biggest,
+                    winRate: rate,
+                    netProfit: profit
+                });
+
+            } catch (err) {
+                console.error("Error fetching arena stats:", err);
+            } finally {
+                setLoadingArena(false);
+            }
+        };
+
+        fetchArenaStats();
+    }, [user, db]);
 
     if (!isLoaded || !user) return null;
 
@@ -463,14 +547,14 @@ export default function Portfolio() {
                             Sports Bets
                         </button>
                         <button
-                            onClick={() => setPortfolioTab('casino')}
+                            onClick={() => setPortfolioTab('arena')}
                             style={{
                                 padding: '6px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', border: 'none', cursor: 'pointer',
-                                background: portfolioTab === 'casino' ? 'var(--primary)' : 'transparent',
-                                color: portfolioTab === 'casino' ? '#000' : 'var(--text-muted)'
+                                background: portfolioTab === 'arena' ? 'var(--primary)' : 'transparent',
+                                color: portfolioTab === 'arena' ? '#000' : 'var(--text-muted)'
                             }}
                         >
-                            Casino
+                            Arena
                         </button>
                     </div>
 
@@ -516,21 +600,13 @@ export default function Portfolio() {
                         </div>
                     ) : (
                         <div className="animate-fade" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
-                            {/* Casino Stats */}
+                            {/* Arena Stats */}
                             <div className="card" style={{ padding: '16px', textAlign: 'center', marginBottom: 0 }}>
                                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 'bold' }}>
-                                    Plays
+                                    Duels
                                 </div>
                                 <div style={{ fontSize: '20px', fontWeight: '900', color: '#fff' }}>
-                                    {casinoStats.totalHands}
-                                </div>
-                            </div>
-                            <div className="card" style={{ padding: '16px', textAlign: 'center', marginBottom: 0 }}>
-                                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 'bold' }}>
-                                    Highest Multi
-                                </div>
-                                <div style={{ fontSize: '20px', fontWeight: '900', color: '#eab308' }}>
-                                    {casinoStats.highestMulti.toFixed(2)}x
+                                    {loadingArena ? '...' : arenaStats.duels}
                                 </div>
                             </div>
                             <div className="card" style={{ padding: '16px', textAlign: 'center', marginBottom: 0 }}>
@@ -538,15 +614,23 @@ export default function Portfolio() {
                                     Best Win
                                 </div>
                                 <div style={{ fontSize: '20px', fontWeight: '900', color: '#22c55e' }}>
-                                    ${casinoStats.bestWin.toFixed(2)}
+                                    ${loadingArena ? '...' : arenaStats.biggestWin.toFixed(2)}
+                                </div>
+                            </div>
+                            <div className="card" style={{ padding: '16px', textAlign: 'center', marginBottom: 0 }}>
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 'bold' }}>
+                                    Win Rate
+                                </div>
+                                <div style={{ fontSize: '20px', fontWeight: '900', color: '#eab308' }}>
+                                    {loadingArena ? '...' : arenaStats.winRate}%
                                 </div>
                             </div>
                             <div className="card" style={{ padding: '16px', textAlign: 'center', marginBottom: 0 }}>
                                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 'bold' }}>
                                     Net Profit
                                 </div>
-                                <div style={{ fontSize: '20px', fontWeight: '900', color: casinoStats.netProfit >= 0 ? '#22c55e' : '#ef4444' }}>
-                                    {casinoStats.netProfit >= 0 ? '+' : '-'}${Math.abs(casinoStats.netProfit).toFixed(2)}
+                                <div style={{ fontSize: '20px', fontWeight: '900', color: arenaStats.netProfit >= 0 ? '#22c55e' : '#ef4444' }}>
+                                    {loadingArena ? '...' : (arenaStats.netProfit >= 0 ? '+' : '-') + '$' + Math.abs(arenaStats.netProfit).toFixed(2)}
                                 </div>
                             </div>
                         </div>
@@ -686,7 +770,7 @@ export default function Portfolio() {
                 historyFrame={historyFrame}
                 allBets={bets}
                 casinoBets={casinoBets}
-                currentBalance={user.balance}
+                currentNetWorth={netWorth}
             />
 
 

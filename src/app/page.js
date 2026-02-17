@@ -20,7 +20,7 @@ export default function Home() {
         addComment, deleteComment, getUserStats, deleteEvent,
         signin, signup, activeEventsCount, serverTime, isGuestMode, setIsGuestMode, db,
         notifications, markNotificationAsRead, toggleLikeComment,
-        todayBetCount, todayCasinoCount, maintenanceSettings
+        todayBetCount, todayCasinoCount, maintenanceSettings, todayArenaCount
     } = useApp(); // Used destructuring to get EVERYTHING needed from storeRef(null);
     const chatContainerRef = useRef(null);
     const [selectedOutcome, setSelectedOutcome] = useState(null);
@@ -728,17 +728,17 @@ export default function Home() {
                             <span style={{ fontSize: '20px', fontWeight: '900', color: '#fff', textShadow: '0 0 10px var(--primary)' }}>{todayBetCount}</span>
                         </div>
                         <div style={{
-                            background: 'rgba(234, 179, 8, 0.1)',
-                            border: '1px solid #eab308',
+                            background: 'rgba(236, 72, 153, 0.1)',
+                            border: '1px solid #ec4899',
                             borderRadius: '12px',
                             padding: '8px 16px',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '12px',
-                            boxShadow: '0 0 15px rgba(234, 179, 8, 0.2)'
+                            boxShadow: '0 0 15px rgba(236, 72, 153, 0.2)'
                         }}>
-                            <span style={{ fontSize: '11px', color: '#fff', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.5px' }}>Casino Rolls</span>
-                            <span style={{ fontSize: '20px', fontWeight: '900', color: '#fff', textShadow: '0 0 10px #eab308' }}>{todayCasinoCount}</span>
+                            <span style={{ fontSize: '11px', color: '#fff', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.5px' }}>Battles Today</span>
+                            <span style={{ fontSize: '20px', fontWeight: '900', color: '#fff', textShadow: '0 0 10px #ec4899' }}>{todayArenaCount}</span>
                         </div>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>

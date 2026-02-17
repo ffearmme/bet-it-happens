@@ -11,6 +11,14 @@ service cloud.firestore {
       );
     }
 
+    // ARENA GAMES
+    match /arena_games/{gameId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null; // Players need to move and update state
+      allow delete: if isAdmin();
+    }
+
     // EVENTS
     match /events/{eventId} {
       allow read: if true;
@@ -42,6 +50,11 @@ service cloud.firestore {
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['squadId']) ||
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance'])
           )
+        ) ||
+        // Allow P2P Settlement (Arena) - MVP Relaxed Rule
+        // Allows users to update balances/stats of opponents when settling games
+        (
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'lockedBalance', 'invested', 'wins', 'losses'])
         )
       );
     }
@@ -96,7 +109,11 @@ service cloud.firestore {
         request.resource.data.type == 'squad_promotion' || 
         request.resource.data.type == 'squad_role_update' || 
         request.resource.data.type == 'squad_kick' || 
-        request.resource.data.type == 'mod_concern'
+        request.resource.data.type == 'mod_concern' ||
+        request.resource.data.type == 'arena_invite' ||
+        request.resource.data.type == 'arena_accepted' ||
+        request.resource.data.type == 'arena_turn' ||
+        request.resource.data.type == 'arena_lost'
       ));
       allow update: if isAdmin() || (
         request.auth != null && 
