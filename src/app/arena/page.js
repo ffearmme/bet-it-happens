@@ -220,7 +220,7 @@ export default function ArenaPage() {
         });
 
         return () => unsubscribe();
-    }, [db, user]);
+    }, [db, user?.id]);
 
     // Listen for COMPLETED games separately
     useEffect(() => {
@@ -414,6 +414,16 @@ export default function ArenaPage() {
                         createdAt: serverTimestamp()
                     });
                 }
+
+                // 5. Create Transaction Record (To count as a "Battle Today" and track history)
+                const transRef = doc(collection(db, 'transactions'));
+                transaction.set(transRef, {
+                    userId: user.id,
+                    type: 'duel_join', // Using same type so it counts towards the stat
+                    amount: -wagerAmount,
+                    gameId: gameRef.id,
+                    createdAt: new Date().toISOString()
+                });
             });
 
             setIsCreateModalOpen(false);

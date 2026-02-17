@@ -318,12 +318,17 @@ export function AppProvider({ children }) {
     const unsubCasinoToday = onSnapshot(casinoTodayQuery, (snap) => setTodayCasinoCount(snap.size));
 
     // Arena Battles Today (Count Duel Joins)
-    const arenaTodayQuery = query(collection(db, 'transactions'), where('type', '==', 'duel_join'), where('createdAt', '>=', startOfDay));
-    // Note: transactions use serverTimestamp usually, but local writes might differ. 
-    // Wait, transactions collection might not exist or use createdAt field as object.
-    // Let's check how transactions are stored. Usually createdAt: serverTimestamp().
-    // Querying serverTimestamp with a Date object works in client SDK.
-    const unsubArenaToday = onSnapshot(arenaTodayQuery, (snap) => setTodayArenaCount(snap.size));
+    // FIX: Switched to counting created GAMES instead of transactions (player joins)
+    const arenaTodayQuery = query(collection(db, 'arena_games'), where('createdAt', '>=', startOfDay));
+
+    const unsubArenaToday = onSnapshot(
+      arenaTodayQuery,
+      (snap) => setTodayArenaCount(snap.size),
+      (error) => {
+        console.error("Battles Today Query Error (likely missing index):", error);
+        // Optionally set a flag or alert, but console is best for index link
+      }
+    );
 
     return () => {
       unsubBetsToday();

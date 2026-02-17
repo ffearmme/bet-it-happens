@@ -201,7 +201,7 @@ export default function TopHeader() {
                                     {user.username.charAt(0).toUpperCase()}
                                 </div>
                             )}
-                            <span style={{ color: '#fff', display: 'none', '@media (min-width: 768px)': { display: 'inline' } }} className="hidden md:inline">{user.username}</span>
+                            <span style={{ color: '#fff' }} className="hidden md:inline">{user.username}</span>
                         </div>
                     </Link>
                 ) : isGuestMode && (
