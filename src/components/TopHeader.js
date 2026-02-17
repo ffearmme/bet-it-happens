@@ -116,8 +116,15 @@ export default function TopHeader() {
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                                     {notifications && notifications.length > 0 ? (
-                                        notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(n => {
-                                            if (n.type === 'admin_reply') console.log("Rendering Admin Reply Notification:", n);
+                                        [...notifications].sort((a, b) => {
+                                            const getTime = (t) => {
+                                                if (!t) return Date.now();
+                                                if (typeof t.toMillis === 'function') return t.toMillis();
+                                                if (t.seconds) return t.seconds * 1000;
+                                                return new Date(t).getTime();
+                                            };
+                                            return getTime(b.createdAt) - getTime(a.createdAt);
+                                        }).map(n => {
                                             return (
                                                 <div
                                                     key={n.id}
@@ -132,7 +139,12 @@ export default function TopHeader() {
                                                     <div style={{ fontSize: '13px', fontWeight: n.read ? 'normal' : 'bold', color: '#fff', marginBottom: '4px' }}>{n.title}</div>
                                                     <div style={{ fontSize: '12px', color: '#ccc', whiteSpace: 'pre-wrap' }}>{n.message}</div>
                                                     <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
-                                                        {new Date(n.createdAt).toLocaleDateString()} {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        {(() => {
+                                                            const d = n.createdAt && typeof n.createdAt.toDate === 'function'
+                                                                ? n.createdAt.toDate()
+                                                                : new Date(n.createdAt || Date.now());
+                                                            return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                                                        })()}
                                                     </div>
                                                     {n.type === 'referral_claim' && !n.claimed && (
                                                         <button

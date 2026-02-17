@@ -2,10 +2,10 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useApp } from '../lib/store';
-import { Briefcase, Dices } from 'lucide-react';
+import { Briefcase, Swords } from 'lucide-react';
 
 export default function Navbar() {
-    const { user, isGuestMode, setIsGuestMode } = useApp();
+    const { user, isGuestMode, setIsGuestMode, myTurnCount, pendingChallengesCount } = useApp();
     const pathname = usePathname();
     const router = useRouter();
 
@@ -13,6 +13,7 @@ export default function Navbar() {
     if (!user && !isGuestMode) return null; // Logic requested by user
 
     const isActive = (path) => pathname === path;
+    const arenaBadgeCount = (myTurnCount || 0) + (pendingChallengesCount || 0);
 
     return (
         <nav className="bottom-nav">
@@ -40,9 +41,32 @@ export default function Navbar() {
             )}
 
             {user && (
-                <Link href="/casino" className={`nav-item ${isActive('/casino') ? 'active' : ''}`}>
-                    <Dices className="nav-icon" />
-                    <span>Casino</span>
+                <Link href="/arena" className={`nav-item ${isActive('/arena') ? 'active' : ''}`} style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative' }}>
+                        <Swords className="nav-icon" />
+                        {arenaBadgeCount > 0 && (
+                            <span style={{
+                                position: 'absolute',
+                                top: '-5px',
+                                right: '-8px',
+                                background: '#ef4444',
+                                color: 'white',
+                                fontSize: '10px',
+                                fontWeight: 'bold',
+                                borderRadius: '50%',
+                                minWidth: '16px',
+                                height: '16px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '0 4px',
+                                border: '2px solid #000'
+                            }}>
+                                {arenaBadgeCount}
+                            </span>
+                        )}
+                    </div>
+                    <span>Arena</span>
                 </Link>
             )}
 

@@ -11,7 +11,8 @@ function AdminContent() {
         user, events, createEvent, resolveEvent, deleteEvent, updateEvent,
         updateEventOrder, deleteBet, toggleFeatured, ideas, deleteIdea, replyToIdea,
         users, deleteUser, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendSystemNotification,
-        syncAllUsernames, casinoSettings, updateCasinoStatus, updateMaintenanceStatus, maintenanceSettings
+        syncAllUsernames, updateMaintenanceStatus, maintenanceSettings,
+        arenaSettings, updateArenaStatus
     } = useApp();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -1539,15 +1540,15 @@ function AdminContent() {
                                 </div>
                             </div>
 
-                            {/* Casino Management Section (Moved) */}
+                            {/* Arena Game Status */}
                             <div className="card" style={{ maxWidth: '1200px' }}>
-                                <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>🎰 Casino Game Status</h2>
+                                <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>⚔️ Arena Game Status</h2>
                                 <p style={{ fontSize: '13px', color: '#888', marginBottom: '16px' }}>
-                                    Disable games temporarily for maintenance or to resolve issues. Users will see a locked screen.
+                                    Disable arena games temporarily. Users will not be able to create new challenges for disabled games.
                                 </p>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
-                                    {['slots', 'crash', 'blackjack', 'roulette'].map(gameId => {
-                                        const isEnabled = casinoSettings?.[gameId] !== false; // Default true
+                                    {['tictactoe'].map(gameId => {
+                                        const isEnabled = arenaSettings?.[gameId] !== false; // Default true if undefined
                                         return (
                                             <div key={gameId} style={{
                                                 padding: '16px',
@@ -1559,13 +1560,15 @@ function AdminContent() {
                                                 border: isEnabled ? '1px solid #10b981' : '1px solid #ef4444'
                                             }}>
                                                 <div>
-                                                    <strong style={{ textTransform: 'capitalize', display: 'block', color: '#fff' }}>{gameId}</strong>
+                                                    <strong style={{ textTransform: 'capitalize', display: 'block', color: '#fff' }}>
+                                                        {gameId === 'tictactoe' ? 'Tic Tac Toe' : gameId}
+                                                    </strong>
                                                     <span style={{ fontSize: '12px', color: isEnabled ? '#10b981' : '#ef4444' }}>
                                                         {isEnabled ? 'Active' : 'Disabled'}
                                                     </span>
                                                 </div>
                                                 <button
-                                                    onClick={() => updateCasinoStatus(gameId, !isEnabled)}
+                                                    onClick={() => updateArenaStatus(gameId, !isEnabled)}
                                                     style={{
                                                         padding: '6px 12px',
                                                         borderRadius: '20px',

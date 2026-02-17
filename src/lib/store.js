@@ -29,6 +29,9 @@ export function AppProvider({ children }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [todayBetCount, setTodayBetCount] = useState(0);
   const [todayCasinoCount, setTodayCasinoCount] = useState(0);
+  const [myTurnCount, setMyTurnCount] = useState(0);
+  const [pendingChallengesCount, setPendingChallengesCount] = useState(0);
+  const [pendingChallenges, setPendingChallenges] = useState([]);
 
   // Ref to track if we are currently deleting the account to prevent auto-recreation
   const isDeletingAccount = useRef(false);
@@ -162,6 +165,7 @@ export function AppProvider({ children }) {
   const [squads, setSquads] = useState([]); // List of all squads
   const [systemAnnouncement, setSystemAnnouncement] = useState(null);
   const [casinoSettings, setCasinoSettings] = useState({}); // { slots: true, etc }
+  const [arenaSettings, setArenaSettings] = useState({}); // { tictactoe: true }
   const [maintenanceSettings, setMaintenanceSettings] = useState({}); // { bets: true, parlay: true, leaderboard: true }
 
   // ... (existing timeout code) ...
@@ -197,6 +201,17 @@ export function AppProvider({ children }) {
       } else {
         // Default settings if doc doesn't exist (all pages enabled by default)
         setMaintenanceSettings({ bets: true, parlay: true, leaderboard: true });
+      }
+    });
+
+    // Listen to Arena Settings
+    const arenaSettingsRef = doc(db, 'system', 'arena');
+    const unsubArenaSettings = onSnapshot(arenaSettingsRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setArenaSettings(docSnap.data());
+      } else {
+        // Default settings
+        setArenaSettings({ tictactoe: true });
       }
     });
 
@@ -263,6 +278,8 @@ export function AppProvider({ children }) {
 
   }, []);
 
+  const [todayArenaCount, setTodayArenaCount] = useState(0);
+
   // --- 2b. Global Daily Stats Listeners ---
   useEffect(() => {
     // Bets Today Listener
@@ -278,9 +295,18 @@ export function AppProvider({ children }) {
     const casinoTodayQuery = query(collection(db, 'casino_bets'), where('timestamp', '>=', startOfDay.getTime()));
     const unsubCasinoToday = onSnapshot(casinoTodayQuery, (snap) => setTodayCasinoCount(snap.size));
 
+    // Arena Battles Today (Count Duel Joins)
+    const arenaTodayQuery = query(collection(db, 'transactions'), where('type', '==', 'duel_join'), where('createdAt', '>=', startOfDay));
+    // Note: transactions use serverTimestamp usually, but local writes might differ. 
+    // Wait, transactions collection might not exist or use createdAt field as object.
+    // Let's check how transactions are stored. Usually createdAt: serverTimestamp().
+    // Querying serverTimestamp with a Date object works in client SDK.
+    const unsubArenaToday = onSnapshot(arenaTodayQuery, (snap) => setTodayArenaCount(snap.size));
+
     return () => {
       unsubBetsToday();
       unsubCasinoToday();
+      unsubArenaToday();
     };
   }, []);
 
@@ -312,10 +338,18 @@ export function AppProvider({ children }) {
     }
 
     // Notifications
-    const qNotif = query(collection(db, 'notifications'), where('userId', '==', user.id), limit(20));
+    const qNotif = query(collection(db, 'notifications'), where('userId', '==', user.id), orderBy('createdAt', 'desc'), limit(20));
     const unsubNotif = onSnapshot(qNotif, (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      list.sort((a, b) => {
+        const getTime = (t) => {
+          if (!t) return Date.now();
+          if (typeof t.toMillis === 'function') return t.toMillis();
+          if (t.seconds) return t.seconds * 1000;
+          return new Date(t).getTime();
+        };
+        return getTime(b.createdAt) - getTime(a.createdAt);
+      });
       setNotifications(list);
     });
 
@@ -328,9 +362,40 @@ export function AppProvider({ children }) {
       setCasinoBets(list);
     });
 
+    // Arena Turn Notifications
+    const qTurns = query(
+      collection(db, 'arena_games'),
+      where('status', '==', 'active'),
+      where('currentTurn', '==', user.id)
+    );
+    const unsubTurns = onSnapshot(qTurns, (snap) => {
+      setMyTurnCount(snap.size);
+    });
+
+    // Arena Pending Challenges (Invites)
+    // We only care about OPEN games where I am the specific opponent
+    const qInvites = query(
+      collection(db, 'arena_games'),
+      where('status', '==', 'open'),
+      where('config.opponentId', '==', user.id)
+    );
+    const unsubInvites = onSnapshot(qInvites, (snap) => {
+      setPendingChallengesCount(snap.size);
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Sort by newest
+      list.sort((a, b) => {
+        const tA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+        const tB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+        return tB - tA;
+      });
+      setPendingChallenges(list);
+    });
+
     return () => {
       unsubNotif();
       unsubCasino();
+      unsubTurns();
+      unsubInvites();
     };
   }, [user?.id]);
 
@@ -3636,6 +3701,17 @@ export function AppProvider({ children }) {
     }
   };
 
+  const updateArenaStatus = async (gameType, isEnabled) => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      const ref = doc(db, 'system', 'arena');
+      await setDoc(ref, { [gameType]: isEnabled }, { merge: true });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats,
@@ -3647,7 +3723,8 @@ export function AppProvider({ children }) {
       squads, createSquad, joinSquad, leaveSquad, manageSquadRequest, kickMember, updateSquad, inviteUserToSquad, respondToSquadInvite, searchUsers, getSquadStats,
       depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest, sendSquadMessage,
       syncAllUsernames, updateCasinoStatus, casinoSettings, updateMaintenanceStatus, maintenanceSettings,
-      todayBetCount, todayCasinoCount
+      todayBetCount, todayCasinoCount, myTurnCount, pendingChallengesCount, pendingChallenges, todayArenaCount,
+      arenaSettings, updateArenaStatus
     }}>
       {children}
     </AppContext.Provider>

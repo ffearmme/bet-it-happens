@@ -91,7 +91,7 @@ export default function JackpotAnnouncer() {
 
             <div style={{ textAlign: 'center' }}>
                 <div style={{ textTransform: 'uppercase', fontSize: '10px', fontWeight: '900', letterSpacing: '1px', opacity: 0.8 }}>
-                    Casino Jackpot Alert
+                    Arena Jackpot Alert
                 </div>
                 <div style={{ fontSize: '14px', whiteSpace: 'nowrap' }}>
                     <span style={{ fontWeight: '900' }}>{jackpot.username}</span> just won <span style={{ fontWeight: '900', fontSize: '16px' }}>${parseFloat(jackpot.amount).toFixed(2)}</span>
