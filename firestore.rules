@@ -113,7 +113,9 @@ service cloud.firestore {
         request.resource.data.type == 'arena_invite' ||
         request.resource.data.type == 'arena_accepted' ||
         request.resource.data.type == 'arena_turn' ||
-        request.resource.data.type == 'arena_lost'
+        request.resource.data.type == 'arena_lost' ||
+        request.resource.data.type == 'result' ||
+        request.resource.data.type == 'system'
       ));
       allow update: if isAdmin() || (
         request.auth != null && 

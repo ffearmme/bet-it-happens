@@ -136,8 +136,8 @@ export default function TopHeader() {
                                                     }}
                                                     className="hover:bg-white/5"
                                                 >
-                                                    <div style={{ fontSize: '13px', fontWeight: n.read ? 'normal' : 'bold', color: '#fff', marginBottom: '4px' }}>{n.title}</div>
-                                                    <div style={{ fontSize: '12px', color: '#ccc', whiteSpace: 'pre-wrap' }}>{n.message}</div>
+                                                    <div style={{ fontSize: '13px', fontWeight: n.read ? 'normal' : 'bold', color: '#fff', marginBottom: '4px' }}>{n.title || 'Notification'}</div>
+                                                    <div style={{ fontSize: '12px', color: '#ccc', whiteSpace: 'pre-wrap' }}>{n.message || 'No details available.'}</div>
                                                     <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
                                                         {(() => {
                                                             const d = n.createdAt && typeof n.createdAt.toDate === 'function'
