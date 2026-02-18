@@ -12,20 +12,15 @@ export default function TicTacToePage({ params }) {
     const [loading, setLoading] = useState(true);
     const [showRules, setShowRules] = useState(false);
 
-    // Hide Bottom Nav when Rules are open
+    // Hide Bottom Nav
     useEffect(() => {
         const nav = document.querySelector('.bottom-nav');
-        if (nav) {
-            if (showRules) {
-                nav.style.display = 'none';
-            } else {
-                nav.style.display = '';
-            }
-        }
+        if (nav) nav.style.display = 'none';
+
         return () => {
             if (nav) nav.style.display = '';
         };
-    }, [showRules]);
+    }, []);
 
     // Listen to Game Data
     useEffect(() => {

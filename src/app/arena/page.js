@@ -26,7 +26,8 @@ export default function ArenaPage() {
         expiry: '24', // hours
         turnTimer: '24', // hours
         matchType: '1', // Best of 1, 3, 5
-        wager: '0'
+        wager: '0',
+        playerLimit: 6 // Default max for Knockout
     });
 
     useEffect(() => {
@@ -394,7 +395,8 @@ export default function ArenaPage() {
                         opponentId: duelConfig.isPrivate && duelConfig.selectedUser ? duelConfig.selectedUser.id : null,
                         expiry: parseInt(duelConfig.expiry),
                         turnTimer: parseInt(duelConfig.turnTimer),
-                        matchType: parseInt(duelConfig.matchType)
+                        matchType: duelConfig.game === 'knockout' ? 1 : parseInt(duelConfig.matchType), // Knockout is always 1 match (survival)
+                        playerLimit: duelConfig.game === 'knockout' ? parseInt(duelConfig.playerLimit) : 2
                     },
                     players: {
                         [user.id]: {
@@ -502,13 +504,21 @@ export default function ArenaPage() {
                                     Select Game
                                 </label>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-                                    {['tictactoe'].map(gameId => {
+                                    {['tictactoe', 'knockout'].map(gameId => {
+                                        // Specific check for knockout since it might not be in settings yet, default to true for dev
                                         const isEnabled = arenaSettings?.[gameId] !== false;
                                         return (
                                             <button
                                                 key={gameId}
                                                 disabled={!isEnabled}
-                                                onClick={() => isEnabled && setDuelConfig({ ...duelConfig, game: gameId })}
+                                                onClick={() => {
+                                                    if (!isEnabled) return;
+                                                    setDuelConfig({
+                                                        ...duelConfig,
+                                                        game: gameId,
+                                                        isPrivate: gameId === 'knockout' ? false : duelConfig.isPrivate // Force public for knockout
+                                                    });
+                                                }}
                                                 style={{
                                                     background: duelConfig.game === gameId ? 'rgba(236, 72, 153, 0.2)' : (isEnabled ? '#27272a' : '#18181b'),
                                                     border: duelConfig.game === gameId ? '1px solid #ec4899' : (isEnabled ? '1px solid #3f3f46' : '1px dashed #333'),
@@ -522,25 +532,14 @@ export default function ArenaPage() {
                                                 }}
                                             >
                                                 {gameId === 'tictactoe' && <span style={{ fontSize: '24px' }}>❌⭕</span>}
+                                                {gameId === 'knockout' && <span style={{ fontSize: '24px' }}>🥊</span>}
                                                 <span style={{ fontWeight: 'bold', fontSize: '14px', textTransform: 'capitalize' }}>
-                                                    {gameId === 'tictactoe' ? 'Tic Tac Toe' : gameId}
+                                                    {gameId === 'tictactoe' ? 'Tic Tac Toe' : 'Knockout'}
                                                 </span>
                                                 {!isEnabled && <span style={{ fontSize: '10px', color: '#ef4444', fontWeight: 'bold' }}>DISABLED</span>}
                                             </button>
                                         );
                                     })}
-                                    <button
-                                        disabled
-                                        style={{
-                                            background: '#18181b', border: '1px dashed #3f3f46',
-                                            borderRadius: '12px', padding: '16px',
-                                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-                                            cursor: 'not-allowed', opacity: 0.5, color: '#71717a'
-                                        }}
-                                    >
-                                        <span style={{ fontSize: '24px' }}>🔒</span>
-                                        <span style={{ fontWeight: 'bold', fontSize: '12px' }}>Coming Soon</span>
-                                    </button>
                                 </div>
                             </div>
 
@@ -589,14 +588,17 @@ export default function ArenaPage() {
                                         <Users size={16} /> Public
                                     </button>
                                     <button
-                                        onClick={() => setDuelConfig({ ...duelConfig, isPrivate: true })}
+                                        onClick={() => duelConfig.game !== 'knockout' && setDuelConfig({ ...duelConfig, isPrivate: true })}
+                                        disabled={duelConfig.game === 'knockout'}
                                         style={{
                                             flex: 1, padding: '10px', borderRadius: '10px',
                                             background: duelConfig.isPrivate ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
                                             border: duelConfig.isPrivate ? '1px solid var(--primary)' : '1px solid #3f3f46',
-                                            color: duelConfig.isPrivate ? 'var(--primary)' : '#a1a1aa',
-                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                                            fontWeight: '600', fontSize: '13px'
+                                            color: duelConfig.isPrivate ? 'var(--primary)' : (duelConfig.game === 'knockout' ? '#52525b' : '#a1a1aa'),
+                                            cursor: duelConfig.game === 'knockout' ? 'not-allowed' : 'pointer',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                            fontWeight: '600', fontSize: '13px',
+                                            opacity: duelConfig.game === 'knockout' ? 0.5 : 1
                                         }}
                                     >
                                         <Lock size={16} /> Private
@@ -755,31 +757,55 @@ export default function ArenaPage() {
                                 </div>
                             </div>
 
-                            {/* Match Type */}
-                            <div>
-                                <label style={{ display: 'block', textTransform: 'uppercase', fontSize: '11px', fontWeight: 'bold', color: '#71717a', marginBottom: '6px' }}>
-                                    Format
-                                </label>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                                    {['1', '3', '5'].map((format) => (
-                                        <button
-                                            key={format}
-                                            onClick={() => setDuelConfig({ ...duelConfig, matchType: format })}
-                                            style={{
-                                                padding: '10px', borderRadius: '10px',
-                                                background: duelConfig.matchType === format ? 'rgba(236, 72, 153, 0.15)' : '#27272a',
-                                                border: duelConfig.matchType === format ? '1px solid #ec4899' : '1px solid #3f3f46',
-                                                color: duelConfig.matchType === format ? '#ec4899' : '#a1a1aa',
-                                                cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                                                fontWeight: '600', fontSize: '12px'
-                                            }}
-                                        >
-                                            <span style={{ fontSize: '10px', opacity: 0.7 }}>Best of</span>
-                                            <span style={{ fontSize: '16px' }}>{format}</span>
-                                        </button>
-                                    ))}
+                            {/* Match Type (Hidden for Knockout) */}
+                            {duelConfig.game !== 'knockout' && (
+                                <div>
+                                    <label style={{ display: 'block', textTransform: 'uppercase', fontSize: '11px', fontWeight: 'bold', color: '#71717a', marginBottom: '6px' }}>
+                                        Format
+                                    </label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                                        {['1', '3', '5'].map((format) => (
+                                            <button
+                                                key={format}
+                                                onClick={() => setDuelConfig({ ...duelConfig, matchType: format })}
+                                                style={{
+                                                    padding: '10px', borderRadius: '10px',
+                                                    background: duelConfig.matchType === format ? 'rgba(236, 72, 153, 0.15)' : '#27272a',
+                                                    border: duelConfig.matchType === format ? '1px solid #ec4899' : '1px solid #3f3f46',
+                                                    color: duelConfig.matchType === format ? '#ec4899' : '#a1a1aa',
+                                                    cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                                    fontWeight: '600', fontSize: '12px'
+                                                }}
+                                            >
+                                                <span style={{ fontSize: '10px', opacity: 0.7 }}>Best of</span>
+                                                <span style={{ fontSize: '16px' }}>{format}</span>
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
+
+                            {/* Player Limit (Only for Knockout) */}
+                            {duelConfig.game === 'knockout' && (
+                                <div>
+                                    <label style={{ display: 'block', textTransform: 'uppercase', fontSize: '11px', fontWeight: 'bold', color: '#71717a', marginBottom: '6px' }}>
+                                        Max Players: {duelConfig.playerLimit}
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="3"
+                                        max="6"
+                                        step="1"
+                                        value={duelConfig.playerLimit}
+                                        onChange={(e) => setDuelConfig({ ...duelConfig, playerLimit: parseInt(e.target.value) })}
+                                        style={{ width: '100%', accentColor: '#ec4899' }}
+                                    />
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#a1a1aa' }}>
+                                        <span>3 Players</span>
+                                        <span>6 Players</span>
+                                    </div>
+                                </div>
+                            )}
 
                             <button
                                 onClick={handleCreateDuel}

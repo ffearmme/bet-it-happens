@@ -233,7 +233,7 @@ export function AppProvider({ children }) {
         setArenaSettings(docSnap.data());
       } else {
         // Default settings
-        setArenaSettings({ tictactoe: true });
+        setArenaSettings({ tictactoe: true, knockout: true });
       }
     });
 

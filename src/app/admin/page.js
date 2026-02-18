@@ -1547,7 +1547,7 @@ function AdminContent() {
                                     Disable arena games temporarily. Users will not be able to create new challenges for disabled games.
                                 </p>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
-                                    {['tictactoe'].map(gameId => {
+                                    {['tictactoe', 'knockout'].map(gameId => {
                                         const isEnabled = arenaSettings?.[gameId] !== false; // Default true if undefined
                                         return (
                                             <div key={gameId} style={{
@@ -1561,7 +1561,7 @@ function AdminContent() {
                                             }}>
                                                 <div>
                                                     <strong style={{ textTransform: 'capitalize', display: 'block', color: '#fff' }}>
-                                                        {gameId === 'tictactoe' ? 'Tic Tac Toe' : gameId}
+                                                        {gameId === 'tictactoe' ? 'Tic Tac Toe' : gameId === 'knockout' ? 'Knockout' : gameId}
                                                     </strong>
                                                     <span style={{ fontSize: '12px', color: isEnabled ? '#10b981' : '#ef4444' }}>
                                                         {isEnabled ? 'Active' : 'Disabled'}
