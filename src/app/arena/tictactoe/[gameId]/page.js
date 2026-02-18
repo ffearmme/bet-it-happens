@@ -399,13 +399,13 @@ export default function TicTacToePage({ params }) {
 
     // ...
 
+    if (loading) return <div className="p-10 text-center text-white">Loading Arena Data...</div>;
+    if (!game) return <div className="p-10 text-center text-white">Game not found</div>;
+
     // Correctly identify the winner for the button condition
     // The winner is the one who is NOT the current turn player
     const expectedWinnerId = game.players && game.currentTurn ? Object.keys(game.players).find(id => id !== game.currentTurn) : null;
     const canClaimTimeout = game.status === 'active' && timeLeft === 'Expired' && user?.id === expectedWinnerId;
-
-    if (loading) return <div className="p-10 text-center text-white">Loading Arena Data...</div>;
-    if (!game) return <div className="p-10 text-center text-white">Game not found</div>;
 
     // Fix: We want to display Creator vs "The Other Player" (Challenger)
     // Previously we looked for "Not Me", which meant for the Challenger, "Not Me" was the Creator, causing duplicate display.
