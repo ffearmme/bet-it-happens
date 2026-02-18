@@ -687,7 +687,7 @@ export default function TicTacToePage({ params }) {
                     </div>
                 )}
             </div>
-        // ...
+
             {/* TIMEOUT CLAIM BUTTON */}
             {
                 canClaimTimeout && (
