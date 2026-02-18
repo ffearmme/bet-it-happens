@@ -2426,7 +2426,8 @@ export function AppProvider({ children }) {
       const snap = await getDocs(betsQ);
       let wins = 0;
       let losses = 0;
-      let profit = 0;
+      // Profit is now Net Worth - 1000 (Initial Balance)
+      let profit = ((userData.balance || 0) + (userData.invested || 0)) - 1000;
       let settledCount = 0;
 
       snap.docs.forEach(d => {
@@ -2434,11 +2435,9 @@ export function AppProvider({ children }) {
         if (b.status === 'won') {
           wins++;
           settledCount++;
-          profit += ((b.potentialPayout || (b.amount * b.odds)) - b.amount);
         } else if (b.status === 'lost') {
           losses++;
           settledCount++;
-          profit -= b.amount;
         }
       });
 

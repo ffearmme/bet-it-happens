@@ -344,25 +344,27 @@ export default function TicTacToePage({ params }) {
     const handleClaimTimeout = async () => {
         if (timeLeft !== 'Expired') return;
 
-        // If it's NOT my turn, and time is expired, I win.
-        // Wait, currentTurn is the person who needs to move.
-        // If currentTurn != me, then the OTHER person timed out. So I can claim.
-        if (game.currentTurn === user.id) return alert("It's your turn! Move!");
+        // Determine who timed out (currentTurn) and who wins (the other player)
+        const loserId = game.currentTurn;
+        const winnerId = Object.keys(game.players).find(id => id !== loserId);
+
+        if (user.id !== winnerId) {
+            return alert("Only the opponent can claim this timeout!");
+        }
 
         try {
             await runTransaction(db, async (transaction) => {
                 const gameRef = doc(db, 'arena_games', gameId);
-                const winner = user.id;
 
                 transaction.update(gameRef, {
                     status: 'completed',
-                    winnerId: winner,
+                    winnerId: winnerId,
                     result: 'timeout',
                     settledAt: serverTimestamp()
                 });
 
                 // Payout Winner
-                const winnerRef = doc(db, 'users', winner);
+                const winnerRef = doc(db, 'users', winnerId);
                 transaction.update(winnerRef, {
                     balance: increment(game.pot),
                     lockedBalance: increment(-game.wager),
@@ -370,7 +372,6 @@ export default function TicTacToePage({ params }) {
                 });
 
                 // Loser
-                const loserId = Object.keys(game.players).find(id => id !== winner);
                 if (loserId) {
                     const loserRef = doc(db, 'users', loserId);
                     transaction.update(loserRef, {
@@ -383,7 +384,7 @@ export default function TicTacToePage({ params }) {
                         type: 'arena_lost',
                         userId: loserId,
                         title: 'Duel Timeout',
-                        message: `You ran out of time! You lost the duel against ${user.username}.`,
+                        message: `You ran out of time! You lost the duel.`,
                         link: `/arena/tictactoe/${gameId}`,
                         read: false,
                         createdAt: serverTimestamp()
@@ -395,6 +396,13 @@ export default function TicTacToePage({ params }) {
             alert("Claim failed");
         }
     };
+
+    // ...
+
+    // Correctly identify the winner for the button condition
+    // The winner is the one who is NOT the current turn player
+    const expectedWinnerId = game.players && game.currentTurn ? Object.keys(game.players).find(id => id !== game.currentTurn) : null;
+    const canClaimTimeout = game.status === 'active' && timeLeft === 'Expired' && user?.id === expectedWinnerId;
 
     if (loading) return <div className="p-10 text-center text-white">Loading Arena Data...</div>;
     if (!game) return <div className="p-10 text-center text-white">Game not found</div>;
@@ -679,97 +687,105 @@ export default function TicTacToePage({ params }) {
                     </div>
                 )}
             </div>
-
+        // ...
             {/* TIMEOUT CLAIM BUTTON */}
-            {game.status === 'active' && timeLeft === 'Expired' && game.currentTurn !== user?.id && (
-                <div style={{ marginTop: '20px' }}>
-                    <button
-                        onClick={handleClaimTimeout}
-                        style={{
-                            background: '#ef4444', color: '#fff', border: 'none',
-                            padding: '12px 24px', borderRadius: '12px',
-                            fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer'
-                        }}
-                    >
-                        <AlertTriangle size={18} /> CLAIM VICTORY (TIMEOUT)
-                    </button>
-                </div>
-            )}
-
-            {/* Turn Indicator (Sticky Bottom if needed, or just below board) */}
-            {game.status === 'active' && (
-                <div style={{ marginTop: '24px', textAlign: 'center', color: '#a1a1aa' }}>
-                    {isMyTurn ? (
-                        <span style={{ color: '#ec4899', fontWeight: 'bold', fontSize: '18px' }}>YOUR TURN</span>
-                    ) : (
-                        <span>Waiting for opponent...</span>
-                    )}
-                </div>
-            )}
-
-            {/* RULES MODAL */}
-            {showRules && (
-                <div style={{
-                    position: 'fixed', inset: 0, zIndex: 10005,
-                    background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    padding: '20px'
-                }} onClick={() => setShowRules(false)}>
-                    <div style={{
-                        background: '#18181b', border: '1px solid #3f3f46', borderRadius: '24px',
-                        padding: '32px', maxWidth: '500px', width: '100%', position: 'relative',
-                        maxHeight: '90vh', overflowY: 'auto'
-                    }} onClick={e => e.stopPropagation()}>
+            {
+                canClaimTimeout && (
+                    <div style={{ marginTop: '20px' }}>
                         <button
-                            onClick={() => setShowRules(false)}
+                            onClick={handleClaimTimeout}
                             style={{
-                                position: 'absolute', top: '20px', right: '20px',
-                                background: 'transparent', border: 'none', color: '#a1a1aa', cursor: 'pointer'
+                                background: '#ef4444', color: '#fff', border: 'none',
+                                padding: '12px 24px', borderRadius: '12px',
+                                fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer'
                             }}
                         >
-                            <X size={24} />
-                        </button>
-
-                        <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <BookOpen size={24} className="text-primary" /> Tic Tac Toe Rules
-                        </h2>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', color: '#d4d4d8', lineHeight: '1.6' }}>
-                            <div>
-                                <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Objective</strong>
-                                Be the first to get 3 of your symbols in a row (horizontal, vertical, or diagonal).
-                            </div>
-                            <div>
-                                <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Gameplay</strong>
-                                Players take turns placing their symbol (X or O) on the 3x3 grid. The player who creates the challenge sets the wager.
-                            </div>
-                            <div>
-                                <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Winning</strong>
-                                Access the full pot by winning the game. The loser forfeits their wager.
-                            </div>
-                            <div>
-                                <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Draw</strong>
-                                If all 9 squares are filled and no player has 3 in a row, the game is a draw. Both players' wagers are refunded.
-                            </div>
-                            <div>
-                                <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Time Limit</strong>
-                                Each player must make their move within the game's time limit (default 24h). If time expires, the opponent can claim victory.
-                            </div>
-                        </div>
-
-                        <button
-                            onClick={() => setShowRules(false)}
-                            style={{
-                                width: '100%', marginTop: '32px', padding: '12px',
-                                background: '#3f3f46', color: '#fff', border: 'none', borderRadius: '12px',
-                                fontWeight: 'bold', cursor: 'pointer'
-                            }}
-                        >
-                            Got it
+                            <AlertTriangle size={18} /> CLAIM VICTORY (TIMEOUT)
                         </button>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+
+            {/* Turn Indicator */}
+            {
+                game.status === 'active' && (
+                    <div style={{ marginTop: '24px', textAlign: 'center', color: '#a1a1aa' }}>
+                        {isMyTurn ? (
+                            <span style={{ color: '#ec4899', fontWeight: 'bold', fontSize: '18px' }}>YOUR TURN</span>
+                        ) : (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                                Waiting for <span style={{ color: '#fff', fontWeight: 'bold' }}>{game.players[game.currentTurn]?.username}</span>...
+                            </span>
+                        )}
+                    </div>
+                )
+            }
+
+            {/* RULES MODAL */}
+            {
+                showRules && (
+                    <div style={{
+                        position: 'fixed', inset: 0, zIndex: 10005,
+                        background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: '20px'
+                    }} onClick={() => setShowRules(false)}>
+                        <div style={{
+                            background: '#18181b', border: '1px solid #3f3f46', borderRadius: '24px',
+                            padding: '32px', maxWidth: '500px', width: '100%', position: 'relative',
+                            maxHeight: '90vh', overflowY: 'auto'
+                        }} onClick={e => e.stopPropagation()}>
+                            <button
+                                onClick={() => setShowRules(false)}
+                                style={{
+                                    position: 'absolute', top: '20px', right: '20px',
+                                    background: 'transparent', border: 'none', color: '#a1a1aa', cursor: 'pointer'
+                                }}
+                            >
+                                <X size={24} />
+                            </button>
+
+                            <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <BookOpen size={24} className="text-primary" /> Tic Tac Toe Rules
+                            </h2>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', color: '#d4d4d8', lineHeight: '1.6' }}>
+                                <div>
+                                    <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Objective</strong>
+                                    Be the first to get 3 of your symbols in a row (horizontal, vertical, or diagonal).
+                                </div>
+                                <div>
+                                    <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Gameplay</strong>
+                                    Players take turns placing their symbol (X or O) on the 3x3 grid. The player who creates the challenge sets the wager.
+                                </div>
+                                <div>
+                                    <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Winning</strong>
+                                    Access the full pot by winning the game. The loser forfeits their wager.
+                                </div>
+                                <div>
+                                    <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Draw</strong>
+                                    If all 9 squares are filled and no player has 3 in a row, the game is a draw. Both players' wagers are refunded.
+                                </div>
+                                <div>
+                                    <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Time Limit</strong>
+                                    Each player must make their move within the game's time limit (default 24h). If time expires, the opponent can claim victory.
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={() => setShowRules(false)}
+                                style={{
+                                    width: '100%', marginTop: '32px', padding: '12px',
+                                    background: '#3f3f46', color: '#fff', border: 'none', borderRadius: '12px',
+                                    fontWeight: 'bold', cursor: 'pointer'
+                                }}
+                            >
+                                Got it
+                            </button>
+                        </div>
+                    </div>
+                )
+            }
+        </div >
     );
 }

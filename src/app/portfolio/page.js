@@ -363,14 +363,9 @@ export default function Portfolio() {
         ? Math.max(...wonBets.map(b => b.potentialPayout - b.amount))
         : 0;
 
-    const totalNetProfit = completedBets.reduce((acc, bet) => {
-        if (bet.status === 'won') return acc + (bet.potentialPayout - bet.amount);
-        if (bet.status === 'lost') return acc - bet.amount;
-        return acc;
-    }, 0);
-
     // --- LOGIC FROM WALLET ---
     const netWorth = (user.balance || 0) + (user.invested || 0);
+    const totalNetProfit = netWorth - 1000;
 
     const BetCard = ({ bet }) => {
         const isParlay = bet.type === 'parlay';

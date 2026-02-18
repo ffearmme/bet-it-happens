@@ -196,19 +196,24 @@ export default function ArenaPage() {
             let gamesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
             // Filter Private Games
-            if (user) {
-                gamesList = gamesList.filter(g => {
-                    if (!g.config?.isPrivate) return true; // Public
+            // Filter Games
+            gamesList = gamesList.filter(g => {
+                // Always show Public games
+                if (!g.config?.isPrivate) return true;
+
+                // Always show Active Private games (for spectating)
+                if (g.status === 'active') return true;
+
+                // For Open Private games, only show if involved
+                if (user) {
                     if (g.creatorId === user.id) return true; // My game
                     if (g.config.opponent === user.username) return true; // Invited
                     // Also check if I'm already a player (e.g. joined private game)
                     if (g.players && g.players[user.id]) return true;
-                    return false;
-                });
-            } else {
-                // Not logged in, only see public
-                gamesList = gamesList.filter(g => !g.config?.isPrivate);
-            }
+                }
+
+                return false;
+            });
 
             // Client-side sort to avoid index requirement
             gamesList.sort((a, b) => {
