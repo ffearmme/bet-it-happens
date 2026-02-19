@@ -443,7 +443,7 @@ export default function KnockoutGamePage({ params }) {
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 10px', alignItems: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 <div style={{ color: '#a1a1aa', fontSize: '14px', fontWeight: 'bold' }}>ROUND {game.round}</div>
-                                {game.lastRoundFrames && !playbackFrames && (
+                                {game.lastRoundFrames && !playbackFrames && !game.currentMoves?.[user.id] && (
                                     <button
                                         onClick={handleReplay}
                                         style={{

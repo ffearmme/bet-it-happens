@@ -74,8 +74,6 @@ export default function KnockoutBoard({
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
 
-        console.log("Animation Effect Triggered. isAnimating:", isAnimating, "Frames:", playbackFrames?.length);
-
         let animationId;
         let lastTime = 0;
         let frameAccumulator = 0;
@@ -96,28 +94,21 @@ export default function KnockoutBoard({
             const scale = width / (PHYSICS_CONFIG.PLATFORM_INITIAL_RADIUS * 2.5); // Zoom to fit platform
 
             // Next Frame logic for Playback (Time-Based)
+            let isComplete = false;
+
             if (isAnimating) {
                 frameAccumulator += deltaTime;
 
                 // While we have enough accumulated time for one or more frames, advance
-                let advanced = false;
-                while (frameAccumulator >= FRAME_TIME) {
-                    if (playbackIndexRef.current < playbackFrames.length - 1) {
-                        playbackIndexRef.current++;
-                        advanced = true;
-                    }
-                    frameAccumulator -= FRAME_TIME;
-                }
-
-                if (advanced) {
-                    // DEBUG: Log occasional frame updates
-                    if (playbackIndexRef.current % 30 === 0) {
-                        console.log(`Frame ${playbackIndexRef.current}/${playbackFrames.length}`, playbackFrames[playbackIndexRef.current]);
-                    }
-
-                    // Start completion check
-                    if (playbackIndexRef.current >= playbackFrames.length - 1) {
-                        // End
+                if (playbackFrames && playbackFrames.length > 0) {
+                    while (frameAccumulator >= FRAME_TIME) {
+                        if (playbackIndexRef.current < playbackFrames.length - 1) {
+                            playbackIndexRef.current++;
+                        } else {
+                            // Reached end
+                            isComplete = true;
+                        }
+                        frameAccumulator -= FRAME_TIME;
                     }
                 }
             }
@@ -153,12 +144,13 @@ export default function KnockoutBoard({
             let currentPositions = gameState;
             if (isAnimating && playbackFrames && playbackFrames[playbackIndexRef.current]) {
                 currentPositions = playbackFrames[playbackIndexRef.current];
-            } else if (isAnimating) {
-                console.warn("Missing frame data at index:", playbackIndexRef.current);
             }
 
             playerIds.forEach((uid, index) => {
                 const pState = currentPositions[uid] || { isEliminated: false, x: 0, y: 0 }; // Default if missing
+
+                // If eliminated, do not draw (vanish)
+                if (pState.isEliminated) return;
 
                 // If initializing (waiting room), place them in circle if no position
                 let x = pState.x || 0;
@@ -169,11 +161,6 @@ export default function KnockoutBoard({
                     const angle = (index / playerIds.length) * Math.PI * 2;
                     x = Math.cos(angle) * platformRadius * 0.6;
                     y = Math.sin(angle) * platformRadius * 0.6;
-                }
-
-                if (pState.isEliminated) {
-                    // Maybe draw a skull or ghost?
-                    ctx.globalAlpha = 0.3;
                 }
 
                 // Draw Height/Shadow (Fake 3D)
@@ -244,20 +231,15 @@ export default function KnockoutBoard({
 
             ctx.restore();
 
-            // Handle Completion OUTSIDE the drawing loop
-            if (isAnimating && playbackIndexRef.current >= playbackFrames.length - 1) {
-                // Trigger completion callback
+            // Handle Completion
+            if (isComplete) {
+                // Trigger completion callback ONCE
                 if (onAnimationComplete) {
-                    // Debounce slightly to ensure last frame is seen
-                    // We can't call set state in RAF loop repeatedly safely without checks.
-                    // We'll let the existing Effect handle it via polling or checking REF via setinterval?
-                    // Or just call callback here? Call callback here is risky if it updates state causing unmount.
-
-                    // Let's rely on the separate Effect polling the REF? No, effect can't poll ref changes.
-                    // We must force update state so effect notices.
-                    if (playbackIndex !== playbackFrames.length - 1) {
-                        setPlaybackIndex(playbackFrames.length - 1); // Trigger effect
-                    }
+                    // Use timeout to break render cycle and let React state update
+                    setTimeout(() => {
+                        onAnimationComplete();
+                    }, 500); // Small pause at end
+                    return; // Stop animation loop
                 }
             }
 
