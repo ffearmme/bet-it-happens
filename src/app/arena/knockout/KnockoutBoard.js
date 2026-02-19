@@ -35,8 +35,17 @@ export default function KnockoutBoard({
 
     // Playback State
     const [playbackIndex, setPlaybackIndex] = useState(0);
+    const playbackIndexRef = useRef(0);
     // Derived "isAnimating" from prop presence
     const isAnimating = !!(playbackFrames && playbackFrames.length > 0);
+
+    // Sync REF with STATE when animation starts/resets
+    useEffect(() => {
+        if (playbackFrames && playbackFrames.length > 0) {
+            setPlaybackIndex(0);
+            playbackIndexRef.current = 0;
+        }
+    }, [playbackFrames]);
 
     // Touch Interaction State
     const [isDragging, setIsDragging] = useState(false);
@@ -65,9 +74,19 @@ export default function KnockoutBoard({
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
 
-        let animationId;
+        console.log("Animation Effect Triggered. isAnimating:", isAnimating, "Frames:", playbackFrames?.length);
 
-        const render = () => {
+        let animationId;
+        let lastTime = 0;
+        let frameAccumulator = 0;
+        const TARGET_FPS = 60;
+        const FRAME_TIME = 1000 / TARGET_FPS;
+
+        const render = (timestamp) => {
+            if (!lastTime) lastTime = timestamp;
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
             const { width, height } = dimensions;
             canvas.width = width;
             canvas.height = height;
@@ -75,6 +94,33 @@ export default function KnockoutBoard({
             const centerX = width / 2;
             const centerY = height / 2;
             const scale = width / (PHYSICS_CONFIG.PLATFORM_INITIAL_RADIUS * 2.5); // Zoom to fit platform
+
+            // Next Frame logic for Playback (Time-Based)
+            if (isAnimating) {
+                frameAccumulator += deltaTime;
+
+                // While we have enough accumulated time for one or more frames, advance
+                let advanced = false;
+                while (frameAccumulator >= FRAME_TIME) {
+                    if (playbackIndexRef.current < playbackFrames.length - 1) {
+                        playbackIndexRef.current++;
+                        advanced = true;
+                    }
+                    frameAccumulator -= FRAME_TIME;
+                }
+
+                if (advanced) {
+                    // DEBUG: Log occasional frame updates
+                    if (playbackIndexRef.current % 30 === 0) {
+                        console.log(`Frame ${playbackIndexRef.current}/${playbackFrames.length}`, playbackFrames[playbackIndexRef.current]);
+                    }
+
+                    // Start completion check
+                    if (playbackIndexRef.current >= playbackFrames.length - 1) {
+                        // End
+                    }
+                }
+            }
 
             // Background
             ctx.fillStyle = '#18181b';
@@ -101,12 +147,14 @@ export default function KnockoutBoard({
             ctx.stroke();
 
             // 2. Draw Players
-            const playerIds = Object.keys(players);
+            const playerIds = Object.keys(players).sort();
 
-            // Determine source of positions: Playback or Live State
+            // Determine source of positions: Playback (REF) or Live State
             let currentPositions = gameState;
-            if (isAnimating && playbackFrames[playbackIndex]) {
-                currentPositions = playbackFrames[playbackIndex];
+            if (isAnimating && playbackFrames && playbackFrames[playbackIndexRef.current]) {
+                currentPositions = playbackFrames[playbackIndexRef.current];
+            } else if (isAnimating) {
+                console.warn("Missing frame data at index:", playbackIndexRef.current);
             }
 
             playerIds.forEach((uid, index) => {
@@ -196,31 +244,39 @@ export default function KnockoutBoard({
 
             ctx.restore();
 
-            // Next Frame logic for Playback
-            if (isAnimating) {
-                if (playbackIndex < playbackFrames.length - 1) {
-                    setPlaybackIndex(prev => prev + 1);
-                } else {
-                    // Animation Complete
-                    setPlaybackIndex(0); // Reset for next usage
-                    if (onAnimationComplete) onAnimationComplete();
+            // Handle Completion OUTSIDE the drawing loop
+            if (isAnimating && playbackIndexRef.current >= playbackFrames.length - 1) {
+                // Trigger completion callback
+                if (onAnimationComplete) {
+                    // Debounce slightly to ensure last frame is seen
+                    // We can't call set state in RAF loop repeatedly safely without checks.
+                    // We'll let the existing Effect handle it via polling or checking REF via setinterval?
+                    // Or just call callback here? Call callback here is risky if it updates state causing unmount.
+
+                    // Let's rely on the separate Effect polling the REF? No, effect can't poll ref changes.
+                    // We must force update state so effect notices.
+                    if (playbackIndex !== playbackFrames.length - 1) {
+                        setPlaybackIndex(playbackFrames.length - 1); // Trigger effect
+                    }
                 }
             }
+
+            animationId = requestAnimationFrame(render);
         };
 
         animationId = requestAnimationFrame(render);
         return () => cancelAnimationFrame(animationId);
-    }, [dimensions, players, myId, gameState, aimAngle, power, isAnimating, playbackIndex, playbackFrames, activeMoves, onAnimationComplete]);
+    }, [dimensions, players, myId, gameState, aimAngle, power, isAnimating, playbackFrames, activeMoves, onAnimationComplete]);
 
-    // Reset playback index if new frames arrive (and we were not already playing them?)
-    // Actually, simple reset on prop change is safe.
-    // Reset playback index if new frames arrive (and we were not already playing them?)
-    // Actually, simple reset on prop change is safe.
+    // Listen for animation completion
     useEffect(() => {
-        if (playbackFrames && playbackFrames.length > 0) {
-            setPlaybackIndex(0);
+        if (isAnimating && playbackFrames && playbackIndex >= playbackFrames.length - 1) {
+            const timer = setTimeout(() => {
+                if (onAnimationComplete) onAnimationComplete();
+            }, 500); // Small pause at end before resetting
+            return () => clearTimeout(timer);
         }
-    }, [playbackFrames]);
+    }, [playbackIndex, isAnimating, playbackFrames, onAnimationComplete]);
 
 
     // Interaction Handlers (Touch/Mouse for Aiming)

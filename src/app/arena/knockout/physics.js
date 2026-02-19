@@ -14,9 +14,9 @@ export const PHYSICS_CONFIG = {
 
 export function calculateRoundOutcome(currentPositions, moves, platformRadius, activePlayers) {
     // 1. Initialize State
-    // currentPositions: { [userId]: { x, y, vx, vy, isEliminated } }
-    // moves: { [userId]: { angle, power } }
-    // activePlayers: Array of userIds who are still in
+    // Sort players by ID to ensure deterministic execution order across all clients/server
+    // This prevents slight floating point differences or iteration order differences from diverging the state.
+    const sortedPlayers = [...activePlayers].sort();
 
     let state = JSON.parse(JSON.stringify(currentPositions));
     const events = []; // Track collisions/eliminations for playback
@@ -24,7 +24,13 @@ export function calculateRoundOutcome(currentPositions, moves, platformRadius, a
 
     // Initialize players who don't have positions (first round)
     const storeDefaults = (uid, index, total) => {
-        if (!state[uid] || state[uid].isEliminated) return;
+        // If state exists and eliminated, skip
+        if (state[uid]?.isEliminated) return;
+
+        // If state is missing (new player/Round 1), initialize
+        if (!state[uid]) {
+            state[uid] = { isEliminated: false };
+        }
 
         // Spawn in circle
         if (!state[uid].x && !state[uid].y) {
@@ -42,7 +48,7 @@ export function calculateRoundOutcome(currentPositions, moves, platformRadius, a
         }
     };
 
-    activePlayers.forEach((uid, i) => storeDefaults(uid, i, activePlayers.length));
+    sortedPlayers.forEach((uid, i) => storeDefaults(uid, i, sortedPlayers.length));
 
     // 2. Apply Moves (Impulse)
     Object.keys(moves).forEach(uid => {
@@ -67,7 +73,7 @@ export function calculateRoundOutcome(currentPositions, moves, platformRadius, a
         for (let s = 0; s < PHYSICS_CONFIG.SUBSTEPS; s++) {
 
             // A. Move & Friction
-            activePlayers.forEach(uid => {
+            sortedPlayers.forEach(uid => {
                 const p = state[uid];
                 if (!p || p.isEliminated) return;
 
@@ -86,10 +92,10 @@ export function calculateRoundOutcome(currentPositions, moves, platformRadius, a
             });
 
             // B. Resolve Collisions (Player vs Player)
-            for (let i = 0; i < activePlayers.length; i++) {
-                for (let j = i + 1; j < activePlayers.length; j++) {
-                    const idA = activePlayers[i];
-                    const idB = activePlayers[j];
+            for (let i = 0; i < sortedPlayers.length; i++) {
+                for (let j = i + 1; j < sortedPlayers.length; j++) {
+                    const idA = sortedPlayers[i];
+                    const idB = sortedPlayers[j];
                     const pA = state[idA];
                     const pB = state[idB];
 
@@ -145,7 +151,7 @@ export function calculateRoundOutcome(currentPositions, moves, platformRadius, a
         }
 
         // C. Check Elimination (Off Platform)
-        activePlayers.forEach(uid => {
+        sortedPlayers.forEach(uid => {
             const p = state[uid];
             if (!p || p.isEliminated) return;
 
@@ -167,3 +173,4 @@ export function calculateRoundOutcome(currentPositions, moves, platformRadius, a
         events: events
     };
 }
+

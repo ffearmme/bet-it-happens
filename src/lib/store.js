@@ -305,8 +305,42 @@ export function AppProvider({ children }) {
   // --- 2b. Global Daily Stats Listeners ---
   useEffect(() => {
     // Bets Today Listener
-    const startOfDay = new Date();
-    startOfDay.setUTCHours(0, 0, 0, 0);
+    // Calculate 12:00 AM Pacific Time (PST/PDT)
+    const getStartOfTodayPST = () => {
+      const now = new Date();
+      // Get the date components in America/Los_Angeles
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Los_Angeles',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric'
+      });
+      const parts = formatter.formatToParts(now);
+      const year = parseInt(parts.find(p => p.type === 'year').value);
+      const month = parseInt(parts.find(p => p.type === 'month').value);
+      const day = parseInt(parts.find(p => p.type === 'day').value);
+
+      // Create UTC date for 08:00:00 UTC (Standard Time 12 AM PST)
+      // Note: Month is 0-indexed in Date.UTC
+      let utcTimestamp = Date.UTC(year, month - 1, day, 8, 0, 0);
+
+      // Check if 8 AM UTC is 1 AM PDT (Daylight Savings)
+      const checkDate = new Date(utcTimestamp);
+      const hourInLA = parseInt(checkDate.toLocaleTimeString('en-US', {
+        timeZone: 'America/Los_Angeles',
+        hour: 'numeric',
+        hour12: false
+      }));
+
+      // If hour is 1, it means we are in DST (UTC-7), so midnight is 7 AM UTC
+      if (hourInLA === 1) {
+        utcTimestamp = Date.UTC(year, month - 1, day, 7, 0, 0);
+      }
+
+      return new Date(utcTimestamp);
+    };
+
+    const startOfDay = getStartOfTodayPST();
 
     // Normal Bets
     const betsTodayQuery = query(collection(db, 'bets'), where('placedAt', '>=', startOfDay.toISOString()));
@@ -318,7 +352,6 @@ export function AppProvider({ children }) {
     const unsubCasinoToday = onSnapshot(casinoTodayQuery, (snap) => setTodayCasinoCount(snap.size));
 
     // Arena Battles Today (Count Duel Joins)
-    // FIX: Switched to counting created GAMES instead of transactions (player joins)
     const arenaTodayQuery = query(collection(db, 'arena_games'), where('createdAt', '>=', startOfDay));
 
     const unsubArenaToday = onSnapshot(

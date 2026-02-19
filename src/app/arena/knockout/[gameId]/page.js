@@ -197,7 +197,7 @@ export default function KnockoutGamePage({ params }) {
                 currentMoves[user.id] = move;
 
                 // Check if all active players have moved
-                const activeIds = Object.keys(g.players).filter(pid => !g.players[pid].isEliminated);
+                const activeIds = Object.keys(g.players).filter(pid => !g.players[pid].isEliminated).sort();
                 const allMoved = activeIds.every(pid => currentMoves[pid]);
 
                 if (allMoved) {
@@ -310,6 +310,20 @@ export default function KnockoutGamePage({ params }) {
         }
     };
 
+
+    const handleReplay = () => {
+        if (game?.lastRoundFrames) {
+            try {
+                const frames = JSON.parse(game.lastRoundFrames);
+                setState(prev => ({ ...prev, playbackFrames: frames }));
+            } catch (e) {
+                console.error("Failed to parse replay:", e);
+                alert("Replay data unavailable.");
+            }
+        } else {
+            alert("No replay available.");
+        }
+    };
 
     // --- RENDER ---
 
@@ -426,8 +440,22 @@ export default function KnockoutGamePage({ params }) {
                 {(game.status === 'active' || game.status === 'completed') && (
                     <>
                         {/* Status Bar */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 10px' }}>
-                            <div style={{ color: '#a1a1aa', fontSize: '14px', fontWeight: 'bold' }}>ROUND {game.round}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 10px', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ color: '#a1a1aa', fontSize: '14px', fontWeight: 'bold' }}>ROUND {game.round}</div>
+                                {game.lastRoundFrames && !playbackFrames && (
+                                    <button
+                                        onClick={handleReplay}
+                                        style={{
+                                            background: '#3f3f46', color: '#fff', border: 'none',
+                                            padding: '4px 8px', borderRadius: '6px', fontSize: '10px',
+                                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
+                                        }}
+                                    >
+                                        <Play size={10} /> REPLAY PREVIOUS
+                                    </button>
+                                )}
+                            </div>
                             <div style={{ color: '#10b981', fontSize: '14px', fontWeight: 'bold' }}>POT: ${game.pot}</div>
                         </div>
 
@@ -497,18 +525,49 @@ export default function KnockoutGamePage({ params }) {
                         <h2 style={{ fontSize: '32px', fontWeight: '900', marginBottom: '8px' }}>
                             {game.winnerId ? game.players[game.winnerId].username : 'DRAW'} WINS!
                         </h2>
-                        <p style={{ fontSize: '18px', opacity: 0.9 }}>
-                            took home the <span style={{ fontWeight: 'bold' }}>${game.pot}</span> pot
-                        </p>
-                        <Link href="/arena">
-                            <button style={{
-                                marginTop: '20px', background: 'rgba(0,0,0,0.2)',
-                                border: '1px solid rgba(255,255,255,0.4)', padding: '12px 24px',
-                                borderRadius: '50px', color: '#fff', cursor: 'pointer', fontWeight: 'bold'
-                            }}>
-                                Back to Arena
+
+                        {/* Personal Result */}
+                        <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px' }}>
+                            {game.winnerId === user?.id ? (
+                                <>
+                                    <div style={{ fontSize: '14px', opacity: 0.8 }}>YOU WON</div>
+                                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10b981' }}>+${game.pot - game.wager}</div>
+                                    <div style={{ fontSize: '10px', opacity: 0.6 }}>Total Payout: ${game.pot}</div>
+                                </>
+                            ) : (
+                                <>
+                                    <div style={{ fontSize: '14px', opacity: 0.8 }}>YOU LOST</div>
+                                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ef4444' }}>-${game.wager}</div>
+                                </>
+                            )}
+                            {!game.winnerId && (
+                                <div style={{ fontSize: '14px', opacity: 0.8 }}>WAGER REFUNDED</div>
+                            )}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                            <button
+                                onClick={handleReplay}
+                                style={{
+                                    marginTop: '10px', background: 'rgba(255,255,255,0.2)',
+                                    border: 'none', padding: '12px 24px',
+                                    borderRadius: '50px', color: '#fff', cursor: 'pointer', fontWeight: 'bold',
+                                    display: 'flex', alignItems: 'center', gap: '8px'
+                                }}
+                            >
+                                <Play size={16} /> REPLAY FINAL ROUND
                             </button>
-                        </Link>
+
+                            <Link href="/arena">
+                                <button style={{
+                                    marginTop: '10px', background: '#fff',
+                                    border: 'none', padding: '12px 24px',
+                                    borderRadius: '50px', color: '#b45309', cursor: 'pointer', fontWeight: 'bold'
+                                }}>
+                                    Back to Arena
+                                </button>
+                            </Link>
+                        </div>
                     </div>
                 )}
             </div>
