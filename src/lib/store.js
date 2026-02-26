@@ -858,7 +858,9 @@ export function AppProvider({ children }) {
 
   const placeBet = async (eventId, outcomeId, amount) => {
     if (!user) return { success: false, error: 'Not logged in' };
-    if (user.balance < amount) return { success: false, error: 'Insufficient funds' };
+    const betAmt = parseFloat(amount);
+    if (isNaN(betAmt) || betAmt <= 0) return { success: false, error: 'Invalid bet amount' };
+    if (user.balance < betAmt) return { success: false, error: 'Insufficient funds' };
 
     const event = events.find(e => e.id === eventId);
     if (!event || event.status !== 'open') return { success: false, error: 'Event is locked' };
@@ -880,7 +882,6 @@ export function AppProvider({ children }) {
     const outcome = event.outcomes.find(o => o.id === outcomeId);
 
     try {
-      // 1. Deduct Balance & Add to Invested
       const userRef = doc(db, 'users', user.id);
       // Streak Logic
       const today = new Date();
@@ -893,8 +894,6 @@ export function AppProvider({ children }) {
       const lastDate = user.lastBetDate || ""; // Assuming stored as toDateString()
 
       let streakType = 'none';
-      // Only update logic if we haven't already processed a streak for today
-      // (Or if the user had 0 streak and just started today)
       if (lastDate !== todayStr) {
         if (lastDate === yesterdayStr) {
           newStreak += 1;
@@ -912,11 +911,9 @@ export function AppProvider({ children }) {
 
       const newLongest = Math.max(newStreak, user.longestStreak || 0);
 
-      // 1. Deduct Balance, Add to Invested, Update Streak
-
       await updateDoc(userRef, {
-        balance: increment(-amount),
-        invested: increment(amount), // Track active wagers for leaderboard
+        balance: increment(-betAmt),
+        invested: increment(betAmt), // Track active wagers for leaderboard
         currentStreak: newStreak,
         longestStreak: newLongest,
         lastBetDate: todayStr
@@ -930,9 +927,9 @@ export function AppProvider({ children }) {
         outcomeId,
         outcomeLabel: outcome.label,
         eventTitle: event.title,
-        amount: parseFloat(amount),
+        amount: betAmt,
         odds: outcome.odds,
-        potentialPayout: amount * outcome.odds,
+        potentialPayout: betAmt * outcome.odds,
         status: 'pending',
         placedAt: new Date().toISOString()
       });
@@ -942,9 +939,9 @@ export function AppProvider({ children }) {
         const eventRef = doc(db, 'events', eventId);
         await updateDoc(eventRef, {
           [`stats.counts.${outcomeId}`]: increment(1),
-          [`stats.amounts.${outcomeId}`]: increment(amount),
+          [`stats.amounts.${outcomeId}`]: increment(betAmt),
           'stats.totalBets': increment(1),
-          'stats.totalPool': increment(amount)
+          'stats.totalPool': increment(betAmt)
         });
       } catch (statsErr) {
         console.warn("Could not update event stats (likely permission issue):", statsErr);
@@ -2060,21 +2057,38 @@ export function AppProvider({ children }) {
       // 1. Fetch all pending bets
       const betsQ = query(collection(db, 'bets'), where('status', '==', 'pending'));
       const betsSnap = await getDocs(betsQ);
-      // If index missing, this line throws.
 
       const investmentsByUser = {};
+
       betsSnap.docs.forEach(doc => {
         const bet = doc.data();
         if (!investmentsByUser[bet.userId]) investmentsByUser[bet.userId] = 0;
         investmentsByUser[bet.userId] += (bet.amount || 0);
       });
 
-      // 2. Fetch all users to update their stats
+      // 2. Fetch active arena games
+      const arenaQ = query(collection(db, 'arena_games'), where('status', 'in', ['open', 'active']));
+      const arenaSnap = await getDocs(arenaQ);
+      arenaSnap.docs.forEach(doc => {
+        const game = doc.data();
+        const wager = game.wager || 0;
+        Object.keys(game.players || {}).forEach(pid => {
+          if (!game.players[pid].isEliminated) {
+            if (!investmentsByUser[pid]) investmentsByUser[pid] = 0;
+            investmentsByUser[pid] += wager;
+          }
+        });
+      });
+
+      // 3. Fetch all active users who have an invested stat, or who are in our map
+      // To ensure we clear any stuck stats (like negative invested), we fetch everyone.
+      // This is safe since this is an admin script. 
       const usersSnap = await getDocs(collection(db, 'users'));
       const batch = writeBatch(db);
       let updateCount = 0;
+      let opCount = 0;
 
-      usersSnap.docs.forEach(userDoc => {
+      for (const userDoc of usersSnap.docs) {
         const uid = userDoc.id;
         const currentInvested = userDoc.data().invested || 0;
         const correctInvested = investmentsByUser[uid] || 0;
@@ -2083,10 +2097,16 @@ export function AppProvider({ children }) {
         if (Math.abs(currentInvested - correctInvested) > 0.01) {
           batch.update(userDoc.ref, { invested: correctInvested });
           updateCount++;
-        }
-      });
+          opCount++;
 
-      if (updateCount > 0) await batch.commit();
+          if (opCount >= 400) {
+            await batch.commit();
+            opCount = 0;
+          }
+        }
+      }
+
+      if (opCount > 0) await batch.commit();
       return { success: true, message: `Recalculated! Updated ${updateCount} users.` };
     } catch (e) {
       console.error("Recalc Detailed Error:", e);
@@ -2836,7 +2856,9 @@ export function AppProvider({ children }) {
 
   const placeParlayBet = async (parlayId, amount) => {
     if (!user) return { success: false, error: 'Not logged in' };
-    if (user.balance < amount) return { success: false, error: 'Insufficient funds' };
+    const betAmt = parseFloat(amount);
+    if (isNaN(betAmt) || betAmt <= 0) return { success: false, error: 'Invalid bet amount' };
+    if (user.balance < betAmt) return { success: false, error: 'Insufficient funds' };
 
     try {
       const parlayRef = doc(db, 'parlays', parlayId);
@@ -2875,8 +2897,8 @@ export function AppProvider({ children }) {
       const newLongest = Math.max(newStreak, user.longestStreak || 0);
 
       await updateDoc(userRef, {
-        balance: increment(-amount),
-        invested: increment(amount),
+        balance: increment(-betAmt),
+        invested: increment(betAmt),
         currentStreak: newStreak,
         longestStreak: newLongest,
         lastBetDate: todayStr
