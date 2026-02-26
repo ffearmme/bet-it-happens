@@ -186,6 +186,20 @@ service cloud.firestore {
       allow delete: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
     }
 
+    // PRIVATE LINKS
+    match /privateLinks/{linkId} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if request.resource.data.used == true;
+      allow delete: if isAdmin();
+    }
+
+    // PRIVATE ANSWERS
+    match /privateAnswers/{answerId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
     // SYSTEM
     match /system/{docId} {
       allow read: if true;

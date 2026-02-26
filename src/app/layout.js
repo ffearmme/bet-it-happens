@@ -74,6 +74,8 @@ function BetaBanner() {
     );
 }
 
+import GlobalUIWrapper from '../components/GlobalUIWrapper';
+
 export default function RootLayout({ children }) {
     return (
         <html lang="en">
@@ -92,13 +94,9 @@ export default function RootLayout({ children }) {
                     `}
                 </Script>
                 <AppProvider>
-                    <BetaBanner />
-                    <TopHeader />
-                    <JackpotAnnouncer />
-                    <ChallengeModal />
-                    {children}
-                    <Navbar />
-                    <InstallPrompt />
+                    <GlobalUIWrapper>
+                        {children}
+                    </GlobalUIWrapper>
                 </AppProvider>
             </body>
         </html>

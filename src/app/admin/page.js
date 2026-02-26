@@ -1,10 +1,11 @@
 "use client";
 import { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useApp } from '../../lib/store';
 
 import { db } from '../../lib/firebase';
-import { collection, query, limit, onSnapshot, doc, updateDoc, where, getDocs, orderBy, writeBatch, increment, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, limit, onSnapshot, doc, updateDoc, where, getDocs, orderBy, writeBatch, increment, getDoc, deleteDoc, setDoc } from 'firebase/firestore';
 
 function AdminContent() {
     const {
@@ -1819,6 +1820,32 @@ function AdminContent() {
                                     >
                                         🧹 Prune Bad Casino Bets
                                     </button>
+                                    <button
+                                        className="btn"
+                                        style={{ background: '#2563eb', color: '#fff', fontWeight: 'bold' }}
+                                        onClick={async () => {
+                                            const token = globalThis.crypto.randomUUID();
+                                            try {
+                                                await setDoc(doc(db, 'privateLinks', token), {
+                                                    used: false,
+                                                    createdAt: new Date().toISOString()
+                                                });
+                                                const url = `${window.location.origin}/invite/${token}`;
+                                                prompt("Single-Use Link Generated! Copy it:", url);
+                                            } catch (e) {
+                                                alert("Error generating link: " + e.message);
+                                            }
+                                        }}
+                                    >
+                                        🔗 Generate Single-Use Link
+                                    </button>
+                                    <Link
+                                        href="/admin/answers"
+                                        className="btn"
+                                        style={{ background: '#4b5563', color: '#fff', fontWeight: 'bold', textDecoration: 'none', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                                    >
+                                        👁️ View Secret Answers
+                                    </Link>
                                 </div>
                             </div>
                         </div>
