@@ -12,7 +12,7 @@ function AdminContent() {
         updateEventOrder, deleteBet, toggleFeatured, ideas, deleteIdea, replyToIdea,
         users, deleteUser, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendSystemNotification,
         syncAllUsernames, updateMaintenanceStatus, maintenanceSettings,
-        arenaSettings, updateArenaStatus, cleanupBannedUsersFromSquads
+        arenaSettings, updateArenaStatus, cleanupBannedUsersFromSquads, recalculateLeaderboard
     } = useApp();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -1772,6 +1772,18 @@ function AdminContent() {
                                         onClick={recalculateAllUserBalances}
                                     >
                                         ⚖️ Recalculate All Balances
+                                    </button>
+                                    <button
+                                        className="btn"
+                                        style={{ background: '#8b5cf6', color: '#fff', fontWeight: 'bold' }}
+                                        onClick={async () => {
+                                            if (confirm("Recalculate leaderboard positions and active wagers?")) {
+                                                const res = await recalculateLeaderboard();
+                                                alert(res.message || res.error);
+                                            }
+                                        }}
+                                    >
+                                        🏆 Recalculate Active Wagers
                                     </button>
                                     <button
                                         className="btn"
