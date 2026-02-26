@@ -35,7 +35,7 @@ export default function ArenaLayout({ children }) {
             setMaintenanceMode(true);
         } else if (pathname.includes('/arena/roulette') && arenaSettings?.roulette === false) {
             setMaintenanceMode(true);
-        } else if (pathname.includes('/arena/tictactoe') && arenaSettings?.tictactoe === false) {
+        } else if (pathname.includes('/arena/connect4') && arenaSettings?.connect4 === false) {
             setMaintenanceMode(true);
         } else {
             setMaintenanceMode(false);

@@ -5,7 +5,7 @@ import { doc, onSnapshot, updateDoc, runTransaction, serverTimestamp, increment,
 import { Swords, Clock, User, Trophy, AlertTriangle, ArrowLeft, BookOpen, X, Lock } from 'lucide-react';
 import Link from 'next/link';
 
-export default function TicTacToePage({ params }) {
+export default function Connect4Page({ params }) {
     const { db, user } = useApp();
     const { gameId } = params;
     const [game, setGame] = useState(null);
@@ -127,9 +127,6 @@ export default function TicTacToePage({ params }) {
                 const players = gameSnap.data().players;
                 const creatorId = gameSnap.data().creatorId;
 
-
-
-                // Let's rewrite the update cleanly
                 const finalPlayers = {
                     ...players,
                     [user.id]: {
@@ -158,7 +155,7 @@ export default function TicTacToePage({ params }) {
                     players: finalPlayers,
                     currentTurn: firstId,
                     lastMoveAt: serverTimestamp(),
-                    board: Array(9).fill(null)
+                    board: Array(42).fill(null)
                 });
 
                 // Notify Creator
@@ -167,8 +164,8 @@ export default function TicTacToePage({ params }) {
                     type: 'arena_accepted',
                     userId: creatorId,
                     title: 'Challenge Accepted!',
-                    message: `${user.username} accepted your challenge! Game on!`,
-                    link: `/arena/tictactoe/${gameId}`,
+                    message: `${user.username} accepted your Connect 4 challenge! Game on!`,
+                    link: `/arena/connect4/${gameId}`,
                     read: false,
                     createdAt: serverTimestamp()
                 });
@@ -179,27 +176,49 @@ export default function TicTacToePage({ params }) {
         }
     };
 
-    const handleMove = async (index) => {
+    const handleMove = async (colIndex) => {
         if (!isMyTurn) return;
-        if (game.board[index]) return; // Occupied
 
+        // Find the lowest available row in this column
+        let targetRow = -1;
+        for (let r = 5; r >= 0; r--) {
+            if (!game.board[r * 7 + colIndex]) {
+                targetRow = r;
+                break;
+            }
+        }
+
+        // Column is full
+        if (targetRow === -1) return;
+
+        const moveIndex = targetRow * 7 + colIndex;
         const newBoard = [...game.board];
-        newBoard[index] = playerSymbol;
+        newBoard[moveIndex] = playerSymbol;
 
-        // Check Win
+        // Check Win for Connect 4
         let roundWinner = null;
         let isRoundDraw = false;
 
-        const lines = [
-            [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
-            [0, 3, 6], [1, 4, 7], [2, 5, 8], // Cols
-            [0, 4, 8], [2, 4, 6] // Diagonals
-        ];
+        const checkLine = (r, c, dr, dc) => {
+            let p = newBoard[r * 7 + c];
+            if (!p) return false;
+            for (let i = 0; i < 4; i++) {
+                let nr = r + dr * i;
+                let nc = c + dc * i;
+                if (nr < 0 || nr >= 6 || nc < 0 || nc >= 7) return false;
+                if (newBoard[nr * 7 + nc] !== p) return false;
+            }
+            return true;
+        };
 
-        for (let line of lines) {
-            const [a, b, c] = line;
-            if (newBoard[a] && newBoard[a] === newBoard[b] && newBoard[a] === newBoard[c]) {
-                roundWinner = user.id;
+        for (let r = 0; r < 6; r++) {
+            for (let c = 0; c < 7; c++) {
+                if (checkLine(r, c, 0, 1) || // Horizontal
+                    checkLine(r, c, 1, 0) || // Vertical
+                    checkLine(r, c, 1, 1) || // Diagonal down-right
+                    checkLine(r, c, 1, -1)) { // Diagonal down-left
+                    roundWinner = user.id;
+                }
             }
         }
 
@@ -271,8 +290,8 @@ export default function TicTacToePage({ params }) {
                                 type: 'arena_lost',
                                 userId: loserId,
                                 title: 'Duel Lost',
-                                message: `You lost the ${matchType > 1 ? 'Best of ' + matchType : ''} Tic Tac Toe duel against ${user.username}.`,
-                                link: `/arena/tictactoe/${gameId}`,
+                                message: `You lost the ${matchType > 1 ? 'Best of ' + matchType : ''} Connect 4 duel against ${user.username}.`,
+                                link: `/arena/connect4/${gameId}`,
                                 read: false,
                                 createdAt: serverTimestamp()
                             });
@@ -299,17 +318,12 @@ export default function TicTacToePage({ params }) {
 
                     } else {
                         // NEXT ROUND (Bo3/Bo5 continuation or Draw in Multi-round)
-                        // If it's a draw in Bo3, we just replay the round (no score change)
-                        // If someone won round but not match, we continue.
-
                         const gameRef = doc(db, 'arena_games', gameId);
 
-                        // Who starts next? The loser of this round, or if draw, swap from last starter.
-                        // Simple logic: Swap from whoever just moved (which was 'user').
                         const nextPlayer = Object.keys(players).find(id => id !== user.id);
 
                         transaction.update(gameRef, {
-                            board: Array(9).fill(null), // Reset Board
+                            board: Array(42).fill(null), // Reset Board
                             players: newPlayers,
                             currentTurn: nextPlayer,
                             lastMoveAt: serverTimestamp(),
@@ -326,8 +340,6 @@ export default function TicTacToePage({ params }) {
                         currentTurn: nextPlayer,
                         lastMoveAt: serverTimestamp()
                     });
-
-                    // Only notify on turn if needed, or maybe just UI updates
                 }
             });
         } catch (e) {
@@ -380,7 +392,7 @@ export default function TicTacToePage({ params }) {
                         userId: loserId,
                         title: 'Duel Timeout',
                         message: `You ran out of time! You lost the duel.`,
-                        link: `/arena/tictactoe/${gameId}`,
+                        link: `/arena/connect4/${gameId}`,
                         read: false,
                         createdAt: serverTimestamp()
                     });
@@ -392,22 +404,15 @@ export default function TicTacToePage({ params }) {
         }
     };
 
-    // ...
-
     if (loading) return <div className="p-10 text-center text-white">Loading Arena Data...</div>;
     if (!game) return <div className="p-10 text-center text-white">Game not found</div>;
 
-    // Correctly identify the winner for the button condition
-    // The winner is the one who is NOT the current turn player
     const expectedWinnerId = game.players && game.currentTurn ? Object.keys(game.players).find(id => id !== game.currentTurn) : null;
     const canClaimTimeout = game.status === 'active' && timeLeft === 'Expired' && user?.id === expectedWinnerId;
 
-    // Fix: We want to display Creator vs "The Other Player" (Challenger)
-    // Previously we looked for "Not Me", which meant for the Challenger, "Not Me" was the Creator, causing duplicate display.
     const player2Id = Object.keys(game.players || {}).find(id => id !== game.creatorId);
     const player2 = player2Id ? game.players[player2Id] : null;
 
-    // For Logic (e.g. "Your Opponent" in text), we might still want "Not Me", but for the VS visual, we want Player 2.
     const isCreator = user?.id === game.creatorId;
 
     return (
@@ -477,9 +482,10 @@ export default function TicTacToePage({ params }) {
                         background: 'linear-gradient(135deg, #f59e0b, #d97706)',
                         margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                         border: game.currentTurn === game.creatorId ? '3px solid #f59e0b' : '3px solid transparent',
-                        boxShadow: game.currentTurn === game.creatorId ? '0 0 20px rgba(245, 158, 11, 0.5)' : 'none'
+                        boxShadow: game.currentTurn === game.creatorId ? '0 0 20px rgba(245, 158, 11, 0.5)' : 'none',
+                        color: 'white', fontWeight: 'bold', fontSize: '24px'
                     }}>
-                        <span style={{ fontSize: '24px', fontWeight: 'bold' }}>{game.players[game.creatorId]?.symbol || '?'}</span>
+                        P1
                     </div>
                     <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{game.creatorUsername}</div>
                     <div style={{ fontSize: '12px', color: '#71717a' }}>${game.wager}</div>
@@ -522,17 +528,10 @@ export default function TicTacToePage({ params }) {
                                 margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 border: game.currentTurn === player2Id ? '3px solid #8b5cf6' : '3px solid transparent',
                                 boxShadow: game.currentTurn === player2Id ? '0 0 20px rgba(139, 92, 246, 0.5)' : 'none',
-                                overflow: 'hidden', position: 'relative'
+                                overflow: 'hidden', position: 'relative',
+                                color: 'white', fontWeight: 'bold', fontSize: '24px'
                             }}>
-                                {player2.avatar ? (
-                                    <img
-                                        src={player2.avatar}
-                                        alt="P2"
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                    />
-                                ) : (
-                                    <span style={{ fontSize: '24px', fontWeight: 'bold' }}>{player2.symbol || 'O'}</span>
-                                )}
+                                P2
                             </div>
                             <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{player2.username}</div>
                             <div style={{ fontSize: '12px', color: '#71717a' }}>${game.wager}</div>
@@ -549,8 +548,8 @@ export default function TicTacToePage({ params }) {
                 </div>
             </div>
 
-            {/* GAME COMPONENT (TIC TAC TOE) */}
-            <div style={{ position: 'relative' }}>
+            {/* GAME COMPONENT (CONNECT 4) */}
+            <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
                 {game.status === 'cancelled' && (
                     <div style={{ textAlign: 'center', padding: '40px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '24px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
                         <h3>Challenge Cancelled</h3>
@@ -611,36 +610,75 @@ export default function TicTacToePage({ params }) {
 
                 {(game.status === 'active' || game.status === 'completed') && (
                     <div style={{
-                        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px',
-                        background: '#18181b', padding: '10px', borderRadius: '16px',
-                        border: '1px solid #333',
-                        opacity: game.status === 'completed' ? 0.5 : 1
+                        background: 'linear-gradient(to bottom, #111827, #1e1b4b)', padding: '16px', borderRadius: '20px',
+                        border: '2px solid rgba(139, 92, 246, 0.4)',
+                        boxShadow: '0 0 40px rgba(139, 92, 246, 0.2)',
+                        opacity: game.status === 'completed' ? 0.6 : 1,
+                        display: 'inline-block'
                     }}>
-                        {Array(9).fill(null).map((_, i) => (
-                            <button
-                                key={i}
-                                disabled={game.status !== 'active' || !!game.board[i]}
-                                onClick={() => handleMove(i)}
-                                style={{
-                                    width: '80px', height: '80px',
-                                    background: '#27272a', borderRadius: '12px',
-                                    border: 'none',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    fontSize: '40px', fontWeight: 'bold',
-                                    color: game.board[i] === 'X' ? '#f59e0b' : '#8b5cf6',
-                                    cursor: (isMyTurn && !game.board[i]) ? 'pointer' : 'default',
-                                    transition: 'background 0.2s'
-                                }}
-                                onMouseEnter={e => {
-                                    if (isMyTurn && !game.board[i]) e.currentTarget.style.background = '#3f3f46';
-                                }}
-                                onMouseLeave={e => {
-                                    e.currentTarget.style.background = '#27272a';
-                                }}
-                            >
-                                {game.board[i]}
-                            </button>
-                        ))}
+                        <div style={{
+                            display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px',
+                            background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '12px',
+                            boxShadow: 'inset 0 4px 20px rgba(0,0,0,0.5)'
+                        }}>
+                            {Array(42).fill(null).map((_, i) => {
+                                const row = Math.floor(i / 7);
+                                const col = i % 7;
+                                const isOccupied = !!game.board[i];
+
+                                // P1 (Creator) token is X traditionally from our code above (symbols[0] or symbols[1])
+                                // But let's color based on whose symbol it is
+                                // If player symbol matches creator symbol -> Gold (P1), else Purple (P2)
+                                const creatorSymbol = game.players[game.creatorId]?.symbol;
+                                const isPlayer1Coin = game.board[i] === creatorSymbol;
+                                const tokenColor = isOccupied ? (isPlayer1Coin ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'linear-gradient(135deg, #8b5cf6, #6d28d9)') : 'transparent';
+                                const tokenGlow = isOccupied ? (isPlayer1Coin ? '0 0 15px rgba(245, 158, 11, 0.6)' : '0 0 15px rgba(139, 92, 246, 0.6)') : 'none';
+
+                                return (
+                                    <button
+                                        key={i}
+                                        disabled={game.status !== 'active' || !!game.board[col]} // Disable if top row of col is full
+                                        onClick={() => handleMove(col)}
+                                        style={{
+                                            width: '45px', height: '45px',
+                                            background: '#09090b', borderRadius: '50%',
+                                            border: '1px solid rgba(255,255,255,0.05)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            cursor: (isMyTurn) ? 'pointer' : 'default',
+                                            boxShadow: 'inset 0 6px 10px rgba(0,0,0,0.8), 0 2px 4px rgba(255,255,255,0.05)',
+                                            transition: 'background 0.2s, transform 0.1s'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            if (isMyTurn && !game.board[col]) {
+                                                e.currentTarget.style.transform = 'scale(1.05)';
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            if (isMyTurn) {
+                                                e.currentTarget.style.transform = 'scale(1)';
+                                            }
+                                        }}
+                                    >
+                                        {isOccupied && (
+                                            <div style={{
+                                                width: '85%', height: '85%',
+                                                background: tokenColor,
+                                                borderRadius: '50%',
+                                                boxShadow: tokenGlow,
+                                                border: '2px solid rgba(255,255,255,0.3)',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                            }}>
+                                                <div style={{
+                                                    width: '60%', height: '60%',
+                                                    borderRadius: '50%',
+                                                    border: '2px dashed rgba(255,255,255,0.2)'
+                                                }} />
+                                            </div>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
 
@@ -741,17 +779,17 @@ export default function TicTacToePage({ params }) {
                             </button>
 
                             <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <BookOpen size={24} className="text-primary" /> Tic Tac Toe Rules
+                                <BookOpen size={24} className="text-primary" /> Connect 4 Rules
                             </h2>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', color: '#d4d4d8', lineHeight: '1.6' }}>
                                 <div>
                                     <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Objective</strong>
-                                    Be the first to get 3 of your symbols in a row (horizontal, vertical, or diagonal).
+                                    Be the first to get 4 of your tokens in a row (horizontal, vertical, or diagonal).
                                 </div>
                                 <div>
                                     <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Gameplay</strong>
-                                    Players take turns placing their symbol (X or O) on the 3x3 grid. The player who creates the challenge sets the wager.
+                                    Players take turns dropping their token into one of the 7 columns. The token falls to the lowest available space in that column.
                                 </div>
                                 <div>
                                     <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Winning</strong>
@@ -759,7 +797,7 @@ export default function TicTacToePage({ params }) {
                                 </div>
                                 <div>
                                     <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Draw</strong>
-                                    If all 9 squares are filled and no player has 3 in a row, the game is a draw. Both players' wagers are refunded.
+                                    If all 42 spaces are filled and no player has 4 in a row, the game is a draw. Both players' wagers are refunded.
                                 </div>
                                 <div>
                                     <strong style={{ color: '#fff', display: 'block', marginBottom: '4px' }}>Time Limit</strong>

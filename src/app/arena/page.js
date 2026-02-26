@@ -335,7 +335,7 @@ export default function ArenaPage() {
             });
             console.log("Joined successfully!");
             // No need to redirect manually, the active games list will update or we can push
-            // router.push(`/arena/tictactoe/${gameId}`);
+            // router.push(`/arena/connect4/${gameId}`);
 
         } catch (e) {
             console.error("Join Error:", e);
@@ -504,7 +504,7 @@ export default function ArenaPage() {
                                     Select Game
                                 </label>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-                                    {['tictactoe', 'knockout'].map(gameId => {
+                                    {['connect4', 'knockout'].map(gameId => {
                                         // Specific check for knockout since it might not be in settings yet, default to true for dev
                                         const isEnabled = arenaSettings?.[gameId] !== false;
                                         return (
@@ -531,10 +531,10 @@ export default function ArenaPage() {
                                                     opacity: isEnabled ? 1 : 0.6
                                                 }}
                                             >
-                                                {gameId === 'tictactoe' && <span style={{ fontSize: '24px' }}>❌⭕</span>}
+                                                {gameId === 'connect4' && <span style={{ fontSize: '24px' }}>🔴🟡</span>}
                                                 {gameId === 'knockout' && <span style={{ fontSize: '24px' }}>🥊</span>}
                                                 <span style={{ fontWeight: 'bold', fontSize: '14px', textTransform: 'capitalize' }}>
-                                                    {gameId === 'tictactoe' ? 'Tic Tac Toe' : 'Knockout'}
+                                                    {gameId === 'connect4' ? 'Connect 4' : 'Knockout'}
                                                 </span>
                                                 {!isEnabled && <span style={{ fontSize: '10px', color: '#ef4444', fontWeight: 'bold' }}>DISABLED</span>}
                                             </button>
@@ -1121,11 +1121,11 @@ export default function ArenaPage() {
                                         }}>IN PROGRESS</div>
 
                                         <div style={{ marginBottom: '16px' }}>
-                                            {game.type === 'tictactoe' ? <Swords size={32} color="#10b981" /> : <Trophy size={32} color="#10b981" />}
+                                            {game.type === 'connect4' ? <Swords size={32} color="#10b981" /> : <Trophy size={32} color="#10b981" />}
                                         </div>
 
                                         <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px', textTransform: 'capitalize' }}>
-                                            {game.type === 'tictactoe' ? 'Tic Tac Toe' : game.type}
+                                            {game.type === 'connect4' ? 'Connect 4' : game.type}
                                         </h2>
 
                                         <div style={{ fontSize: '14px', color: '#a1a1aa', marginBottom: '16px' }}>
@@ -1256,7 +1256,7 @@ export default function ArenaPage() {
                                             color: '#ec4899',
                                             boxShadow: 'inset 0 0 20px rgba(0,0,0,0.5)'
                                         }}>
-                                            {game.type === 'tictactoe' ? <Swords size={32} /> : <Trophy size={32} />}
+                                            {game.type === 'connect4' ? <Swords size={32} /> : <Trophy size={32} />}
                                         </div>
 
                                         <h2 style={{
@@ -1266,7 +1266,7 @@ export default function ArenaPage() {
                                             marginBottom: '8px',
                                             textTransform: 'capitalize'
                                         }}>
-                                            {game.type === 'tictactoe' ? 'Tic Tac Toe' : game.type}
+                                            {game.type === 'connect4' ? 'Connect 4' : game.type}
                                         </h2>
 
                                         <div style={{ marginBottom: '16px' }}>
@@ -1366,15 +1366,15 @@ export default function ArenaPage() {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                             <div style={{
                                                 width: '36px', height: '36px', borderRadius: '10px',
-                                                background: game.type === 'tictactoe' ? 'rgba(236, 72, 153, 0.1)' : 'rgba(255,255,255,0.05)',
+                                                background: game.type === 'connect4' ? 'rgba(236, 72, 153, 0.1)' : 'rgba(255,255,255,0.05)',
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                color: game.type === 'tictactoe' ? '#ec4899' : '#fff'
+                                                color: game.type === 'connect4' ? '#ec4899' : '#fff'
                                             }}>
-                                                {game.type === 'tictactoe' ? <Swords size={18} /> : <Trophy size={18} />}
+                                                {game.type === 'connect4' ? <Swords size={18} /> : <Trophy size={18} />}
                                             </div>
                                             <div>
                                                 <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#fff', textTransform: 'capitalize' }}>
-                                                    {game.type === 'tictactoe' ? 'Tic Tac Toe' : game.type}
+                                                    {game.type === 'connect4' ? 'Connect 4' : game.type}
                                                 </div>
                                                 <div style={{ fontSize: '11px', color: '#71717a' }}>
                                                     {dateStr} • {game.players && Object.keys(game.players).length} Players

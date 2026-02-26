@@ -44,7 +44,8 @@ service cloud.firestore {
         isAdmin() ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['squadInvites']) ||
         (
-          resource.data.squadId != null && // Must be in a squad
+          resource.data.get('squadId', null) != null && // Safely check and ensure user is in a squad
+          exists(/databases/$(database)/documents/squads/$(resource.data.squadId)) && // Safely check existence
           get(/databases/$(database)/documents/squads/$(resource.data.squadId)).data.leaderId == request.auth.uid && // Requester must be leader of THAT squad
           (
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['squadId']) ||

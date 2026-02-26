@@ -12,7 +12,7 @@ function AdminContent() {
         updateEventOrder, deleteBet, toggleFeatured, ideas, deleteIdea, replyToIdea,
         users, deleteUser, updateUserGroups, updateSystemAnnouncement, systemAnnouncement, sendSystemNotification,
         syncAllUsernames, updateMaintenanceStatus, maintenanceSettings,
-        arenaSettings, updateArenaStatus
+        arenaSettings, updateArenaStatus, cleanupBannedUsersFromSquads
     } = useApp();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -1261,20 +1261,45 @@ function AdminContent() {
                         <div className="card">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                 <h2 style={{ fontSize: '18px' }}>Users Directory ({filteredUsers.length})</h2>
-                                <button
-                                    onClick={() => setShowBanned(!showBanned)}
-                                    style={{
-                                        fontSize: '12px',
-                                        padding: '4px 8px',
-                                        background: showBanned ? '#ef4444' : '#333',
-                                        color: showBanned ? '#fff' : '#888',
-                                        border: 'none',
-                                        borderRadius: '4px',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    {showBanned ? 'Hide Banned' : 'Show Banned'}
-                                </button>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                        onClick={async () => {
+                                            if (confirm('🧹 Scan and remove all banned users from their current squads?')) {
+                                                const res = await cleanupBannedUsersFromSquads();
+                                                if (res.success) {
+                                                    alert('✅ Success: ' + res.message);
+                                                } else {
+                                                    alert('❌ Error: ' + res.error);
+                                                }
+                                            }
+                                        }}
+                                        style={{
+                                            fontSize: '12px',
+                                            padding: '4px 8px',
+                                            background: '#3b82f6',
+                                            color: '#fff',
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        🧹 Clean Squads
+                                    </button>
+                                    <button
+                                        onClick={() => setShowBanned(!showBanned)}
+                                        style={{
+                                            fontSize: '12px',
+                                            padding: '4px 8px',
+                                            background: showBanned ? '#ef4444' : '#333',
+                                            color: showBanned ? '#fff' : '#888',
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {showBanned ? 'Hide Banned' : 'Show Banned'}
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="mod-table">
@@ -1547,7 +1572,7 @@ function AdminContent() {
                                     Disable arena games temporarily. Users will not be able to create new challenges for disabled games.
                                 </p>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
-                                    {['tictactoe', 'knockout'].map(gameId => {
+                                    {['connect4', 'knockout'].map(gameId => {
                                         const isEnabled = arenaSettings?.[gameId] !== false; // Default true if undefined
                                         return (
                                             <div key={gameId} style={{
@@ -1561,7 +1586,7 @@ function AdminContent() {
                                             }}>
                                                 <div>
                                                     <strong style={{ textTransform: 'capitalize', display: 'block', color: '#fff' }}>
-                                                        {gameId === 'tictactoe' ? 'Tic Tac Toe' : gameId === 'knockout' ? 'Knockout' : gameId}
+                                                        {gameId === 'connect4' ? 'Connect 4' : gameId === 'knockout' ? 'Knockout' : gameId}
                                                     </strong>
                                                     <span style={{ fontSize: '12px', color: isEnabled ? '#10b981' : '#ef4444' }}>
                                                         {isEnabled ? 'Active' : 'Disabled'}

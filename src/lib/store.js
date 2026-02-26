@@ -94,6 +94,7 @@ export function AppProvider({ children }) {
             if (userData.banned || userData.role === 'banned') {
               alert("Your account has been banned.");
               signOut(auth);
+              setIsLoaded(true);
               return;
             }
 
@@ -187,7 +188,7 @@ export function AppProvider({ children }) {
   const [squads, setSquads] = useState([]); // List of all squads
   const [systemAnnouncement, setSystemAnnouncement] = useState(null);
   const [casinoSettings, setCasinoSettings] = useState({}); // { slots: true, etc }
-  const [arenaSettings, setArenaSettings] = useState({}); // { tictactoe: true }
+  const [arenaSettings, setArenaSettings] = useState({}); // { connect4: true }
   const [maintenanceSettings, setMaintenanceSettings] = useState({}); // { bets: true, parlay: true, leaderboard: true }
 
   // ... (existing timeout code) ...
@@ -233,7 +234,7 @@ export function AppProvider({ children }) {
         setArenaSettings(docSnap.data());
       } else {
         // Default settings
-        setArenaSettings({ tictactoe: true, knockout: true });
+        setArenaSettings({ connect4: true, knockout: true });
       }
     });
 
@@ -2206,7 +2207,46 @@ export function AppProvider({ children }) {
       const notifSnap = await getDocs(query(collection(db, 'notifications'), where('userId', '==', userId)));
       notifSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
 
-      // 5. User Profile
+      // 5. Squads (Remove from all squads or delete squad if empty)
+      const squadsSnap = await getDocs(query(collection(db, 'squads')));
+      squadsSnap.docs.forEach(d => {
+        const squad = d.data();
+        let needsUpdate = false;
+
+        const newMembers = (squad.members || []).filter(uid => {
+          if (uid === userId) needsUpdate = true;
+          return uid !== userId;
+        });
+
+        const newMemberDetails = (squad.memberDetails || []).filter(m => m.id !== userId);
+
+        const newRequests = (squad.requests || []).filter(r => {
+          if (r.userId === userId) needsUpdate = true;
+          return r.userId !== userId;
+        });
+
+        if (needsUpdate) {
+          if (newMembers.length === 0) {
+            allDocsToDelete.push(d.ref); // Delete squad if empty
+          } else {
+            const updateData = {
+              members: newMembers,
+              memberDetails: newMemberDetails,
+              requests: newRequests
+            };
+            if (squad.leaderId === userId) {
+              const newLeader = newMemberDetails[0];
+              updateData.leaderId = newLeader.id;
+              updateData.memberDetails = newMemberDetails.map(m =>
+                m.id === newLeader.id ? { ...m, role: 'leader' } : m
+              );
+            }
+            updateDoc(d.ref, updateData).catch(console.error);
+          }
+        }
+      });
+
+      // 6. User Profile
       allDocsToDelete.push(doc(db, 'users', userId));
 
       console.log(`Deleting account ${userId}: ${allDocsToDelete.length} documents total.`);
@@ -2273,6 +2313,46 @@ export function AppProvider({ children }) {
       // 7. Jackpots (New)
       const jackpotSnap = await getDocs(query(collection(db, 'jackpots'), where('userId', '==', targetUserId)));
       jackpotSnap.docs.forEach(d => allDocsToDelete.push(d.ref));
+
+      // 8. Squads (Remove from all squads or delete squad if empty)
+      const squadsSnap = await getDocs(query(collection(db, 'squads')));
+      squadsSnap.docs.forEach(d => {
+        const squad = d.data();
+        let needsUpdate = false;
+
+        const newMembers = (squad.members || []).filter(uid => {
+          if (uid === targetUserId) needsUpdate = true;
+          return uid !== targetUserId;
+        });
+
+        const newMemberDetails = (squad.memberDetails || []).filter(m => m.id !== targetUserId);
+
+        const newRequests = (squad.requests || []).filter(r => {
+          if (r.userId === targetUserId) needsUpdate = true;
+          return r.userId !== targetUserId;
+        });
+
+        if (needsUpdate) {
+          if (newMembers.length === 0) {
+            allDocsToDelete.push(d.ref); // Delete squad if empty
+          } else {
+            const updateData = {
+              members: newMembers,
+              memberDetails: newMemberDetails,
+              requests: newRequests
+            };
+            if (squad.leaderId === targetUserId) {
+              const newLeader = newMemberDetails[0];
+              updateData.leaderId = newLeader.id;
+              updateData.memberDetails = newMemberDetails.map(m =>
+                m.id === newLeader.id ? { ...m, role: 'leader' } : m
+              );
+            }
+            // Execute update immediately since it's an update, not delete
+            updateDoc(d.ref, updateData).catch(console.error);
+          }
+        }
+      });
 
       console.log(`Clearing data for user ${targetUserId}: ${allDocsToDelete.length} documents total.`);
       await commitBatchBuffer(allDocsToDelete);
@@ -3794,6 +3874,65 @@ export function AppProvider({ children }) {
     }
   };
 
+  const cleanupBannedUsersFromSquads = async () => {
+    if (!user || user.role !== 'admin') return { success: false, error: 'Unauthorized' };
+    try {
+      // 1. Get all banned users
+      const bannedSnap = await getDocs(query(collection(db, 'users'), where('banned', '==', true)));
+      const bannedUserIds = new Set();
+      bannedSnap.docs.forEach(d => bannedUserIds.add(d.id));
+
+      if (bannedUserIds.size === 0) return { success: true, message: 'No banned users found.' };
+
+      // 2. Iterate squads and remove them
+      const squadsSnap = await getDocs(query(collection(db, 'squads')));
+      const batch = writeBatch(db);
+      let updatedCount = 0;
+      let deletedCount = 0;
+
+      squadsSnap.docs.forEach(d => {
+        const squad = d.data();
+        let needsUpdate = false;
+
+        const newMembers = (squad.members || []).filter(uid => {
+          if (bannedUserIds.has(uid)) needsUpdate = true;
+          return !bannedUserIds.has(uid);
+        });
+
+        const newMemberDetails = (squad.memberDetails || []).filter(m => !bannedUserIds.has(m.id));
+
+        if (needsUpdate) {
+          if (newMembers.length === 0) {
+            batch.delete(d.ref);
+            deletedCount++;
+          } else {
+            const updateData = {
+              members: newMembers,
+              memberDetails: newMemberDetails,
+            };
+            if (bannedUserIds.has(squad.leaderId)) {
+              const newLeader = newMemberDetails[0];
+              updateData.leaderId = newLeader.id;
+              updateData.memberDetails = newMemberDetails.map(m =>
+                m.id === newLeader.id ? { ...m, role: 'leader' } : m
+              );
+            }
+            batch.update(d.ref, updateData);
+            updatedCount++;
+          }
+        }
+      });
+
+      if (updatedCount > 0 || deletedCount > 0) {
+        await batch.commit();
+      }
+
+      return { success: true, message: `Removed banned users. Updated ${updatedCount} squads, deleted ${deletedCount} empty squads.` };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       user, signup, signin, logout, updateUser, submitIdea, deleteIdea, deleteAccount, deleteUser, demoteSelf, syncEventStats, resendVerification,
@@ -3802,7 +3941,7 @@ export function AppProvider({ children }) {
       isGuestMode, setIsGuestMode,
       notifications, markNotificationAsRead, clearAllNotifications, submitModConcern, claimReferralReward,
       createParlay, placeParlayBet, addParlayComment, calculateParlays, deleteParlay, sendSystemNotification,
-      squads, createSquad, joinSquad, leaveSquad, manageSquadRequest, kickMember, updateSquad, inviteUserToSquad, respondToSquadInvite, searchUsers, getSquadStats,
+      squads, createSquad, joinSquad, leaveSquad, manageSquadRequest, kickMember, updateSquad, inviteUserToSquad, respondToSquadInvite, searchUsers, getSquadStats, cleanupBannedUsersFromSquads,
       depositToSquad, withdrawFromSquad, updateMemberRole, transferSquadLeadership, requestSquadWithdrawal, respondToWithdrawalRequest, sendSquadMessage,
       syncAllUsernames, updateCasinoStatus, casinoSettings, updateMaintenanceStatus, maintenanceSettings,
       todayBetCount, todayCasinoCount, myTurnCount, pendingChallengesCount, pendingChallenges, todayArenaCount,

@@ -110,7 +110,7 @@ export default function ChallengeModal() {
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                 }}>
                     <div style={{ fontSize: '13px', color: '#d4d4d8' }}>
-                        <span style={{ textTransform: 'capitalize' }}>{currentChallenge.type === 'tictactoe' ? 'Tic Tac Toe' : currentChallenge.type}</span>
+                        <span style={{ textTransform: 'capitalize' }}>{currentChallenge.type === 'connect4' ? 'Connect 4' : currentChallenge.type}</span>
                         <span style={{ margin: '0 6px', opacity: 0.3 }}>|</span>
                         Best of {currentChallenge.config?.matchType || 1}
                     </div>

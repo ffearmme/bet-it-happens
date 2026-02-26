@@ -2256,7 +2256,7 @@ export default function Home() {
                                     <ul style={{ paddingLeft: '20px', color: '#d4d4d8', fontSize: '14px', lineHeight: '1.6' }}>
                                         <li><b>The Arena:</b> Challenge other users directly to 1v1 battles! ⚔️</li>
                                         <li><b>Private Duels:</b> Send exclusive invites to specific friends for private high-stakes matches. 🔒</li>
-                                        <li><b>Tic Tac Toe:</b> The first Arena game is live! Test your strategy in this classic. ⭕❌</li>
+                                        <li><b>Connect 4:</b> The first Arena game is live! Test your strategy in this classic. 🔴🟡</li>
                                         <li><b>Enhanced Stats:</b> Portfolio now tracks your Net Worth and Arena specific performance. 📈</li>
                                     </ul>
                                 </div>
