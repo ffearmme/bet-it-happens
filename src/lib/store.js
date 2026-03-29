@@ -2912,6 +2912,7 @@ export function AppProvider({ children }) {
         type: 'parlay',
         parlayId: parlayId,
         legs: parlay.legs,
+        eventIds: parlay.legs.map(l => l.eventId),
         amount: parseFloat(amount),
         odds: parlay.finalMultiplier, // Store as 'odds' for compatibility with display if needed
         potentialPayout: amount * parlay.finalMultiplier,

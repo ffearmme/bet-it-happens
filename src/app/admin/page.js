@@ -606,29 +606,36 @@ function AdminContent() {
         "Weather", "Tech", "Pop Culture", "The Boys", "The Fam"
     ];
 
-    // Fetch Bets for Editing Event
     useEffect(() => {
         if (!editingId) return;
-        const q = query(collection(db, 'bets'), where('eventId', '==', editingId));
-        getDocs(q).then(snap => {
-            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            // Sort by placedAt
-            list.sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
-            setEditingBets(list);
+        const q1 = query(collection(db, 'bets'), where('eventId', '==', editingId));
+        const q2 = query(collection(db, 'bets'), where('eventIds', 'array-contains', editingId));
+        
+        Promise.all([getDocs(q1), getDocs(q2)]).then(([snap1, snap2]) => {
+            const list1 = snap1.docs.map(d => ({ id: d.id, ...d.data() }));
+            const list2 = snap2.docs.map(d => ({ id: d.id, ...d.data() }));
+            const all = [...list1, ...list2];
+            const unique = Array.from(new Map(all.map(item => [item.id, item])).values());
+            unique.sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
+            setEditingBets(unique);
         });
     }, [editingId]);
 
-    // Fetch Bets for Completed Event View
     useEffect(() => {
         if (!viewingBetsEventId) {
             setViewingBetsList([]);
             return;
         }
-        const q = query(collection(db, 'bets'), where('eventId', '==', viewingBetsEventId));
-        getDocs(q).then(snap => {
-            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            list.sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
-            setViewingBetsList(list);
+        const q1 = query(collection(db, 'bets'), where('eventId', '==', viewingBetsEventId));
+        const q2 = query(collection(db, 'bets'), where('eventIds', 'array-contains', viewingBetsEventId));
+        
+        Promise.all([getDocs(q1), getDocs(q2)]).then(([snap1, snap2]) => {
+            const list1 = snap1.docs.map(d => ({ id: d.id, ...d.data() }));
+            const list2 = snap2.docs.map(d => ({ id: d.id, ...d.data() }));
+            const all = [...list1, ...list2];
+            const unique = Array.from(new Map(all.map(item => [item.id, item])).values());
+            unique.sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt));
+            setViewingBetsList(unique);
         });
     }, [viewingBetsEventId]);
 
@@ -1403,6 +1410,50 @@ function AdminContent() {
                         </div>
                     )}
 
+                    {/* --- SYSTEM MAINTENANCE (Admin Script Hub) --- */}
+                    {activeTab === 'maintenance' && (
+                        <div className="card">
+                            <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>System Maintenance Tools</h2>
+                            
+                            <div style={{ marginBottom: '24px', padding: '16px', background: '#222', borderRadius: '8px' }}>
+                                <h3 style={{ fontSize: '16px', marginBottom: '8px', color: '#fbbf24' }}>Fix Missing Parlay Event IDs</h3>
+                                <p style={{ fontSize: '12px', color: '#888', marginBottom: '12px' }}>
+                                    Run this to attach `eventIds` fields to all existing parlay bets. This fixes them not showing up in the 'Resolve' views for individual events.
+                                </p>
+                                <button
+                                    onClick={async () => {
+                                        if (!confirm('This will query all parlay bets and add eventIds to them if missing. Continue?')) return;
+                                        try {
+                                            const q = query(collection(db, 'bets'), where('type', '==', 'parlay'));
+                                            const snap = await getDocs(q);
+                                            let count = 0;
+                                            const batchAmt = writeBatch(db);
+                                            snap.forEach(d => {
+                                                const data = d.data();
+                                                if (data.legs && (!data.eventIds || data.eventIds.length !== data.legs.length)) {
+                                                    batchAmt.update(d.ref, { eventIds: data.legs.map(l => l.eventId) });
+                                                    count++;
+                                                }
+                                            });
+                                            if (count > 0) {
+                                                await batchAmt.commit();
+                                                alert(`Successfully backfilled ${count} parlay bets.`);
+                                            } else {
+                                                alert(`No parlay bets needed updating.`);
+                                            }
+                                        } catch (e) {
+                                            alert(`Error: ${e.message}`);
+                                        }
+                                    }}
+                                    className="btn"
+                                    style={{ background: '#ca8a04', color: '#fff', fontSize: '13px' }}
+                                >
+                                    Fix Parlay Event IDs
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     {/* --- COMMUNITY TAB --- */}
                     {activeTab === 'community' && (
                         <div className="card">
@@ -1520,6 +1571,38 @@ function AdminContent() {
                     {/* --- SYSTEM TAB --- */}
                     {activeTab === 'maintenance' && (
                         <div>
+                            {/* SITE WIDE MAINTENANCE */}
+                            <div className="card" style={{ marginBottom: '24px', maxWidth: '1200px', border: maintenanceSettings?.remodel ? '2px solid #f59e0b' : '1px solid #333' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <h2 style={{ fontSize: '18px', marginBottom: '8px', color: maintenanceSettings?.remodel ? '#f59e0b' : '#fff' }}>🏗️ Site-wide Remodel Mode</h2>
+                                        <p style={{ fontSize: '13px', color: '#888' }}>
+                                            When enabled, the entire site is locked for all users (except admins). They will see the 'Closed for Remodel' splash screen with the final leaderboard.
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            if (confirm(maintenanceSettings?.remodel ? "Open the site back up for everyone?" : "Lock the entire site for remodel? (Only admins will have access)")) {
+                                                updateMaintenanceStatus('remodel', !maintenanceSettings?.remodel);
+                                            }
+                                        }}
+                                        style={{
+                                            padding: '12px 24px',
+                                            borderRadius: '24px',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            fontWeight: 'bold',
+                                            fontSize: '14px',
+                                            background: maintenanceSettings?.remodel ? '#10b981' : '#f59e0b',
+                                            color: '#000',
+                                            boxShadow: maintenanceSettings?.remodel ? '0 0 15px rgba(16, 185, 129, 0.4)' : '0 0 15px rgba(245, 158, 11, 0.4)'
+                                        }}
+                                    >
+                                        {maintenanceSettings?.remodel ? '✅ OPEN SITE' : '🏗️ ENABLE REMODEL MODE'}
+                                    </button>
+                                </div>
+                            </div>
+
                             {/* Page Visibility Status */}
                             <div className="card" style={{ marginBottom: '24px', maxWidth: '1200px' }}>
                                 <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>🚫 Page Visibility & Access</h2>
